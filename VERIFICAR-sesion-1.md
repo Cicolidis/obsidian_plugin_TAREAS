@@ -63,21 +63,6 @@ cambia la regla B.
 | 16 | Repetir 1, 2 y 11 con **Outliner desactivado** | La forma de la transacción cambia. La regla no la mira, pero eso está probado offline, no en la app |
 | 17 | Repetir 1 con `stickCursor` en «Never» | Cambia dónde puede pararse el cursor, que es de qué depende el caso 11 |
 
-## El teléfono
-
-Es el punto 2 de la §15 de la spec y la única parte del prototipo con una
-hipótesis **sin fundamento medido**: el teclado de software escribe por
-composición (IME) y las transacciones pueden no tener la misma forma.
-
-| # | Qué |
-|---|---|
-| 18 | Caso 1 en el teléfono, tecleando normal |
-| 19 | Caso 1 aceptando una **sugerencia de autocorrección** antes de apretar Enter |
-| 20 | Caso 11 en el teléfono |
-
-Si 18–20 fallan: la salida está prevista y no cuesta nada — se apaga el
-interruptor en el teléfono y ahí se escribe `- [ ]` a mano, como hoy.
-
 ---
 
 ## Si algo no coincide: medirlo, no discutirlo
@@ -161,16 +146,27 @@ No es un problema de sincronización. **El buscador de complementos de la
 comunidad solo lista plugins publicados en el registro de Obsidian**, y este no
 lo está ni tiene por qué estarlo. Nunca va a aparecer ahí.
 
-Este vault no usa Obsidian Sync (no hay `sync.json` ni plugin de sincronización
-instalado), así que la ruta tiene que ser otra. Las tres que hay, en orden de
-trabajo:
+Este vault no usa Obsidian Sync (no hay `sync.json` ni plugin de
+sincronización), así que la ruta elegida es **BRAT**, que ya está instalado.
 
-1. **Copiar los tres archivos** —`main.js`, `manifest.json`, `styles.css`— a
-   `‹vault del teléfono›/.obsidian/plugins/tareas-outline/`, por el mismo medio
-   por el que hoy llega el vault. Cero trabajo de nuestro lado; hay que repetirlo
-   en cada cambio.
-2. **BRAT**, que ya está instalado en el vault. Instala plugins desde un
-   repositorio de GitHub en cualquier dispositivo, y actualiza solo. Requiere
-   poner el repo en GitHub con una release.
-3. **Obsidian Sync** con «Complementos de la comunidad instalados» activado.
-   Es pago y hoy no está.
+### Lo que falta para que funcione
+
+1. `gh auth login` — lo tenés que correr vos: pide credenciales.
+2. Yo creo el repositorio y publico la primera release con `npm run release`.
+3. En el teléfono: BRAT → *Add beta plugin* → la dirección del repositorio.
+   Desde ahí se actualiza solo con cada release nueva.
+
+### Y recién ahí, los casos del teléfono
+
+| # | Qué |
+|---|---|
+| 18 | Caso 1 en el teléfono, tecleando normal |
+| 19 | Caso 1 aceptando una **sugerencia de autocorrección** antes de apretar Enter |
+| 20 | Caso 11 en el teléfono |
+
+Es el punto 2 de la §15 de la spec y la única parte del prototipo con una
+hipótesis **sin fundamento medido**: el teclado de software escribe por
+composición (IME) y las transacciones pueden no tener la misma forma.
+
+Si 18–20 fallan, la salida está prevista y no cuesta nada: se apaga el
+interruptor y en el teléfono se escribe `- [ ]` a mano, como hoy.
