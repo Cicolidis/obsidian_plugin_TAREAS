@@ -1,0 +1,4 @@
+# Las fixtures se comparan byte por byte (invariante 9): que git no les
+# normalice los finales de línea ni el salto final, que es justamente lo que
+# los tests verifican que el parser conserva.
+test/fixtures/*.md -text
