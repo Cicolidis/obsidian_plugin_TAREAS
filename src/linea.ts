@@ -87,3 +87,83 @@ export function columnaDelCheckbox(b: Bullet): number {
 export function columnaDelContenido(b: Bullet): number {
   return columnaDelCheckbox(b) + (b.checkbox?.length ?? 0);
 }
+
+// ---------------------------------------------------------------- headings
+
+/**
+ * El tipo semántico de un heading (spec §4.1).
+ *
+ * Sale del **prefijo del destino del wikilink**, no del nivel (D6): en el
+ * corpus H1 y H4 aparecen las dos veces como proyecto y como sección, así que
+ * el nivel no distingue nada. El nivel solo decide anidamiento y herencia.
+ */
+export type TipoHeading = "proyecto" | "área" | "sección";
+
+/**
+ * Los pedazos de un heading, verbatim: `renderHeading(parseHeading(x)) === x`.
+ *
+ * `hashes` y `espacio` se guardan aparte por la misma razón que en `Bullet`:
+ * reescribir sin normalizar de paso.
+ */
+export interface Heading {
+  hashes: string;
+  espacio: string;
+  /** Lo que sigue al espacio, verbatim, incluidos los espacios finales. */
+  texto: string;
+  /** 1 a 6. */
+  nivel: number;
+  tipo: TipoHeading;
+  /** El destino del wikilink, si el heading es proyecto o área. */
+  destino: string | null;
+  /**
+   * Una referencia `p_`/`a_` escrita **sin corchetes**, si la hay.
+   *
+   * No tiene efecto sobre `tipo`: por decisión del usuario, solo el wikilink
+   * define proyecto o área (§4.1 al pie de la letra). Existe porque hoy 15 de
+   * los 18 headings semánticos están en texto plano y la migración de la §19.1
+   * —que es el paso 8— necesita la lista. Guardarlo acá evita tener que volver
+   * a inventar una gramática para eso.
+   *
+   * El corte es hasta el fin de línea: sin delimitador no hay forma de saber
+   * dónde termina el nombre, y adivinar partiría nombres reales
+   * (`p_UBA_Políticas económicas` es una carpeta del vault).
+   */
+  candidatoPlano: string | null;
+}
+
+const HEADING_RE = /^(#{1,6})([ \t]+)([\s\S]*)$/;
+/** Wikilink en cualquier parte del texto. El destino corta en `#`, `|` o `]]`. */
+const WIKILINK_RE = /\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/;
+/** `p_algo` o `a_algo` sin corchetes, tras principio de línea o separador. */
+const REF_PLANA_RE = /(?:^|[\s⮕→>])([pa]_.*)$/;
+
+/** Los pedazos del heading, o `null` si la línea no es un heading ATX. */
+export function parseHeading(text: string): Heading | null {
+  const m = HEADING_RE.exec(text);
+  if (!m) return null;
+  const [, hashes, espacio, contenido] = m as unknown as [string, string, string, string];
+
+  const wiki = WIKILINK_RE.exec(contenido);
+  const destino = wiki ? wiki[1]!.trim() : null;
+  const tipo: TipoHeading =
+    destino?.startsWith("p_") ? "proyecto" : destino?.startsWith("a_") ? "área" : "sección";
+
+  return {
+    hashes,
+    espacio,
+    texto: contenido,
+    nivel: hashes.length,
+    tipo,
+    destino: tipo === "sección" ? null : destino,
+    // Solo tiene sentido cuando no hay wikilink semántico: si el heading ya
+    // dice `[[p_X]]`, no hay nada que migrar. Se busca aunque haya un
+    // wikilink a otra cosa (`## WORKBENCH | [[tareas_LOG]] ⮕ p_X`).
+    candidatoPlano:
+      tipo === "sección" ? (REF_PLANA_RE.exec(contenido)?.[1]?.trim() ?? null) : null,
+  };
+}
+
+/** La línea de vuelta, byte por byte. */
+export function renderHeading(h: Heading): string {
+  return `${h.hashes}${h.espacio}${h.texto}`;
+}
