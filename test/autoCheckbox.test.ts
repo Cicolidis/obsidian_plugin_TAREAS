@@ -396,3 +396,37 @@ describe("la selección que Outliner despacha después", () => {
     expect(st.update({ selection: { anchor: fin - 4 } }).state.selection.main.head).toBe(fin - 4);
   });
 });
+
+describe("la transacción corregida sigue siendo el mismo gesto", () => {
+  /**
+   * CodeMirror discrimina por el subtipo del `userEvent`: `indentOnInput` solo
+   * reacciona a «input.type». Aplastarlo a «input» apaga cosas del entorno sin
+   * que se note en ninguna prueba de texto.
+   */
+  it("conserva el userEvent original", () => {
+    const doc = "\t- 1A";
+    const st = estado(doc);
+    const linea = st.doc.lineAt(0);
+    const tr = st.update({
+      changes: FORMAS["Obsidian: reemplaza el carácter previo al cursor"]!(
+        linea,
+        linea.to,
+        continuacion(doc),
+      ),
+      userEvent: "input.type",
+    });
+    expect(tr.state.doc.toString()).toBe("\t- 1A\n\t- [ ] ");
+    expect(tr.isUserEvent("input.type")).toBe(true);
+  });
+
+  it("una transacción sin userEvent tampoco se inventa uno", () => {
+    const doc = "\t- 1A";
+    const st = estado(doc);
+    const linea = st.doc.lineAt(0);
+    const tr = st.update({
+      changes: FORMAS["Outliner: reemplaza la línea entera"]!(linea, linea.to, continuacion(doc)),
+    });
+    expect(tr.state.doc.toString()).toBe("\t- 1A\n\t- [ ] ");
+    expect(tr.isUserEvent("input")).toBe(false);
+  });
+});

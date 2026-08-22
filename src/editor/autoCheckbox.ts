@@ -2,10 +2,10 @@ import {
   Annotation,
   EditorState,
   StateField,
+  Transaction,
   type ChangeSpec,
   type Extension,
   type Text,
-  type Transaction,
   type TransactionSpec,
 } from "@codemirror/state";
 import {
@@ -166,7 +166,12 @@ function corregirCambios(tr: Transaction): TransactionSpec | Transaction {
       ? { selection: { anchor: cursor }, annotations: CURSOR_PUESTO.of(cursor) }
       : {}),
     scrollIntoView: true,
-    userEvent: tr.isUserEvent("input") ? "input" : undefined,
+    // El `userEvent` se conserva **tal cual**, no se aplasta a "input".
+    // CodeMirror discrimina por el subtipo: `indentOnInput` solo reacciona a
+    // "input.type", y devolver "input" lo apaga sin que se note. Un filtro
+    // que reescribe una transacción no tiene por qué cambiar de qué gesto
+    // vino.
+    userEvent: tr.annotation(Transaction.userEvent),
   };
   return spec;
 }
