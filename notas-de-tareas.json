@@ -1,0 +1,17 @@
+{
+  "_comentario": [
+    "Las notas de tareas activas (spec §D2: el plugin lee una lista explícita,",
+    "no el vault entero). Un solo lugar: la consumen `src/notas.ts` y",
+    "`scripts/medir-tareas.mjs`. Es el valor por omisión; la lista efectiva",
+    "vive en la configuración del plugin y el usuario puede agregar notas."
+  ],
+  "notas": [
+    "0_inbox/tareas_VIDA.md",
+    "0_inbox/tareas_COLE.md",
+    "0_inbox/tareas_ACADEMIA.md",
+    "0_inbox/tareas_MES.md",
+    "0_inbox/tareas_CLAUDE.md",
+    "0_inbox/tareas_CÍCLICAS.md",
+    "0_inbox/tareas_LOG.md"
+  ]
+}

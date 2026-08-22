@@ -1,0 +1,11 @@
+# Se reconstruye con `npm install`.
+node_modules/
+dist/
+*.log
+
+# Basura de macOS.
+.DS_Store
+
+# El bundle: lo produce `npm run build` y cambia entero en cada compilación.
+# Si alguna vez se publica, main.js va adjunto a la release, no al repositorio.
+main.js

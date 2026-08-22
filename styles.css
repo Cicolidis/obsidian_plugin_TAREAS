@@ -1,0 +1,23 @@
+/*
+ * Estilos del plugin de tareas.
+ *
+ * Todavía vacío: el prototipo del checkbox automático (spec §20 paso 1) no
+ * dibuja nada. El archivo existe porque `npm run deploy` lo copia junto con
+ * `main.js` y el manifiesto, y así el comando es el mismo antes y después de
+ * que haya CSS.
+ */
+
+/* La lista de notas necesita el ancho entero: una ruta de vault no entra en
+   la columna angosta que Obsidian le da por omisión a un control. */
+.tareas-ajustes-notas {
+  display: block;
+}
+.tareas-ajustes-notas .setting-item-control {
+  justify-content: flex-start;
+  padding-top: var(--size-4-2);
+}
+.tareas-ajustes-notas textarea {
+  width: 100%;
+  font-family: var(--font-monospace);
+  resize: vertical;
+}

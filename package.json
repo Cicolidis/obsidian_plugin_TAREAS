@@ -1,0 +1,26 @@
+{
+  "name": "obsidian-plugin-tareas",
+  "version": "0.0.1",
+  "description": "Plugin de Obsidian para gestión de tareas: un outliner con vistas superpuestas sobre notas markdown.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "deploy": "npm run build && mkdir -p \"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}/.obsidian/plugins/tareas-outline\" && cp main.js manifest.json styles.css \"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}/.obsidian/plugins/tareas-outline/\" && npm run humo",
+    "humo": "node scripts/humo.mjs",
+    "medir": "node scripts/medir-tareas.mjs \"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}\"",
+    "release": "npm run build && node scripts/release.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "builtin-modules": "^5.3.0",
+    "esbuild": "^0.28.1",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
