@@ -222,3 +222,19 @@ nuevo.
 Si sale bien, el caso 16 estaba causado por el `userEvent` y no queda nada
 abierto. Si sigue naciendo al ras, **ahí sí** va el espía corregido: pegarlo,
 un solo Enter, copiar el bloque, `espiaTareas.off()`.
+
+## Prueba 26: OK — el caso 16 estaba causado por el `userEvent`
+
+Nace `	- [ ] ` con el tab, dibujado como checkbox y con el cursor listo para
+escribir. Con eso **no queda ningún caso abierto**: el prototipo del paso 1 de
+la §20 de la spec está verificado en escritorio y en el teléfono, con Outliner
+encendido y apagado, y con `stickCursor` en sus dos extremos.
+
+Lo que el prototipo dejó demostrado, que es para lo que existía:
+
+- El `transactionFilter` gana sobre la continuación de listas de Obsidian y
+  sobre el keymap de `Prec.highest` de Outliner.
+- Una regla que no mira la forma del cambio funciona con las cuatro formas
+  medidas.
+- **En móvil funciona igual.** El teclado por composición no lo rompe, así que
+  la salida de emergencia de la §15 punto 2 no hace falta y el diseño no cambia.

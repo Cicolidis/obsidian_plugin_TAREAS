@@ -1,6 +1,6 @@
 {
   "name": "obsidian-plugin-tareas",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Plugin de Obsidian para gestión de tareas: un outliner con vistas superpuestas sobre notas markdown.",
   "private": true,
   "type": "module",

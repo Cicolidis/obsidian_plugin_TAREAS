@@ -1,7 +1,7 @@
 {
   "id": "tareas-outline",
   "name": "Tareas (outline)",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "minAppVersion": "1.6.0",
   "description": "Outliner de tareas con vistas superpuestas: las tareas se escriben en notas markdown y el plugin agrega interfaz encima.",
   "author": "",
