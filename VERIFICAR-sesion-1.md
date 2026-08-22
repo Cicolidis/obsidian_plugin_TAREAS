@@ -151,10 +151,17 @@ sincronización), así que la ruta elegida es **BRAT**, que ya está instalado.
 
 ### Lo que falta para que funcione
 
-1. `gh auth login` — lo tenés que correr vos: pide credenciales.
-2. Yo creo el repositorio y publico la primera release con `npm run release`.
-3. En el teléfono: BRAT → *Add beta plugin* → la dirección del repositorio.
-   Desde ahí se actualiza solo con cada release nueva.
+Ya está hecho: el repositorio es
+[`Cicolidis/obsidian_plugin_TAREAS`](https://github.com/Cicolidis/obsidian_plugin_TAREAS)
+y la release `0.0.1` tiene adjuntos los tres archivos que BRAT baja.
+
+En el teléfono, en el vault ya sincronizado:
+
+1. Ajustes → BRAT → **Add beta plugin**.
+2. Pegar `Cicolidis/obsidian_plugin_TAREAS` y aceptar.
+3. Ajustes → Complementos de la comunidad → activar **Tareas (outline)**.
+
+De ahí en más, cada `npm run release` le llega como actualización.
 
 ### Y recién ahí, los casos del teléfono
 
