@@ -177,3 +177,48 @@ composición (IME) y las transacciones pueden no tener la misma forma.
 
 Si 18–20 fallan, la salida está prevista y no cuesta nada: se apaga el
 interruptor y en el teléfono se escribe `- [ ]` a mano, como hoy.
+
+---
+
+# Tercera vuelta
+
+De la segunda quedó **cerrado casi todo**:
+
+- **18, 19, 20 (teléfono): OK.** Era el único riesgo capaz de cambiar el
+  diseño (§15 punto 2 de la spec). El teclado por composición no rompe el
+  filtro. La salida de emergencia queda sin usar.
+- **21, 22 (el arreglo del cursor): OK.**
+- **23: OK.** El cursor entra al checkbox, lo recorre y sale hasta el
+  comienzo de la línea. La defensa dura una transacción, como tenía que ser.
+- **24 (control): el tab se conserva.** Obsidian solo, sin Outliner y sin el
+  plugin, hace nacer la línea nueva con su tab y como bullet.
+
+## Lo que el log invalidó
+
+La prueba 25 no midió nada: **el espía tiraba excepción dentro del
+`dispatch`**, la transacción nunca llegaba a despacharse, y Obsidian caía a su
+camino de salida insertando un salto pelado. «Al ras, sin bullet» era el espía,
+no el plugin. Ya está corregido: ahora el logueo va dentro de un `try` y el
+`dispatch` original se llama siempre.
+
+## Prueba 26 — el caso 16, otra vez y sin espía
+
+Puede que ya esté resuelto: el filtro aplastaba el `userEvent` de `input.type`
+a `input`, y CodeMirror discrimina por el subtipo —`indentOnInput` solo reacciona
+a `input.type`—, así que apagaba comportamiento del entorno sin que se notara.
+Ahora se conserva tal cual.
+
+```bash
+npm run deploy
+```
+
+Y desactivar/activar **Tareas (outline)** en Obsidian para que cargue el bundle
+nuevo.
+
+| # | Configuración | Acción | Tiene que quedar |
+|---|---|---|---|
+| 26 | Outliner **desactivado**, «Checkbox automático» **encendido**, sin espía | Enter al final de `	- 1A` | `	- [ ] ` **con el tab**, al mismo nivel |
+
+Si sale bien, el caso 16 estaba causado por el `userEvent` y no queda nada
+abierto. Si sigue naciendo al ras, **ahí sí** va el espía corregido: pegarlo,
+un solo Enter, copiar el bloque, `espiaTareas.off()`.
