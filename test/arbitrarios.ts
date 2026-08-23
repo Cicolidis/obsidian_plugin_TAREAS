@@ -18,7 +18,7 @@ const palabra = fc.constantFrom(
   "armar",
   "mandar",
   "corregir",
-  "tangram",
+  "planilla",
   "guía",
   "monografía",
   "Präsentation",

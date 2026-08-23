@@ -115,17 +115,21 @@ describe("columnas", () => {
 });
 
 /**
- * Los headings del corpus, en sus tres formas reales. La forma dominante es la
- * de texto plano: 15 de los 18 headings semánticos no tienen corchetes. Por
- * decisión del usuario **solo el wikilink define proyecto o área**; el texto
- * plano queda registrado en `candidatoPlano` para la migración de la §19.1.
+ * Los headings en las tres formas que tiene el corpus, con **nombres
+ * inventados**: el repositorio es público, así que acá van las formas y no los
+ * títulos. Los headings de verdad se comparan en `npm run test:corpus`.
+ *
+ * La forma dominante es la de texto plano: 15 de los 18 headings semánticos no
+ * tienen corchetes. Por decisión del usuario **solo el wikilink define proyecto
+ * o área**; el texto plano queda registrado en `candidatoPlano` para la
+ * migración de la §19.1.
  */
 describe("parseHeading", () => {
   it("es reversible byte por byte", () => {
     for (const l of [
-      "# PERSONAL",
-      "## WORKBENCH | [[tareas_LOG]]",
-      "#### MINT 6 ⮕ p_6_Sheets",
+      "# UN TÍTULO",
+      "## SECCIÓN | [[otra_nota]]",
+      "#### MATERIA 4 ⮕ p_Cuatro_Ejemplo",
       "###### hasta seis",
       "#  dos espacios",
       "#\tcon tab",
@@ -145,18 +149,18 @@ describe("parseHeading", () => {
 
   it("el tipo sale del prefijo del destino del wikilink, no del nivel (D6)", () => {
     // El mismo nivel, los tres tipos: es la razón de ser de D6.
-    expect(parseHeading("#### [[p_6_Sheets]]")).toMatchObject({
+    expect(parseHeading("#### [[p_Cuatro_Ejemplo]]")).toMatchObject({
       tipo: "proyecto",
-      destino: "p_6_Sheets",
+      destino: "p_Cuatro_Ejemplo",
     });
-    expect(parseHeading("#### [[a_Reuniones semanales]]")).toMatchObject({
+    expect(parseHeading("#### [[a_Un área de ejemplo]]")).toMatchObject({
       tipo: "área",
-      destino: "a_Reuniones semanales",
+      destino: "a_Un área de ejemplo",
     });
     // Un enlace a otra cosa es sección: la §4.1 lo dice explícitamente.
     // `medir-tareas.mjs` lo cuenta aparte como «enlace-otro»; no es un bug de
     // ninguno de los dos, es que la spec pliega esa categoría dentro de sección.
-    expect(parseHeading("## WORKBENCH | [[tareas_LOG]]")).toMatchObject({
+    expect(parseHeading("## SECCIÓN | [[otra_nota]]")).toMatchObject({
       tipo: "sección",
       destino: null,
     });
@@ -168,12 +172,17 @@ describe("parseHeading", () => {
   });
 
   it("un proyecto en texto plano NO es proyecto, pero queda anotado", () => {
-    // Las tres formas que existen hoy en el vault.
+    // Las tres formas que existen hoy en el vault, con nombres inventados.
     for (const [linea, candidato] of [
-      ["#### MINT 6 ⮕ p_6_Sheets", "p_6_Sheets"],
-      ["#### p_PKM", "p_PKM"],
-      ["# p_HOGAR → CHARCAS 5142", "p_HOGAR → CHARCAS 5142"],
-      ["#### IB, MATE, etc. ⮕ a_Reuniones con Gabi V.", "a_Reuniones con Gabi V."],
+      // rótulo + flecha + referencia
+      ["#### MATERIA 4 ⮕ p_Cuatro_Ejemplo", "p_Cuatro_Ejemplo"],
+      // la referencia sola
+      ["#### p_Solo", "p_Solo"],
+      // la referencia primero y una aclaración al lado: el corte es hasta el
+      // fin de línea, porque sin corchetes no hay dónde cortar sin adivinar
+      ["# p_Casa → ACLARACIÓN AL LADO", "p_Casa → ACLARACIÓN AL LADO"],
+      // un área con espacios y un punto final
+      ["#### VARIOS, ETC. ⮕ a_Reuniones con el equipo", "a_Reuniones con el equipo"],
     ] as const) {
       const h = parseHeading(linea)!;
       expect(h.tipo, linea).toBe("sección");
@@ -183,9 +192,10 @@ describe("parseHeading", () => {
   });
 
   it("un `a_` en medio de una palabra no es una referencia", () => {
-    // `casa_Zapiola` y `**casa_Soler**` son secciones del corpus; leerlas como
-    // área inventaría un área por cada casa.
-    for (const l of ["### casa_Zapiola :LiHouse:", "### **casa_Soler** :LiWarehouse:"]) {
+    // El corpus tiene varias secciones con la forma `casa_algo`, incluso en
+    // negrita y con icono de Iconize; leerlas como área inventaría un área por
+    // cada casa.
+    for (const l of ["### casa_Norte :LiHouse:", "### **casa_Sur** :LiWarehouse:"]) {
       expect(parseHeading(l)!.candidatoPlano, l).toBeNull();
     }
   });

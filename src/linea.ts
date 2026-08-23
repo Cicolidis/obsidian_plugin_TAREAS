@@ -125,8 +125,10 @@ export interface Heading {
    * a inventar una gramática para eso.
    *
    * El corte es hasta el fin de línea: sin delimitador no hay forma de saber
-   * dónde termina el nombre, y adivinar partiría nombres reales
-   * (`p_UBA_Políticas económicas` es una carpeta del vault).
+   * dónde termina el nombre, y adivinar lo partiría. Cortar en el primer
+   * espacio —lo que hace `scripts/medir-tareas.mjs`— produce nombres que no son
+   * de nada: hay proyectos del vault cuyo nombre lleva espacios y existe como
+   * carpeta con el nombre entero. Ver `INFORME-gramaticas.md` §3.
    */
   candidatoPlano: string | null;
 }
