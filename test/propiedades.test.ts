@@ -1,8 +1,18 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { parseDocumento, renderDocumento, reemplazarLinea } from "../src/documento.js";
+import {
+  arbolDe,
+  eliminarLineas,
+  insertarLineas,
+  lineasDelSubarbol,
+  parseDocumento,
+  rangoDelSubarbol,
+  recorrer,
+  reemplazarLinea,
+  renderDocumento,
+} from "../src/documento.js";
 import { indexar } from "../src/tareas.js";
-import { parseTaskToken, setTaskToken, stripTaskToken } from "../src/token.js";
+import { nuevoId, parseTaskToken, setTaskToken, stripTaskToken } from "../src/token.js";
 import { documento, documentoRaro, patch, textoLibre, tokenRoto, tokenValido } from "./arbitrarios.js";
 
 /**
@@ -200,6 +210,110 @@ describe("invariante 9 — parsear y volver a escribir no altera un byte", () =>
         const n = semilla % doc.lineas.length;
         expect(renderDocumento(reemplazarLinea(doc, n, doc.lineas[n]!.texto))).toBe(raw);
       }),
+      corridas,
+    );
+  });
+});
+
+describe("primitivas de escritura por rango (§8)", () => {
+  it("insertar y volver a borrar deja el archivo idéntico, siempre", () => {
+    fc.assert(
+      fc.property(
+        documento,
+        fc.nat(),
+        fc.array(fc.constantFrom("- [ ] nueva", "\t- nota", "", "## corte"), {
+          minLength: 1,
+          maxLength: 4,
+        }),
+        (raw, semilla, textos) => {
+          const doc = parseDocumento(raw);
+          const n = semilla % (doc.lineas.length + 1);
+          const con = insertarLineas(doc, n, textos);
+          expect(renderDocumento(eliminarLineas(con, n, n + textos.length - 1))).toBe(raw);
+        },
+      ),
+      corridas,
+    );
+  });
+
+  it("después de insertar o borrar, el invariante 9 sigue en pie", () => {
+    fc.assert(
+      fc.property(documento, fc.nat(), (raw, semilla) => {
+        const doc = parseDocumento(raw);
+        const n = semilla % (doc.lineas.length + 1);
+        const con = renderDocumento(insertarLineas(doc, n, ["- [ ] nueva"]));
+        expect(renderDocumento(parseDocumento(con))).toBe(con);
+        if (doc.lineas.length === 0) return;
+        const m = semilla % doc.lineas.length;
+        const sin = renderDocumento(eliminarLineas(doc, m, m));
+        expect(renderDocumento(parseDocumento(sin))).toBe(sin);
+      }),
+      corridas,
+    );
+  });
+
+  it("borrar un subárbol no toca ni un byte de lo que está afuera", () => {
+    // Es el invariante 3 llevado al descarte físico de la §12: se va el
+    // subárbol entero y nada más que el subárbol.
+    fc.assert(
+      fc.property(documento, fc.nat(), (raw, semilla) => {
+        const doc = parseDocumento(raw);
+        const nodos = recorrer(arbolDe(doc));
+        if (nodos.length === 0) return;
+        const objetivo = nodos[semilla % nodos.length]!;
+        const { desde, hasta } = rangoDelSubarbol(objetivo);
+
+        const afuera = doc.lineas.filter((l) => l.n < desde || l.n > hasta).map((l) => l.texto);
+        const despues = eliminarLineas(doc, desde, hasta);
+        expect(despues.lineas.map((l) => l.texto)).toEqual(afuera);
+      }),
+      corridas,
+    );
+  });
+
+  it("los subárboles de las raíces particionan el documento sin solaparse", () => {
+    fc.assert(
+      fc.property(documento, (raw) => {
+        const rangos = arbolDe(parseDocumento(raw))
+          .map(rangoDelSubarbol)
+          .sort((a, b) => a.desde - b.desde);
+        for (let i = 1; i < rangos.length; i++) {
+          expect(rangos[i]!.desde).toBeGreaterThan(rangos[i - 1]!.hasta);
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("las líneas de un subárbol son un tramo contiguo del documento", () => {
+    fc.assert(
+      fc.property(documento, fc.nat(), (raw, semilla) => {
+        const doc = parseDocumento(raw);
+        const nodos = recorrer(arbolDe(doc));
+        if (nodos.length === 0) return;
+        const objetivo = nodos[semilla % nodos.length]!;
+        const { desde, hasta } = rangoDelSubarbol(objetivo);
+        expect(lineasDelSubarbol(doc, objetivo)).toEqual(
+          doc.lineas.slice(desde, hasta + 1).map((l) => l.texto),
+        );
+      }),
+      corridas,
+    );
+  });
+});
+
+describe("nuevoId nunca choca (§5.4)", () => {
+  it("con cualquier conjunto de ids ya escritos", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.stringMatching(/^[a-z0-9]{4,8}$/), { maxLength: 200 }),
+        (existentes) => {
+          const set = new Set(existentes);
+          const id = nuevoId(set);
+          expect(set.has(id)).toBe(false);
+          expect(id).toMatch(/^[a-z0-9]{4,8}$/);
+        },
+      ),
       corridas,
     );
   });

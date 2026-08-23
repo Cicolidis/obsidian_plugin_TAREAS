@@ -206,3 +206,44 @@ export function stripTaskToken(linea: string): string {
   if (a.estado !== "ok") return linea;
   return a.texto.replace(/[ \t]+$/, "");
 }
+
+/**
+ * Un `id` que no choca con ninguno de los que ya existen (§5.4).
+ *
+ * Arranca en 4 caracteres y crece solo si hace falta. Con 36⁴ = 1.679.616
+ * combinaciones y 395 tareas, la probabilidad de choque es del orden de 1 en
+ * 4.000: crecer casi nunca pasa, pero **no se puede depender de que no pase**,
+ * porque un id repetido no rompe nada visible — hace que dos tareas distintas
+ * sean la misma para el workbench, que es peor que un error.
+ *
+ * `aleatorio` se inyecta para poder forzar el choque en los tests. Un generador
+ * que no se puede hacer chocar es un generador cuyo camino de choque no se
+ * probó nunca.
+ *
+ * Esta función **no se llama al parsear**. El id se escribe solo cuando la
+ * tarea entra a un workbench: ponerle id a las 395 tareas al arrancar tocaría
+ * los cinco archivos en cada dispositivo cada vez que se abre Obsidian, que es
+ * la receta de conflictos de Sync que la §5.4 evita.
+ */
+const ALFABETO = "abcdefghijklmnopqrstuvwxyz0123456789";
+const LARGO_MINIMO = 4;
+const LARGO_MAXIMO = 8;
+
+export function nuevoId(
+  existentes: ReadonlySet<string>,
+  aleatorio: () => number = Math.random,
+): string {
+  for (let largo = LARGO_MINIMO; largo <= LARGO_MAXIMO; largo++) {
+    // Unos cuantos intentos por largo antes de agrandar: agrandar es la salida
+    // cuando el espacio está saturado, no cuando hubo mala suerte una vez.
+    for (let intento = 0; intento < 16; intento++) {
+      let id = "";
+      for (let i = 0; i < largo; i++)
+        id += ALFABETO[Math.floor(aleatorio() * ALFABETO.length) % ALFABETO.length];
+      if (!existentes.has(id)) return id;
+    }
+  }
+  // 36⁸ combinaciones agotadas es imposible con este corpus, pero un bucle
+  // infinito silencioso sería peor que un error que se ve.
+  throw new Error("no se pudo generar un id libre");
+}

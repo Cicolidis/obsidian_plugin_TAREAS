@@ -6,7 +6,14 @@
  * dueña. De ahí que `linea` esté marcado como volátil en la spec: la identidad
  * es el `id` del token, nunca la posición.
  */
-import { arbolDe, headingsDe, recorrer, type Documento, type Nodo } from "./documento.js";
+import {
+  arbolDe,
+  headingsDe,
+  rangoDelSubarbol,
+  recorrer,
+  type Documento,
+  type Nodo,
+} from "./documento.js";
 import { estadoDe, type Heading } from "./linea.js";
 import { parseTaskToken, type TaskMeta } from "./token.js";
 
@@ -241,4 +248,54 @@ export function idsACompletar(tareas: readonly Task[], clave: Clave): Clave[] {
  */
 export function idsADestildar(_tareas: readonly Task[], clave: Clave): Clave[] {
   return [clave];
+}
+
+// ---------------------------------------------------------- colapso (§9)
+
+/**
+ * Cuántas líneas tiene un subárbol antes de colapsarlo por defecto.
+ *
+ * Sale de medir: p50 del subárbol = 2 líneas, p90 = 12, máx = 76. Colapsar todo
+ * sería molesto para el caso típico y no colapsar nada haría inusable el
+ * workbench. El número vive acá solo, porque una constante repetida en la vista
+ * y en la lógica termina divergiendo.
+ */
+export const LINEAS_ANTES_DE_COLAPSAR = 5;
+
+export interface ResumenDeSubarbol {
+  /** Líneas que ocupa, blancos de adentro incluidos. */
+  lineas: number;
+  /** Tareas que contiene, incluida la raíz. Los `- [ ]` vacíos no cuentan. */
+  tareas: number;
+  hechas: number;
+  /** Bullets sin checkbox que cuelgan: notas de tarea (§4.3). */
+  notas: number;
+}
+
+/**
+ * Lo que una vista necesita para decidir si colapsa y qué contador muestra.
+ *
+ * Devuelve los tres conteos y no un texto: la §9 pide «un contador `(3/60)`»
+ * pero no dice qué es cada número, y **inventar el formato acá lo congelaría en
+ * la capa 1**. La vista arma el texto con lo que quiera de esto.
+ */
+export function resumenDelSubarbol(doc: Documento, nodo: Nodo): ResumenDeSubarbol {
+  const { desde, hasta } = rangoDelSubarbol(nodo);
+  const dentro: Nodo[] = [];
+  const visitar = (x: Nodo) => {
+    dentro.push(x);
+    x.hijos.forEach(visitar);
+  };
+  visitar(nodo);
+  return {
+    lineas: hasta - desde + 1,
+    tareas: dentro.filter((n) => n.rol === "tarea").length,
+    hechas: dentro.filter((n) => n.rol === "tarea" && estadoDe(n.bullet) !== " ").length,
+    notas: dentro.filter((n) => n.rol === "nota").length,
+  };
+}
+
+/** ¿Este subárbol nace colapsado? (§9) */
+export function naceColapsado(resumen: ResumenDeSubarbol): boolean {
+  return resumen.lineas > LINEAS_ANTES_DE_COLAPSAR;
 }

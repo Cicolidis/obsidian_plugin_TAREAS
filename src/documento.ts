@@ -191,3 +191,79 @@ export function recorrer(nodos: readonly Nodo[]): Nodo[] {
   nodos.forEach(visitar);
   return salida;
 }
+
+// ------------------------------------------------- escritura por rango (§8)
+
+/**
+ * Líneas nuevas insertadas **antes** de la línea `n`.
+ *
+ * Insertar en `lineas.length` agrega al final. Ojo con lo que eso significa
+ * según cómo termine el archivo: una nota que termina en `\n` tiene una última
+ * línea vacía, así que «al final del texto» es antes de esa, no después. Es la
+ * diferencia entre agregar una tarea y agregar una tarea más un salto de línea
+ * de regalo, en cinco de las siete notas que no terminan en `\n`.
+ */
+export function insertarLineas(doc: Documento, n: number, textos: readonly string[]): Documento {
+  if (n < 0 || n > doc.lineas.length) throw new RangeError(`línea ${n} fuera del documento`);
+  const crudas = doc.lineas.map((l) => l.texto);
+  crudas.splice(n, 0, ...textos);
+  return renumerar(crudas);
+}
+
+/**
+ * El documento sin las líneas de `desde` a `hasta`, las dos incluidas.
+ *
+ * Existe para el descarte físico de la §12, que es una acción explícita y con
+ * confirmación. Ninguna operación automática lo llama.
+ */
+export function eliminarLineas(doc: Documento, desde: number, hasta: number): Documento {
+  if (desde < 0 || hasta >= doc.lineas.length || desde > hasta)
+    throw new RangeError(`rango ${desde}..${hasta} fuera del documento`);
+  const crudas = doc.lineas.map((l) => l.texto);
+  crudas.splice(desde, hasta - desde + 1);
+  return renumerar(crudas);
+}
+
+/**
+ * Reconstruye el documento desde las líneas crudas.
+ *
+ * Insertar y borrar corren los números de línea de todo lo que sigue, y `n` es
+ * volátil por diseño (§6): la identidad es el `id`, nunca la posición. Volver a
+ * clasificar es barato —parsear las siete notas enteras cuesta 0,3 ms— y evita
+ * la clase de bug donde un índice queda apuntando a otra línea.
+ */
+function renumerar(crudas: readonly string[]): Documento {
+  return { lineas: crudas.map((texto, n) => ({ n, texto, clase: claseDe(texto) })) };
+}
+
+/**
+ * El rango de líneas que ocupa un nodo con todo lo que cuelga de él.
+ *
+ * Es la unidad de la §12 —archivar manda el subárbol completo, incluidas las
+ * notas sin checkbox— y también la unidad de escritura de la §8: un rango, no
+ * el archivo.
+ *
+ * Las líneas en blanco **de adentro** entran, porque el árbol no se corta en
+ * un blanco y sacarlas cambiaría el texto que se archiva. Las de después del
+ * último descendiente no: pertenecen a lo que sigue, no al subárbol.
+ */
+export function rangoDelSubarbol(nodo: Nodo): { desde: number; hasta: number } {
+  let hasta = nodo.n;
+  const visitar = (x: Nodo) => {
+    hasta = Math.max(hasta, x.n);
+    x.hijos.forEach(visitar);
+  };
+  visitar(nodo);
+  return { desde: nodo.n, hasta };
+}
+
+/** Las líneas de un subárbol, verbatim y en orden. */
+export function lineasDelSubarbol(doc: Documento, nodo: Nodo): string[] {
+  const { desde, hasta } = rangoDelSubarbol(nodo);
+  return doc.lineas.slice(desde, hasta + 1).map((l) => l.texto);
+}
+
+/** El nodo que empieza en esta línea, o `null`. */
+export function nodoEnLinea(nodos: readonly Nodo[], n: number): Nodo | null {
+  return recorrer(nodos).find((x) => x.n === n) ?? null;
+}
