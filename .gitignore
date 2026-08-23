@@ -9,3 +9,7 @@ dist/
 # El bundle: lo produce `npm run build` y cambia entero en cada compilación.
 # Si alguna vez se publica, main.js va adjunto a la release, no al repositorio.
 main.js
+
+# El volcado del outline de Obsidian para `npm run test:corpus`. Lleva los
+# títulos reales de las notas y este repositorio es público.
+outline-obsidian.local.json

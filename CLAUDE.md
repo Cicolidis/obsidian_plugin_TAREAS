@@ -75,13 +75,19 @@ Un cambio de diseño se prueba **encendiéndolo**, no reemplazando el anterior. 
 ## Comandos
 
 ```bash
-npm test                # vitest
+npm test                # vitest: unitarias y propiedades, sin vault
+npm run test:corpus     # diferencial contra las siete notas reales (opt-in)
 npm run typecheck
 npm run build
 npm run deploy          # compila, copia al vault y corre la prueba de humo
 npm run humo            # prueba de humo del bundle
-node scripts/medir-tareas.mjs "$OBSIDIAN_VAULT"
+npm run medir           # node scripts/medir-tareas.mjs "$OBSIDIAN_VAULT"
 ```
+
+`npm run test:corpus` se saltea sin `OBSIDIAN_VAULT`. El bloque que compara
+contra el parser de Obsidian necesita además `outline-obsidian.local.json`
+—ignorado por git, porque lleva los títulos reales de las notas— y se saltea
+solo si falta o si quedó viejo. Ver `INFORME-gramaticas.md`.
 
 `OBSIDIAN_VAULT` por defecto es `$HOME/Downloads/obsidian/mental palace`.
 

@@ -13,7 +13,8 @@
     "deploy": "npm run build && mkdir -p \"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}/.obsidian/plugins/tareas-outline\" && cp main.js manifest.json styles.css \"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}/.obsidian/plugins/tareas-outline/\" && npm run humo",
     "humo": "node scripts/humo.mjs",
     "medir": "node scripts/medir-tareas.mjs \"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}\"",
-    "release": "npm run build && node scripts/release.mjs"
+    "release": "npm run build && node scripts/release.mjs",
+    "test:corpus": "OBSIDIAN_VAULT=\"${OBSIDIAN_VAULT:-$HOME/Downloads/obsidian/mental palace}\" vitest run --config vitest.corpus.config.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

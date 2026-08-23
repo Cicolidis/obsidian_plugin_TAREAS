@@ -14,6 +14,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Las notas de tareas activas.
@@ -22,7 +23,7 @@ import { join } from "node:path";
  * este script y `src/notas.ts`: una lista de valores escrita en dos archivos
  * termina divergiendo (CLAUDE.md).
  */
-const NOTAS = JSON.parse(
+export const NOTAS = JSON.parse(
   await readFile(new URL("../notas-de-tareas.json", import.meta.url), "utf8"),
 ).notas;
 
@@ -56,7 +57,7 @@ function tipoDeHeading(texto) {
 
 // ------------------------------------------------------------------ análisis
 
-function analizar(nombre, contenido) {
+export function analizar(nombre, contenido) {
   const lineas = contenido.split("\n");
 
   const m = {
@@ -236,21 +237,29 @@ function reportar(medidas) {
 
 // --------------------------------------------------------------------- main
 
-const vault = process.argv[2];
-if (!vault) {
-  console.error("Uso: node scripts/medir-tareas.mjs <ruta-del-vault> [--json]");
-  process.exit(1);
-}
-
-const medidas = [];
-for (const rel of NOTAS) {
-  try {
-    medidas.push(analizar(rel, await readFile(join(vault, rel), "utf8")));
-  } catch (e) {
-    if (e.code === "ENOENT") console.error(`(falta, se omite: ${rel})`);
-    else throw e;
+/**
+ * El guard existe para que `test/corpus/` pueda importar `analizar` y
+ * comparar esta gramática contra la del plugin. La gramática de arriba **no se
+ * toca**: el valor del diferencial es que las dos sean independientes, así que
+ * si alguna vez divergen no puede ser porque comparten código.
+ */
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const vault = process.argv[2];
+  if (!vault) {
+    console.error("Uso: node scripts/medir-tareas.mjs <ruta-del-vault> [--json]");
+    process.exit(1);
   }
-}
 
-if (process.argv.includes("--json")) console.log(JSON.stringify(medidas, null, 2));
-else reportar(medidas);
+  const medidas = [];
+  for (const rel of NOTAS) {
+    try {
+      medidas.push(analizar(rel, await readFile(join(vault, rel), "utf8")));
+    } catch (e) {
+      if (e.code === "ENOENT") console.error(`(falta, se omite: ${rel})`);
+      else throw e;
+    }
+  }
+
+  if (process.argv.includes("--json")) console.log(JSON.stringify(medidas, null, 2));
+  else reportar(medidas);
+}
