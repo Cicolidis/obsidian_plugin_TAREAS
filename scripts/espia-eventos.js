@@ -124,6 +124,7 @@
 
     console.log(
       "espía de eventos ENCENDIDO. Escribí en una nota de tareas y mirá qué llega.\n" +
+        "  espiaEventos.resumen()   ← sondas 1 y 2, después de teclear un rato\n" +
         "Sondas que escriben (solo sobre " + PRUEBA + "):\n" +
         "  await espiaEventos.probarProcess()\n" +
         "  await espiaEventos.probarEditorAbierto()",
@@ -269,6 +270,58 @@
     return sobrevivio;
   }
 
+  /** La mediana de una lista de números, o `null` si está vacía. */
+  function mediana(xs) {
+    if (xs.length === 0) return null;
+    const o = [...xs].sort((a, b) => a - b);
+    return o[Math.floor(o.length / 2)];
+  }
+
+  /**
+   * Sondas 1 y 2, ya calculadas: cada cuánto llega `changed` y cuánto tarda.
+   *
+   * Existe porque leer la tabla a ojo es donde se cuela el error. Las dos
+   * preguntas que responde son las que deciden el debounce del plugin:
+   *
+   *   - **Cada cuánto llega `changed` mientras alguien escribe.** Si Obsidian ya
+   *     lo espacia, un debounce propio solo agrega latencia entre la acción y el
+   *     redibujo.
+   *   - **Cuánto va de `modify` a `changed`.** Es el retraso que el store tendría
+   *     si esperara al evento en vez de alimentarse de lo que devuelve `process`.
+   */
+  function resumen() {
+    const changed = registro.filter((r) => r.evento === "changed");
+    const modify = registro.filter((r) => r.evento === "modify");
+
+    const huecos = [];
+    for (let i = 1; i < changed.length; i++) {
+      if (changed[i].path === changed[i - 1].path) huecos.push(changed[i].ms - changed[i - 1].ms);
+    }
+
+    // Cada `changed` con el `modify` más cercano que lo precede, del mismo archivo.
+    const demoras = [];
+    for (const c of changed) {
+      const previos = modify.filter((m) => m.path === c.path && m.ms <= c.ms);
+      if (previos.length) demoras.push(c.ms - previos[previos.length - 1].ms);
+    }
+
+    console.log("\n=== sondas 1 y 2 ===");
+    console.log(`  eventos: modify×${modify.length}  changed×${changed.length}`);
+    console.log(
+      `  hueco entre changed consecutivos (ms): mín ${huecos.length ? Math.min(...huecos) : "-"}` +
+        ` · mediana ${mediana(huecos) ?? "-"} · máx ${huecos.length ? Math.max(...huecos) : "-"}`,
+    );
+    console.log(
+      `  demora modify → changed (ms): mín ${demoras.length ? Math.min(...demoras) : "-"}` +
+        ` · mediana ${mediana(demoras) ?? "-"} · máx ${demoras.length ? Math.max(...demoras) : "-"}`,
+    );
+    console.log(
+      "  ⇒ si el hueco mediano ya es de cientos de ms, Obsidian espacia solo\n" +
+        "    y un debounce propio arriba solo agrega latencia.",
+    );
+    return { huecos, demoras };
+  }
+
   window.espiaEventos = {
     on,
     off() {
@@ -283,6 +336,7 @@
       console.table(registro);
       return registro;
     },
+    resumen,
     probarProcess,
     probarEditorAbierto,
     registro,
