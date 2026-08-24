@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTaskToken, setTaskToken, stripTaskToken } from "../src/token.js";
+import { parseTaskToken, resolverDue, setTaskToken, stripTaskToken } from "../src/token.js";
 
 const CON_TODO = "- [ ] llamar a Flow %%t:id=a3f2;wb=foco,mudanza;due=2026-08-29;rec=w;p=2;done=2026-08-30%%";
 
@@ -52,7 +52,11 @@ describe("parseTaskToken", () => {
     ["id con mayúsculas", "- [ ] x %%t:id=A3F2%%"],
     ["fecha mal formada", "- [ ] x %%t:due=29-08-2026%%"],
     ["fecha imposible de leer", "- [ ] x %%t:due=mañana%%"],
-    ["rec inválido", "- [ ] x %%t:rec=d%%"],
+    ["día del mes cero", "- [ ] x %%t:due=0%%"],
+    ["día del mes fuera de rango", "- [ ] x %%t:due=32%%"],
+    ["día con cero adelante", "- [ ] x %%t:due=07%%"],
+    ["rec vacío", "- [ ] x %%t:rec=%%"],
+    ["rec con coma: un grupo, no varios", "- [ ] x %%t:rec=lunes,martes%%"],
     ["p=0 explícito", "- [ ] x %%t:p=0%%"],
     ["p fuera de rango", "- [ ] x %%t:p=3%%"],
     ["wb vacío", "- [ ] x %%t:wb=%%"],
@@ -134,5 +138,80 @@ describe("stripTaskToken", () => {
 
   it("una línea sin token vuelve tal cual, espacios finales incluidos", () => {
     expect(stripTaskToken("- [ ] x   ")).toBe("- [ ] x   ");
+  });
+});
+
+/**
+ * La recurrencia como **etiqueta de grupo**, no como motor.
+ *
+ * El plugin no regenera ni corre fechas por su cuenta: un botón reinicia todas
+ * las tareas de un grupo cuando el usuario lo aprieta. Es lo que evita que la
+ * §11 choque con la §8, donde un reinicio por calendario haría que todos los
+ * dispositivos reescribieran las mismas líneas en el mismo momento.
+ */
+describe("rec como grupo de reinicio", () => {
+  it("acepta cualquier nombre, como `wb`", () => {
+    for (const grupo of ["lunes", "mensual", "mudanza", "semana en el cole", "w", "m"]) {
+      const a = parseTaskToken(`- [ ] x %%t:rec=${grupo}%%`);
+      expect(a.estado, grupo).toBe("ok");
+      if (a.estado === "ok") expect(a.meta.rec).toBe(grupo);
+    }
+  });
+
+  it("se escribe y se lee igual", () => {
+    const linea = setTaskToken("- [ ] regar las plantas", { rec: "lunes" });
+    expect(linea).toBe("- [ ] regar las plantas %%t:rec=lunes%%");
+  });
+
+  it("convive con un workbench y un vencimiento", () => {
+    const linea = setTaskToken("- [ ] pagar el alquiler", {
+      wb: ["mes"],
+      due: "10",
+      rec: "mensual",
+    });
+    expect(linea).toBe("- [ ] pagar el alquiler %%t:wb=mes;due=10;rec=mensual%%");
+  });
+});
+
+describe("due como día del mes", () => {
+  it("acepta las dos formas", () => {
+    for (const [due, valido] of [
+      ["2026-09-10", true],
+      ["10", true],
+      ["1", true],
+      ["31", true],
+      ["0", false],
+      ["32", false],
+      ["07", false],
+    ] as const) {
+      const estado = parseTaskToken(`- [ ] x %%t:due=${due}%%`).estado;
+      expect(estado, due).toBe(valido ? "ok" : "ilegible");
+    }
+  });
+
+  it("una fecha concreta se devuelve tal cual", () => {
+    expect(resolverDue("2026-09-10", "2026-12-01")).toBe("2026-09-10");
+  });
+
+  it("un día del mes se resuelve contra hoy, sin reescribir nada", () => {
+    expect(resolverDue("10", "2026-09-01")).toBe("2026-09-10");
+    expect(resolverDue("10", "2026-09-10")).toBe("2026-09-10"); // hoy mismo cuenta
+  });
+
+  it("si el día ya pasó, es el del mes que viene", () => {
+    expect(resolverDue("10", "2026-09-11")).toBe("2026-10-10");
+    expect(resolverDue("10", "2026-12-11")).toBe("2027-01-10");
+  });
+
+  it("un día que no existe en ese mes se recorta al último", () => {
+    // `due=31` en febrero es el 28, no el 3 de marzo: un vencimiento que se
+    // adelanta unos días es mejor que uno que se salta el mes.
+    expect(resolverDue("31", "2026-02-01")).toBe("2026-02-28");
+    expect(resolverDue("31", "2028-02-01")).toBe("2028-02-29"); // bisiesto
+    expect(resolverDue("31", "2026-04-01")).toBe("2026-04-30");
+  });
+
+  it("sin vencimiento, no hay nada que resolver", () => {
+    expect(resolverDue(null, "2026-09-01")).toBeNull();
   });
 });

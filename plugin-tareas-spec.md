@@ -123,8 +123,8 @@ Texto libre, tablas, imágenes embebidas, y los 11 checkboxes vacíos usados com
 |---|---|---|
 | `id` | 4-8 chars `[a-z0-9]` | **Solo al asignar la tarea a un workbench.** Ver §5.4 |
 | `wb` | lista separada por comas | Al tocar un botón de workbench |
-| `due` | `AAAA-MM-DD` | Desde el menú, o al confirmar una fecha detectada |
-| `rec` | `w` \| `m` | Desde el menú |
+| `due` | `AAAA-MM-DD`, o `D`/`DD` (día del mes) si la tarea es cíclica | Desde el menú, o al confirmar una fecha detectada |
+| `rec` | nombre libre del **grupo de reinicio** (`lunes`, `mensual`, …) | Desde el menú |
 | `p` | `1` (alta) \| `2` (muy alta) | Desde la barra de prioridad. Normal no escribe nada |
 | `done` | `AAAA-MM-DD` | Al completar |
 
@@ -267,26 +267,68 @@ La vista Buscar tiene un filtro «sin proyecto» con acción de asignar. Y **al 
 
 ---
 
-## 11. Recurrencia
+## 11. Tareas cíclicas
 
-Modelo **regenerativo**: al completar, la tarea queda `[x]` con su `done`, y se inserta una instancia nueva.
+**Revisado el 23/08/2026.** La versión anterior era regenerativa: al completar,
+la tarea quedaba `[x]` y el plugin insertaba una instancia nueva, oculta hasta
+su fecha de activación, y le corría la fecha a la que no se hubiera completado.
+Se reemplazó por lo de abajo porque chocaba consigo misma en tres lugares. El
+detalle está en los comentarios de `src/tareas.ts`.
 
-- **Anclaje al calendario, no a la fecha de completado.** `rec=w` regenera los lunes; `rec=m`, el día 1. No importa qué día se creó ni cuándo se completó.
-- **Si tiene hijos, la instancia nueva los clona todos destildados.**
-- **Los bullets sin checkbox se copian verbatim y no se modifican jamás.** Es lo que protege los instructivos y datos de pago de `tareas_MES`.
-- **La instancia nueva hereda los workbenches de la anterior.** Sin esto hay que rearmar el workbench cada lunes, que es exactamente la fricción a eliminar.
-- **Se genera al completar pero queda oculta hasta su fecha de activación.** Si no, el workbench se llena de tareas del futuro.
-- **Si llegó la fecha y no se completó, no se genera otra.** Se mantiene una sola instancia viva y se le corre la fecha.
+### El modelo: una etiqueta y un botón
 
-En las vistas, las recurrentes van **agrupadas aparte** de las de una sola vez.
+`rec` es el nombre de un **grupo de reinicio**, no un motor: `rec=lunes`,
+`rec=mensual`, `rec=mudanza`. Se crean escribiéndolos, como los workbenches.
 
-### tareas_CÍCLICAS: fuera de la v1
+Un botón por grupo **destilda todas las tareas de ese grupo y les borra el
+`done`**. Nada más: no se crea ninguna instancia, no se clona ningún hijo y no
+se corre ninguna fecha.
 
-Hoy son bullets sin checkbox agrupados por día de la semana: 0 tareas completables en 43 líneas. No se completan, se consultan. Convertirlas agregaría una obligación diaria de tildar que hoy no existe — **es un cambio de hábito, no una feature**.
+- **El disparador es el usuario, nunca el calendario.** Es lo que resuelve el
+  choque con la §8: un reinicio por calendario haría que todos los dispositivos
+  con Obsidian abierto reescribieran las mismas líneas en el mismo momento,
+  sobre archivos en Sync. Peor que el caso que la §8 vino a prevenir.
+- **Solo toca las tareas etiquetadas.** En `tareas_MES` el registro por mes son
+  hijos sin etiqueta, con el monto de cada mes; un reinicio que barriera la nota
+  entera los convertiría en tareas pendientes y perdería el dato.
+- **Los workbenches y el `due` sobreviven al reinicio.** Sin eso hay que rearmar
+  el workbench cada lunes, que es la fricción a eliminar.
+- **No se mide el atraso.** Decisión explícita: una cíclica que no se reinició
+  no está vencida, está igual que ayer.
+- **Las cíclicas van agrupadas aparte** de las de una sola vez, en las vistas.
 
-En v1 la pestaña Agenda **muestra la sección del día en modo lectura, sin checkboxes**. Cero código nuevo. Si al usarlo aparece la necesidad de tildarlas, el mecanismo de `rec=w:vie` ya está construido.
+### El vencimiento adentro del período
 
----
+Una cíclica puede tener plazo propio: 3 tareas del corpus dicen «antes del día
+10» o «antes del segundo vencimiento». Para esas, **`due` guarda el día del mes,
+no la fecha**: `due=10` es «el 10 del mes en curso», y se resuelve contra el
+reloj con `resolverDue`. Guardar `2026-09-10` obligaría a que algo le corriera
+el mes en octubre, que es la escritura automática otra vez por la puerta de
+atrás. Un día que no existe en ese mes se recorta al último: `due=31` en febrero
+es el 28.
+
+### Al reiniciar, el usuario elige qué pasa con lo completado
+
+La confirmación ofrece **reiniciar** o **archivar y reiniciar**; la segunda
+escribe el bloque en `tareas_LOG.md` con la fecha (§12) antes de destildar. Así
+la semanal trivial no llena el LOG y la mensual del alquiler deja rastro, sin
+decidirlo de antemano.
+
+**La confirmación es obligatoria.** Es la escritura más grande del plugin —23
+líneas de un tirón en `tareas_MES`, medido— sobre un archivo en Sync, y
+`vault.process()` no pasa por el editor, así que Ctrl-Z no la deshace. Tiene que
+decir cuántas tareas va a reiniciar y en qué nota.
+
+### tareas_CÍCLICAS: sigue fuera de la v1, pero ya no es caro
+
+Hoy son bullets sin checkbox agrupados por día de la semana: 0 tareas
+completables en 43 líneas. No se completan, se consultan. En v1 la pestaña
+Agenda **muestra la sección del día en modo lectura, sin checkboxes**.
+
+Lo que cambia respecto de la versión anterior de esta sección: convertirlas ya
+no agrega ninguna obligación diaria. Con el botón, si un día no se reinicia no
+pasa nada y nada queda marcado como atrasado. El mecanismo es `rec=lunes`,
+`rec=martes`, … y un botón por día.
 
 ## 12. Terminar una tarea: dos verbos, no uno
 
@@ -439,7 +481,7 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
 2. **`setTaskToken` es idempotente**, y con patch vacío no modifica el archivo.
 3. **Reescribir una tarea nunca modifica sus bullets sin checkbox.**
 4. **Ninguna operación reescribe un archivo entero.**
-5. **Regenerar una recurrente dos veces seguidas produce una sola instancia viva.**
+5. **Reiniciar un grupo cíclico dos veces seguidas da el mismo archivo**, y no toca una sola línea que no lleve la etiqueta de ese grupo.
 6. **Archivar y volver a parsear el LOG produce el mismo archivo** (idempotencia del archivado).
 7. **Un token que no parsea deja la línea intacta.**
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
@@ -468,7 +510,7 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 |---|---|---|
 | 0 | ~~Medir el corpus~~ | Hecho. Los números están en §2 |
 | 1 | **Prototipo del `transactionFilter`** del checkbox automático, conviviendo con Outliner, probado en escritorio **y en el teléfono** | Es lo único que puede salir mal de un modo que cambie el diseño. Si falla, §15 punto 2 |
-| 2 | **Capa 1 completa con tests**: parser de las cuatro clases de línea, token, árboles, recurrencia, archivado | Lógica pura primero, interfaz después. Y da los invariantes 2, 3, 5, 6, 7, 8, 9 sin tocar Obsidian |
+| 2 | **Capa 1 completa con tests**: parser de las cuatro clases de línea, token, árboles, reinicio de cíclicas, archivado | Lógica pura primero, interfaz después. Y da los invariantes 2, 3, 5, 6, 7, 8, 9 sin tocar Obsidian |
 | 3 | **Store + capa de escritura**, con el invariante 9 como prueba diferencial contra las siete notas reales | Antes de dibujar nada, garantizar que leer y escribir no corrompe |
 | 4 | **Decoraciones sobre la nota**: ocultar el token, botones en hover, colores de prioridad | El frente principal (§13.0) |
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |

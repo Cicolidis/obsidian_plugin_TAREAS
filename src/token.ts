@@ -25,9 +25,34 @@ export interface TaskMeta {
   id: string | null;
   /** Nombres de workbench. Vacío es «en ninguno». */
   wb: string[];
-  /** `AAAA-MM-DD`. */
+  /**
+   * El vencimiento, en una de dos formas:
+   *
+   * - `AAAA-MM-DD` — una fecha concreta, para una tarea de una sola vez.
+   * - `D` o `DD` — un día del mes, **solo con `rec`**: `due=10` en una cíclica
+   *   mensual es «el 10 del mes en curso». Se resuelve con `resolverDue`.
+   *
+   * La segunda forma existe para no tener que reescribir la fecha cada mes.
+   * Guardar `2026-09-10` obligaría a que algo le corriera el mes en octubre, y
+   * eso es una escritura de mantenimiento automática: justo lo que la §8
+   * prohíbe. Son 3 tareas del corpus (`antes del día 10`, `antes del segundo
+   * vencimiento`), todas en `tareas_MES`.
+   */
   due: string | null;
-  rec: "w" | "m" | null;
+  /**
+   * El **grupo de reinicio** al que pertenece esta tarea cíclica.
+   *
+   * Es una etiqueta de nombre libre, como `wb`: `rec=lunes`, `rec=mensual`,
+   * `rec=mudanza`. No es un motor. El plugin **nunca** regenera ni corre fechas
+   * por su cuenta; un botón reinicia todas las tareas de un grupo cuando el
+   * usuario lo aprieta.
+   *
+   * Es lo que evita el choque entre la §11 y la §8: el disparador es el
+   * usuario, no el calendario. Un reinicio por calendario haría que todos los
+   * dispositivos con Obsidian abierto reescribieran las mismas líneas en el
+   * mismo momento, sobre archivos en Sync.
+   */
+  rec: string | null;
   /** 0 normal · 1 alta · 2 muy alta. La normal no escribe campo. */
   prioridad: 0 | 1 | 2;
   /** `AAAA-MM-DD`. */
@@ -67,8 +92,14 @@ const PARECIDO_RE = /%%t:/;
 
 const ID_RE = /^[a-z0-9]{4,8}$/;
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
-/** Un nombre de workbench: cualquier cosa menos lo que rompería el token. */
-const WB_RE = /^[^;,%]+$/;
+/**
+ * Un nombre de workbench o de grupo de reinicio: cualquier cosa menos lo que
+ * rompería el token. Los dos comparten forma y por eso comparten el regex:
+ * repetirlo en dos lugares es cómo empiezan a divergir.
+ */
+const NOMBRE_RE = /^[^;,%]+$/;
+/** Un día del mes: `1` a `31`, sin ceros a la izquierda. */
+const DIA_RE = /^(?:[1-9]|[12]\d|3[01])$/;
 
 /** El orden en que se escriben los campos. Fijo, y en un solo lugar. */
 const ORDEN = ["id", "wb", "due", "rec", "p", "done"] as const;
@@ -102,17 +133,17 @@ function parseCampos(cuerpo: string): TaskMeta | null {
       case "wb": {
         if (valor === "") return null;
         const nombres = valor.split(",");
-        if (!nombres.every((n) => WB_RE.test(n))) return null;
+        if (!nombres.every((n) => NOMBRE_RE.test(n))) return null;
         if (new Set(nombres).size !== nombres.length) return null;
         meta.wb = nombres;
         break;
       }
       case "due":
-        if (!FECHA_RE.test(valor)) return null;
+        if (!FECHA_RE.test(valor) && !DIA_RE.test(valor)) return null;
         meta.due = valor;
         break;
       case "rec":
-        if (valor !== "w" && valor !== "m") return null;
+        if (!NOMBRE_RE.test(valor)) return null;
         meta.rec = valor;
         break;
       case "p":
@@ -246,4 +277,42 @@ export function nuevoId(
   // 36⁸ combinaciones agotadas es imposible con este corpus, pero un bucle
   // infinito silencioso sería peor que un error que se ve.
   throw new Error("no se pudo generar un id libre");
+}
+
+/**
+ * El vencimiento como fecha concreta.
+ *
+ * `due=2026-09-10` se devuelve tal cual. `due=10` —el día del mes de una
+ * cíclica— se resuelve contra `hoy`: si el 10 ya pasó, es el 10 del mes que
+ * viene, porque el vencimiento de una mensual siempre está por delante.
+ *
+ * Es una función del reloj y no del archivo: **nadie reescribe nada** cuando
+ * cambia el mes. Ese es el punto.
+ *
+ * `hoy` se pasa como `AAAA-MM-DD` en vez de leerse de `Date` para que los tests
+ * puedan pararse en cualquier día sin tocar el reloj de la máquina.
+ */
+export function resolverDue(due: string | null, hoy: string): string | null {
+  if (due === null) return null;
+  if (FECHA_RE.test(due)) return due;
+  if (!DIA_RE.test(due)) return null;
+
+  const dia = Number(due);
+  const [a, m] = [Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7))];
+  const deEsteMes = enMes(a, m, dia);
+  if (deEsteMes >= hoy) return deEsteMes;
+  return m === 12 ? enMes(a + 1, 1, dia) : enMes(a, m + 1, dia);
+}
+
+/**
+ * El día `dia` de ese mes, recortado al último día si el mes es más corto.
+ *
+ * `due=31` en febrero es el 28 —o el 29—, no el 3 de marzo. Un vencimiento que
+ * se corre al mes siguiente por no existir el día sería peor que uno que se
+ * adelanta unos días.
+ */
+function enMes(anio: number, mes: number, dia: number): string {
+  const ultimo = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+  const d = Math.min(dia, ultimo);
+  return `${anio}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }

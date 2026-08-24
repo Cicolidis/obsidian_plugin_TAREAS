@@ -11,8 +11,14 @@ import {
   reemplazarLinea,
   renderDocumento,
 } from "../src/documento.js";
-import { indexar } from "../src/tareas.js";
-import { nuevoId, parseTaskToken, setTaskToken, stripTaskToken } from "../src/token.js";
+import { aplicarReinicio, indexar, planDeReinicio } from "../src/tareas.js";
+import {
+  nuevoId,
+  parseTaskToken,
+  setTaskToken,
+  stripTaskToken,
+  type TaskMeta,
+} from "../src/token.js";
 import { documento, documentoRaro, patch, textoLibre, tokenRoto, tokenValido } from "./arbitrarios.js";
 
 /**
@@ -314,6 +320,118 @@ describe("nuevoId nunca choca (§5.4)", () => {
           expect(id).toMatch(/^[a-z0-9]{4,8}$/);
         },
       ),
+      corridas,
+    );
+  });
+});
+
+describe("reinicio de un grupo cíclico", () => {
+  /** Un documento con tareas de dos grupos y tareas sin etiqueta. */
+  const conGrupos = fc
+    .array(
+      fc.tuple(
+        fc.constantFrom("[ ] ", "[x] "),
+        textoLibre,
+        fc.constantFrom<string | null>("lunes", "mensual", null),
+        fc.option(fc.constantFrom("2026-08-24"), { nil: null }),
+        fc.integer({ min: 0, max: 2 }),
+      ),
+      { minLength: 1, maxLength: 12 },
+    )
+    .map((filas) =>
+      filas
+        .map(([cb, t, rec, done, nivel]) => {
+          const meta: Partial<TaskMeta> = {};
+          if (rec !== null) meta.rec = rec;
+          if (done !== null && cb === "[x] ") meta.done = done;
+          return setTaskToken(`${"\t".repeat(nivel)}- ${cb}${t}`, meta);
+        })
+        .join("\n"),
+    );
+
+  it("no toca ni un byte de las líneas que no son del grupo", () => {
+    // Es la propiedad de seguridad del botón: en `tareas_MES` el registro por
+    // mes son hijos sin etiqueta, y barrerlos perdería el dato de cada mes.
+    fc.assert(
+      fc.property(conGrupos, fc.constantFrom("lunes", "mensual", "inexistente"), (raw, grupo) => {
+        const doc = parseDocumento(raw);
+        const tareas = indexar(doc, "n.md");
+        const plan = planDeReinicio(doc, tareas, grupo);
+        const tocadas = new Set(plan.map((c) => c.linea));
+
+        const despues = aplicarReinicio(doc, plan);
+        for (const l of doc.lineas) {
+          if (tocadas.has(l.n)) continue;
+          expect(despues.lineas[l.n]!.texto, `línea ${l.n}`).toBe(l.texto);
+        }
+        // Y todo lo que sí tocó pertenece al grupo.
+        for (const n of tocadas) {
+          expect(tareas.find((t) => t.linea === n)!.rec).toBe(grupo);
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("después de reiniciar, ninguna del grupo queda hecha ni con done", () => {
+    fc.assert(
+      fc.property(conGrupos, fc.constantFrom("lunes", "mensual"), (raw, grupo) => {
+        const doc = parseDocumento(raw);
+        const plan = planDeReinicio(doc, indexar(doc, "n.md"), grupo);
+        const despues = aplicarReinicio(doc, plan);
+        for (const t of indexar(despues, "n.md")) {
+          if (t.rec !== grupo) continue;
+          expect(t.hecha, `línea ${t.linea}`).toBe(false);
+          expect(t.done, `línea ${t.linea}`).toBeNull();
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("es idempotente: reiniciar dos veces es reiniciar una", () => {
+    fc.assert(
+      fc.property(conGrupos, fc.constantFrom("lunes", "mensual"), (raw, grupo) => {
+        const doc = parseDocumento(raw);
+        const una = aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo));
+        const dos = aplicarReinicio(una, planDeReinicio(una, indexar(una, "n.md"), grupo));
+        expect(renderDocumento(dos)).toBe(renderDocumento(una));
+      }),
+      corridas,
+    );
+  });
+
+  it("conserva los workbenches y el vencimiento de cada tarea", () => {
+    // Sin esto hay que rearmar el workbench cada lunes, que es exactamente la
+    // fricción que la §11 quiere eliminar.
+    fc.assert(
+      fc.property(textoLibre, fc.constantFrom("10", "2026-09-10"), (t, due) => {
+        const raw = setTaskToken(`- [x] ${t}`, {
+          wb: ["foco"],
+          due,
+          rec: "mensual",
+          done: "2026-08-09",
+        });
+        const doc = parseDocumento(raw);
+        const despues = aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), "mensual"));
+        const tarea = indexar(despues, "n.md")[0]!;
+        expect(tarea.workbenches).toEqual(["foco"]);
+        expect(tarea.due).toBe(due);
+        expect(tarea.rec).toBe("mensual");
+      }),
+      corridas,
+    );
+  });
+
+  it("el invariante 9 sigue en pie después de reiniciar", () => {
+    fc.assert(
+      fc.property(conGrupos, fc.constantFrom("lunes", "mensual"), (raw, grupo) => {
+        const doc = parseDocumento(raw);
+        const texto = renderDocumento(
+          aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo)),
+        );
+        expect(renderDocumento(parseDocumento(texto))).toBe(texto);
+      }),
       corridas,
     );
   });
