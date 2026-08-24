@@ -9,7 +9,7 @@
  * decide el debounce es **cuándo llega el evento**, y eso solo se sabe
  * mirándolo.
  *
- * Tres preguntas que este espía responde:
+ * Cinco preguntas que este espía responde:
  *
  *   1. ¿`metadataCache.on("changed")` dispara por tecla, por pausa o al
  *      guardar? Obsidian ya espacia su indexado; si el evento llega cada dos
@@ -20,6 +20,14 @@
  *      evento que llegue después tiene que ser idempotente y no un segundo
  *      reparseo que pise algo.
  *   3. ¿Cuánto tarda desde que se escribe hasta que llega?
+ *   4. ¿Un `process` que devuelve el contenido **igual** escribe igual? De eso
+ *      depende si el camino de «no se pudo ubicar la línea» puede devolver
+ *      `data` intacto o tiene que tirar. Ver `probarProcess`.
+ *   5. Con la nota **abierta y recién tecleada**, ¿la escritura sobrevive?
+ *      `TextFileView.requestSave` está documentado como «Debounced save in 2
+ *      seconds from now», así que el disco puede estar hasta 2 s atrasado
+ *      respecto del editor, y el volcado posterior del buffer pisaría lo que
+ *      `vault.process` acaba de escribir. Ver `probarEditorAbierto`.
  *
  * ## La lección que hereda de `espia.js`
  *
@@ -33,9 +41,21 @@
  *   espiaEventos.marcar()  poner una marca antes de escribir, para medir la
  *                          demora hasta el evento
  *   espiaEventos.tabla()   resumen de lo registrado
+ *
+ *   await espiaEventos.probarProcess()        sondas 3 y 4
+ *   await espiaEventos.probarEditorAbierto()  sonda 5
  */
 (() => {
   const NOTAS = /tareas_/; // solo las notas que le importan al plugin
+
+  /**
+   * Las sondas que **escriben** solo tocan la nota de prueba.
+   *
+   * No es prudencia decorativa: `tareas_COLE.md` tiene 309 tareas y está en
+   * Sync. Un instrumento de medición no tiene por qué poder tocarla, y si no
+   * puede, no hay forma de que un error de tipeo en la consola la toque.
+   */
+  const PRUEBA = "0_inbox/tareas_PRUEBA.md";
 
   // Cada referencia con **su** emisor: `offref` es por emisor, y llamarlo con
   // una referencia ajena es pedirle a la instrumentación que falle sola.
@@ -45,6 +65,7 @@
   let marca = null;
 
   const t = () => Math.round(performance.now());
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function anotar(evento, path, extra) {
     try {
@@ -103,13 +124,149 @@
 
     console.log(
       "espía de eventos ENCENDIDO. Escribí en una nota de tareas y mirá qué llega.\n" +
-        "Para medir la demora de una escritura del plugin:\n" +
-        "  espiaEventos.marcar(); await app.vault.process(archivo, (d) => d + ' ');",
+        "Sondas que escriben (solo sobre " + PRUEBA + "):\n" +
+        "  await espiaEventos.probarProcess()\n" +
+        "  await espiaEventos.probarEditorAbierto()",
     );
   }
 
   function off() {
     for (const { emisor, ref } of refs.splice(0)) emisor.offref(ref);
+  }
+
+  /** El archivo de prueba, o `null` con el motivo ya impreso. */
+  function archivoDePrueba() {
+    const f = app.vault.getFileByPath(PRUEBA);
+    if (!f) console.error(`no existe ${PRUEBA}. Creala antes de correr las sondas.`);
+    return f ?? null;
+  }
+
+  /** Cuántos eventos de cada tipo hubo desde `desde`, esperando `ms`. */
+  async function contarDesde(desde, ms) {
+    await esperar(ms);
+    const nuevos = registro.slice(desde);
+    return {
+      modify: nuevos.filter((r) => r.evento === "modify").length,
+      changed: nuevos.filter((r) => r.evento === "changed").length,
+    };
+  }
+
+  /**
+   * Sondas 3 y 4: qué hace `vault.process` cuando no hay nada que cambiar.
+   *
+   * La 3 pregunta si devolver `data` intacto igual escribe —o sea, si el
+   * camino de «no se pudo ubicar la línea» toca el archivo igual, que sobre un
+   * vault en Sync es ruido que nadie pidió—. La 4 pregunta si tirar adentro de
+   * `fn` es una forma limpia de abortar sin escribir.
+   *
+   * No suponer ninguna de las dos: `process` promete atomicidad, no promete
+   * nada sobre estos dos casos.
+   */
+  async function probarProcess() {
+    const f = archivoDePrueba();
+    if (!f) return;
+
+    const antes = await app.vault.cachedRead(f);
+    const mtime0 = f.stat.mtime;
+
+    console.log("\n=== sonda 3: process que devuelve el contenido igual ===");
+    let i = registro.length;
+    marca = t();
+    await app.vault.process(f, (d) => d);
+    const s3 = await contarDesde(i, 3000);
+    const mtime3 = app.vault.getFileByPath(PRUEBA).stat.mtime;
+    console.log(
+      `  eventos: modify×${s3.modify} changed×${s3.changed}` +
+        `   mtime ${mtime3 === mtime0 ? "IGUAL" : "CAMBIÓ"}`,
+    );
+    console.log(
+      s3.modify === 0 && mtime3 === mtime0
+        ? "  ⇒ devolver `data` intacto NO escribe. El camino de «no ubicada» puede devolverlo."
+        : "  ⇒ devolver `data` intacto ESCRIBE igual. Hay que tirar para abortar.",
+    );
+
+    console.log("\n=== sonda 4: process que tira ===");
+    i = registro.length;
+    marca = t();
+    let tiro = false;
+    try {
+      await app.vault.process(f, () => {
+        throw new Error("sonda del espía");
+      });
+    } catch (err) {
+      tiro = true;
+      console.log(`  la promesa rechazó: ${err.message}`);
+    }
+    const s4 = await contarDesde(i, 2000);
+    const ahora = await app.vault.cachedRead(app.vault.getFileByPath(PRUEBA));
+    console.log(
+      `  rechazó=${tiro}  eventos: modify×${s4.modify} changed×${s4.changed}` +
+        `   contenido ${ahora === antes ? "INTACTO" : "CAMBIÓ"}`,
+    );
+    console.log(
+      tiro && s4.modify === 0 && ahora === antes
+        ? "  ⇒ tirar adentro de `fn` aborta sin escribir. Es una salida limpia."
+        : "  ⇒ tirar NO es una salida limpia. Revisar antes de usarlo.",
+    );
+    marca = null;
+  }
+
+  /**
+   * Sonda 5: la nota abierta, recién tecleada, y una escritura por `process`.
+   *
+   * `TextFileView.requestSave` es «Debounced save in 2 seconds from now». Si el
+   * editor todavía no volcó su buffer, `process` escribe sobre un disco
+   * atrasado y el volcado posterior **pisa** lo escrito. Esa es la falla que
+   * `ubicarLinea` no puede atajar: adentro de `process` el disco se ve
+   * consistente.
+   *
+   * Protocolo: abrir la nota de prueba, **teclear algo** y correr esto
+   * enseguida, sin esperar. Se prueba con y sin `save()` previo.
+   */
+  async function probarEditorAbierto({ conSave = false } = {}) {
+    const f = archivoDePrueba();
+    if (!f) return;
+
+    const vistas = app.workspace
+      .getLeavesOfType("markdown")
+      .map((l) => l.view)
+      .filter((v) => v.file?.path === PRUEBA);
+    if (vistas.length === 0) {
+      console.error(`abrí ${PRUEBA} en una pestaña, tecleá algo, y volvé a correr esto.`);
+      return;
+    }
+
+    const enDisco = await app.vault.cachedRead(f);
+    const enEditor = vistas[0].getViewData();
+    console.log(`\n=== sonda 5: editor abierto (conSave=${conSave}) ===`);
+    console.log(
+      `  disco ${enDisco.length} bytes · editor ${enEditor.length} bytes · ` +
+        (enDisco === enEditor ? "IGUALES (ya guardó: tecleá y probá de nuevo)" : "DISTINTOS ← la ventana existe"),
+    );
+
+    if (conSave) {
+      const t0 = t();
+      await Promise.all(vistas.map((v) => v.save()));
+      console.log(`  save() de ${vistas.length} vista(s) en ${t() - t0}ms`);
+    }
+
+    // La marca es una línea al final: no toca ninguna tarea y se ve enseguida.
+    const MARCA = `\n<!-- sonda del espía ${Date.now()} -->`;
+    marca = t();
+    await app.vault.process(f, (d) => d + MARCA);
+    console.log("  escrito. Esperando 5s a ver si el editor lo pisa…");
+    await esperar(5000);
+
+    const despues = await app.vault.cachedRead(app.vault.getFileByPath(PRUEBA));
+    const sobrevivio = despues.includes(MARCA.trim());
+    console.log(
+      sobrevivio
+        ? "  ⇒ la escritura SOBREVIVIÓ."
+        : "  ⇒ la escritura FUE PISADA por el volcado del editor. El save() previo es obligatorio.",
+    );
+    console.log(`  (borrá la línea de la sonda a mano: buscá «sonda del espía» en ${PRUEBA})`);
+    marca = null;
+    return sobrevivio;
   }
 
   window.espiaEventos = {
@@ -126,6 +283,8 @@
       console.table(registro);
       return registro;
     },
+    probarProcess,
+    probarEditorAbierto,
     registro,
   };
   on();

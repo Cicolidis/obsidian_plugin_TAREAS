@@ -11,12 +11,11 @@ import {
   headingsDe,
   rangoDelSubarbol,
   recorrer,
-  reemplazarLinea,
   type Documento,
   type Nodo,
 } from "./documento.js";
-import { estadoDe, parseBullet, renderBullet, type Heading } from "./linea.js";
-import { parseTaskToken, setTaskToken, type TaskMeta } from "./token.js";
+import { estadoDe, type Heading } from "./linea.js";
+import { parseTaskToken, type TaskMeta } from "./token.js";
 
 export interface Task {
   /** El `id` del token. `null` hasta que la tarea entra a un workbench (§5.4). */
@@ -303,23 +302,10 @@ export function naceColapsado(resumen: ResumenDeSubarbol): boolean {
   return resumen.lineas > LINEAS_ANTES_DE_COLAPSAR;
 }
 
-// ------------------------------------------------- reinicio de un grupo (§11)
-
-/**
- * Una línea que el reinicio va a cambiar, y en qué la va a cambiar.
- *
- * Se devuelve el plan en vez de aplicarlo, por dos razones. La primera es la
- * §8: quien escribe es la capa 2, y necesita rangos, no un archivo nuevo. La
- * segunda es que el botón **tiene que confirmar antes**: es la escritura más
- * grande del plugin —23 líneas de un tirón en `tareas_MES`, medido— sobre un
- * archivo en Sync, y `vault.process()` no pasa por el editor, así que Ctrl-Z no
- * la deshace. Para decir «vas a reiniciar 23 tareas» hay que saberlo antes.
- */
-export interface CambioDeLinea {
-  linea: number;
-  antes: string;
-  despues: string;
-}
+// -------------------------------------- consultas sobre grupos cíclicos (§11)
+//
+// Quién arma el plan de reinicio es `acciones.ts`, con los otros dos planes.
+// Acá quedan las dos preguntas que se le hacen al índice y que no escriben nada.
 
 /** Las tareas cíclicas de un grupo, estén completadas o no. */
 export function tareasDelGrupo(tareas: readonly Task[], grupo: string): Task[] {
@@ -329,42 +315,4 @@ export function tareasDelGrupo(tareas: readonly Task[], grupo: string): Task[] {
 /** Todos los grupos de reinicio que aparecen, en orden alfabético. */
 export function gruposDeReinicio(tareas: readonly Task[]): string[] {
   return [...new Set(tareas.map((t) => t.rec).filter((r): r is string => r !== null))].sort();
-}
-
-/**
- * Qué líneas cambia reiniciar un grupo.
- *
- * Destildar y borrar el `done`, nada más. No se crea ninguna instancia, no se
- * clona ningún hijo y no se corre ninguna fecha: el modelo regenerativo de la
- * §11 se reemplazó por este botón justamente para que el plugin no tenga que
- * actuar solo. El `due` de una cíclica es un día del mes y se resuelve con el
- * reloj (`resolverDue`), así que tampoco hay que tocarlo.
- *
- * **Solo toca las tareas etiquetadas.** Es la parte crítica: en `tareas_MES` el
- * usuario lleva a mano un hijo por mes con el monto de ese mes, y esos hijos no
- * llevan etiqueta. Un reinicio que barriera la nota entera los convertiría en
- * tareas pendientes y perdería el registro.
- *
- * Una tarea del grupo que ya está pendiente no aparece en el plan: reiniciarla
- * no cambiaría nada, y contarla haría que la confirmación mintiera sobre
- * cuántas cosas va a tocar.
- */
-export function planDeReinicio(doc: Documento, tareas: readonly Task[], grupo: string): CambioDeLinea[] {
-  const cambios: CambioDeLinea[] = [];
-  for (const t of tareasDelGrupo(tareas, grupo)) {
-    const antes = doc.lineas[t.linea]!.texto;
-    const b = parseBullet(antes);
-    if (!b || b.checkbox === null) continue;
-    if (!t.hecha && t.done === null) continue; // ya está pendiente y limpia
-
-    const destildado = renderBullet({ ...b, checkbox: b.checkbox.replace(/\[.\]/, "[ ]") });
-    const despues = setTaskToken(destildado, { done: null });
-    if (despues !== antes) cambios.push({ linea: t.linea, antes, despues });
-  }
-  return cambios;
-}
-
-/** El documento con el plan aplicado, línea por línea y sin tocar nada más. */
-export function aplicarReinicio(doc: Documento, cambios: readonly CambioDeLinea[]): Documento {
-  return cambios.reduce((d, c) => reemplazarLinea(d, c.linea, c.despues), doc);
 }

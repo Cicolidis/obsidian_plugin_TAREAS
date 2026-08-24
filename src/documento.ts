@@ -195,6 +195,29 @@ export function recorrer(nodos: readonly Nodo[]): Nodo[] {
 // ------------------------------------------------- escritura por rango (§8)
 
 /**
+ * Una línea que va a cambiar, y **en qué texto la esperaba quien planeó el cambio**.
+ *
+ * Vive acá, con `reemplazarLinea` e `insertarLineas`, porque es la descripción
+ * de una escritura por rango: lo que la §8 pide en vez de reescribir el archivo.
+ *
+ * `antes` no es decorativo y es lo que hace posible el invariante 10. Un plan se
+ * arma sobre el documento que el store tiene en memoria y se aplica minutos
+ * después sobre el disco, que para entonces puede haberse corrido: llevar el
+ * texto esperado permite **verificar antes de escribir** en vez de confiar en un
+ * número de línea. Quien lo verifica es `src/ubicar.ts`.
+ *
+ * También es lo que permite confirmar antes de una escritura grande —el reinicio
+ * de un grupo cíclico son 23 líneas de un tirón, medido— porque para decir «vas a
+ * reiniciar 23 tareas» hay que tener el plan antes de aplicarlo. Y hace falta:
+ * `vault.process()` no pasa por el editor, así que Ctrl-Z no lo deshace.
+ */
+export interface CambioDeLinea {
+  linea: number;
+  antes: string;
+  despues: string;
+}
+
+/**
  * Líneas nuevas insertadas **antes** de la línea `n`.
  *
  * Insertar en `lineas.length` agrega al final. Ojo con lo que eso significa

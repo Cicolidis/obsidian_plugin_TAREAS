@@ -23,5 +23,58 @@ export const STRINGS = {
       marcador: "0_inbox/tareas_VIDA.md",
       restaurar: "Volver a la lista original",
     },
+    notaDeLog: {
+      nombre: "Nota de historial",
+      descripcion:
+        "A dónde va lo archivado. El plugin no la parsea al arrancar: el historial se lee " +
+        "cuando se abre la vista.",
+    },
+    workbenchFavorito: {
+      nombre: "Workbench favorito",
+      descripcion:
+        "El workbench del comando de asignación. Conviene que no se llame por unidad de " +
+        "tiempo: «foco» o «mudanza», no «hoy». Un workbench llamado «hoy» obliga a " +
+        "mantenerlo al día; uno llamado «foco» no caduca.",
+    },
+    verificacion: {
+      titulo: "Verificación",
+      descripcion:
+        "Andamiaje para probar el plugin. Apagado, no cambia nada de cómo funciona.",
+      congelarStore: {
+        nombre: "Congelar el índice en memoria",
+        descripcion:
+          "El índice deja de actualizarse: queda a propósito desfasado del archivo. Sirve " +
+          "para comprobar que una acción escribe en la línea correcta aunque se haya " +
+          "tecleado arriba. Acordate de apagarlo.",
+      },
+      registrarEventos: {
+        nombre: "Registrar eventos en la consola",
+        descripcion:
+          "Imprime cada relectura de una nota con su demora, y cada escritura con lo que " +
+          "escribió.",
+      },
+    },
+  },
+  comandos: {
+    completar: "Completar la tarea del cursor",
+    workbench: "Asignar la tarea del cursor al workbench favorito",
+  },
+  avisos: {
+    sinTarea: "El cursor no está sobre una tarea de una nota de tareas.",
+    sinIndice: "Esta nota todavía no está en el índice. Revisá la lista en los ajustes.",
+    yaCompleta: "Esa tarea ya está completa.",
+    completadas: (n: number) => (n === 1 ? "1 tarea completada." : `${n} tareas completadas.`),
+    entraAlWorkbench: (n: number, wb: string) =>
+      `${n === 1 ? "1 tarea" : `${n} tareas`} a «${wb}».`,
+    saleDelWorkbench: (n: number, wb: string) =>
+      `${n === 1 ? "1 tarea" : `${n} tareas`} fuera de «${wb}».`,
+    sinCambios: "No había nada que cambiar.",
+    /** El aviso que importa: no se escribió, y por qué. */
+    noUbicada:
+      "No se escribió nada: alguna línea ya no está donde estaba, o aparece repetida. " +
+      "No se adivina cuál era. Volvé a intentar.",
+    ilegibles: (n: number) =>
+      `${n === 1 ? "1 línea tiene" : `${n} líneas tienen`} el token ilegible y no se ` +
+      "tocaron. Hay que arreglarlas a mano.",
   },
 } as const;

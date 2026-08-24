@@ -1,18 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseDocumento, renderDocumento } from "../src/documento.js";
-import {
-  aplicarReinicio,
-  gruposDeReinicio,
-  indexar,
-  planDeReinicio,
-  tareasDelGrupo,
-} from "../src/tareas.js";
+import { aplicarPlan, planDeReinicio } from "../src/acciones.js";
+import { gruposDeReinicio, indexar, tareasDelGrupo } from "../src/tareas.js";
 
 const doc = (raw: string) => parseDocumento(raw);
 const reiniciar = (raw: string, grupo: string) => {
   const d = doc(raw);
   const plan = planDeReinicio(d, indexar(d, "n.md"), grupo);
-  return { plan, texto: renderDocumento(aplicarReinicio(d, plan)) };
+  return { plan, texto: renderDocumento(aplicarPlan(d, plan)) };
 };
 
 /**

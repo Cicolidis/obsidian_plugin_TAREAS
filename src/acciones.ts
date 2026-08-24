@@ -1,0 +1,274 @@
+/**
+ * Los planes: qué líneas cambia cada acción del usuario, y en qué las cambia.
+ *
+ * Capa 1 entera. **Nada de acá escribe.** Devuelven `CambioDeLinea[]` y quien
+ * escribe es `vault/escribir.ts`, que es el único lugar del plugin que toca el
+ * disco. La separación no es estética; compra tres cosas:
+ *
+ * 1. La §8: quien escribe necesita **rangos**, no un archivo nuevo.
+ * 2. **Confirmar antes.** El reinicio de un grupo son 23 líneas de un tirón en
+ *    `tareas_MES`, medido, sobre un archivo en Sync, y `vault.process()` no
+ *    pasa por el editor: Ctrl-Z no lo deshace. Para decir «vas a reiniciar 23
+ *    tareas» hay que tener el plan antes de aplicarlo.
+ * 3. Cada `CambioDeLinea` lleva `antes`, así que **nada se escribe sin decir
+ *    qué esperaba encontrar**. Es el invariante 10, y lo verifica `ubicar.ts`.
+ *
+ * Un plan se arma sobre el documento que el store tiene en memoria; para cuando
+ * se escribe, el archivo puede haberse corrido. Por eso el número de línea de un
+ * plan es una **sugerencia** y el texto de `antes` es el dato duro.
+ */
+import { reemplazarLinea, type CambioDeLinea, type Documento } from "./documento.js";
+import { parseBullet, renderBullet } from "./linea.js";
+import {
+  claveDe,
+  idsACompletar,
+  porClave,
+  subarbolDe,
+  tareasDelGrupo,
+  type Clave,
+  type Task,
+} from "./tareas.js";
+import { nuevoId, parseTaskToken, setTaskToken, type TaskMeta } from "./token.js";
+
+/**
+ * Un cambio sobre una línea, o nada si esa línea no hay que tocarla.
+ *
+ * Todo plan de acá pasa por esta función, y de acá salen dos garantías baratas:
+ * una línea con el token ilegible vuelve intacta —`setTaskToken` ya lo hace, y
+ * la comparación de abajo lo confirma— y **un cambio que no cambia nada no
+ * entra al plan**. Lo segundo importa para poder contar: un plan que incluye
+ * líneas idénticas miente en la confirmación sobre cuántas cosas va a tocar.
+ */
+function cambio(doc: Documento, linea: number, despues: string): CambioDeLinea | null {
+  const antes = doc.lineas[linea]?.texto;
+  if (antes === undefined || antes === despues) return null;
+  return { linea, antes, despues };
+}
+
+/** El checkbox de una línea, cambiado de estado. La línea entera si no es bullet. */
+function conCheckbox(texto: string, estado: " " | "x"): string {
+  const b = parseBullet(texto);
+  if (!b || b.checkbox === null) return texto;
+  return renderBullet({ ...b, checkbox: b.checkbox.replace(/\[.\]/, `[${estado}]`) });
+}
+
+/**
+ * La línea con el checkbox cambiado **y** el token parcheado.
+ *
+ * El primer intento hacía `setTaskToken(conCheckbox(...))` y tenía un agujero
+ * que encontró un caso: sobre una línea con el token ilegible, `setTaskToken`
+ * se niega y devuelve lo que recibió —pero lo que recibió **ya tenía el
+ * checkbox tildado**—, así que la mitad del cambio pasaba igual. El invariante
+ * 7 dice que un token que no parsea deja la línea **intacta**, no medio
+ * escrita.
+ *
+ * Por eso la negativa está acá, antes de tocar nada, y no en `setTaskToken`:
+ * es el único lugar por el que pasan los tres planes.
+ */
+function marcar(texto: string, estado: " " | "x", patch: Partial<TaskMeta>): string {
+  if (parseTaskToken(texto).estado === "ilegible") return texto; // invariante 7
+  return setTaskToken(conCheckbox(texto, estado), patch);
+}
+
+/**
+ * Las líneas del subárbol que el plugin **no va a tocar** por tener el token
+ * ilegible (§5.3).
+ *
+ * Existe para que el comando lo pueda decir. Saltear una línea rota es lo
+ * correcto —nunca reparar a ciegas— pero saltearla **en silencio** deja al
+ * usuario con una tarea madre en `[x]` y una hija en `[ ]` sin explicación, que
+ * es peor que el token roto. Un aviso convierte un misterio en algo arreglable
+ * a mano.
+ */
+export function ilegiblesDelSubarbol(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+): number[] {
+  return subarbolDe(tareas, clave)
+    .map((t) => t.linea)
+    .filter((n) => {
+      const texto = doc.lineas[n]?.texto;
+      return texto !== undefined && parseTaskToken(texto).estado === "ilegible";
+    });
+}
+
+// ------------------------------------------------------ completar (§12, §9)
+
+/**
+ * Qué líneas cambia completar una tarea: **«completar y descartar»** de la §12.
+ *
+ * Marca `[x]` y escribe `done`, y **no borra la línea de la nota**: la tarea
+ * queda en su lugar y las vistas la ocultan. El descarte físico es otra acción,
+ * explícita y con confirmación.
+ *
+ * Baja por el subárbol completo, que es la §9 —«marcar el padre completa todos
+ * los hijos»—, usando `idsACompletar`, que ya tiene esa asimetría escrita: no
+ * existe la operación inversa, porque completar todos los hijos **no** completa
+ * al padre.
+ *
+ * Los bullets sin checkbox del subárbol no aparecen en el plan: `idsACompletar`
+ * devuelve tareas, no líneas, así que el invariante 3 —reescribir una tarea
+ * nunca modifica sus bullets sin checkbox— sale de la forma del recorrido y no
+ * de una comprobación aparte.
+ *
+ * Una tarea del subárbol que ya estaba completada con **otra** fecha conserva la
+ * suya: `done` solo se escribe donde no había ninguno. Pisarla convertiría
+ * «terminé esto el martes» en «terminé todo hoy», que es perder un dato para no
+ * ganar nada.
+ *
+ * `hoy` se pasa como `AAAA-MM-DD` en vez de leerse del reloj para que los tests
+ * puedan pararse en cualquier día.
+ */
+export function planDeCompletar(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+  hoy: string,
+): CambioDeLinea[] {
+  const indice = porClave(tareas);
+  const cambios: CambioDeLinea[] = [];
+  for (const c of idsACompletar(tareas, clave)) {
+    const t = indice.get(c);
+    if (!t) continue;
+    const texto = doc.lineas[t.linea]?.texto;
+    if (texto === undefined) continue;
+    const patch: Partial<TaskMeta> = t.done === null ? { done: hoy } : {};
+    const x = cambio(doc, t.linea, marcar(texto, "x", patch));
+    if (x) cambios.push(x);
+  }
+  return cambios;
+}
+
+/** ¿Hay algo que completar acá, o el subárbol ya está entero en `[x]`? */
+export function yaEstaCompleta(tareas: readonly Task[], clave: Clave): boolean {
+  const indice = porClave(tareas);
+  return idsACompletar(tareas, clave).every((c) => indice.get(c)?.hecha ?? true);
+}
+
+// ----------------------------------------------------- workbench (§9, §5.4)
+
+/**
+ * Qué líneas cambia asignar —o sacar— un workbench.
+ *
+ * Tres reglas de la spec, en una función:
+ *
+ * - **Va el árbol completo, no una hoja suelta** (§9). Mandar una tarea madre a
+ *   un workbench y que los hijos se queden en la nota deja el workbench
+ *   mostrando un título sin lo que hay que hacer.
+ * - **El toggle lo decide la raíz** y se aplica a todo el subárbol. La spec no
+ *   dice qué hacer cuando la raíz está en el workbench y un hijo no —el ★ de la
+ *   §13.0 es un toggle sobre *la* tarea—, y mirar cada línea por separado haría
+ *   que un clic dejara el árbol mitad adentro y mitad afuera. Que mande la raíz
+ *   es lo único predecible desde afuera: el indicador que se ve es el de ella.
+ * - **El `id` se escribe solo al entrar** (§5.4). Ponerle id a las 406 tareas al
+ *   arrancar tocaría los cinco archivos en cada dispositivo cada vez que se abre
+ *   Obsidian: la receta de conflictos de Sync. Al salir **no se borra**: el id es
+ *   identidad, no pertenencia, y una tarea que vuelve al workbench tiene que ser
+ *   la misma tarea.
+ *
+ * `idsEnUso` viene de afuera —del store, que los conoce en **todas** las notas—
+ * porque un id repetido no rompe nada visible: hace que dos tareas distintas
+ * sean la misma para el workbench, que es peor que un error. `aleatorio` se
+ * inyecta por lo mismo que en `nuevoId`: un generador que no se puede hacer
+ * chocar es un generador cuyo camino de choque no se probó nunca.
+ */
+export function planDeWorkbench(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+  wb: string,
+  idsEnUso: ReadonlySet<string>,
+  aleatorio: () => number = Math.random,
+): CambioDeLinea[] {
+  const raiz = porClave(tareas).get(clave);
+  if (!raiz) return [];
+  const entra = !raiz.workbenches.includes(wb);
+
+  // Los ids que se van repartiendo entran al conjunto sobre la marcha: si no,
+  // dos tareas del mismo subárbol podrían recibir el mismo id en el mismo clic.
+  const usados = new Set(idsEnUso);
+
+  const cambios: CambioDeLinea[] = [];
+  for (const t of subarbolDe(tareas, clave)) {
+    const texto = doc.lineas[t.linea]?.texto;
+    if (texto === undefined) continue;
+    // Una línea ilegible no se reescribe (§5.3), y tampoco se le gasta un id.
+    if (parseTaskToken(texto).estado === "ilegible") continue;
+
+    const patch: Partial<TaskMeta> = {
+      wb: entra
+        ? t.workbenches.includes(wb)
+          ? t.workbenches
+          : [...t.workbenches, wb]
+        : t.workbenches.filter((n) => n !== wb),
+    };
+    if (entra && t.id === null) {
+      patch.id = nuevoId(usados, aleatorio);
+      usados.add(patch.id);
+    }
+
+    const x = cambio(doc, t.linea, setTaskToken(texto, patch));
+    if (x) cambios.push(x);
+  }
+  return cambios;
+}
+
+// ------------------------------------------- reinicio de un grupo (§11)
+
+/**
+ * Qué líneas cambia reiniciar un grupo.
+ *
+ * Destildar y borrar el `done`, nada más. No se crea ninguna instancia, no se
+ * clona ningún hijo y no se corre ninguna fecha: el modelo regenerativo de la
+ * §11 se reemplazó por este botón justamente para que el plugin no tenga que
+ * actuar solo. El `due` de una cíclica es un día del mes y se resuelve con el
+ * reloj (`resolverDue`), así que tampoco hay que tocarlo.
+ *
+ * **Solo toca las tareas etiquetadas.** Es la parte crítica: en `tareas_MES` el
+ * usuario lleva a mano un hijo por mes con el monto de ese mes, y esos hijos no
+ * llevan etiqueta. Un reinicio que barriera la nota entera los convertiría en
+ * tareas pendientes y perdería el registro.
+ *
+ * Una tarea del grupo que ya está pendiente no aparece en el plan: reiniciarla
+ * no cambiaría nada, y contarla haría que la confirmación mintiera sobre
+ * cuántas cosas va a tocar.
+ */
+export function planDeReinicio(
+  doc: Documento,
+  tareas: readonly Task[],
+  grupo: string,
+): CambioDeLinea[] {
+  const cambios: CambioDeLinea[] = [];
+  for (const t of tareasDelGrupo(tareas, grupo)) {
+    const antes = doc.lineas[t.linea]?.texto;
+    if (antes === undefined) continue;
+    const b = parseBullet(antes);
+    if (!b || b.checkbox === null) continue;
+    if (!t.hecha && t.done === null) continue; // ya está pendiente y limpia
+
+    const x = cambio(doc, t.linea, marcar(antes, " ", { done: null }));
+    if (x) cambios.push(x);
+  }
+  return cambios;
+}
+
+// ---------------------------------------------------- aplicar, en memoria
+
+/**
+ * El documento con un plan aplicado, línea por línea y sin tocar nada más.
+ *
+ * Es la versión **en memoria** —la que usan los tests y las propiedades—, no la
+ * que escribe. Sobre el disco quien aplica es `ubicar.ts`, que además verifica
+ * el `antes` de cada cambio contra lo que hay ahí en ese momento. Acá no hace
+ * falta: el documento es el mismo con el que se armó el plan.
+ */
+export function aplicarPlan(doc: Documento, cambios: readonly CambioDeLinea[]): Documento {
+  return cambios.reduce((d, c) => reemplazarLinea(d, c.linea, c.despues), doc);
+}
+
+/** La clave de la tarea que está en esta línea, o `null` si no hay ninguna. */
+export function claveEnLinea(tareas: readonly Task[], archivo: string, linea: number): Clave | null {
+  const c = claveDe(archivo, linea);
+  return tareas.some((t) => claveDe(t.archivo, t.linea) === c) ? c : null;
+}

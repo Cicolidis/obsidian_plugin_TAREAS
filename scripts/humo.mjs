@@ -50,9 +50,21 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   editorInfoField    el alcance por archivo; sin él intercepta el vault
 //   0_inbox/tareas_    la lista de notas, que viaja como JSON importado
 //   [ ]                lo que el filtro escribe
+//   onLayoutReady      el arranque del store (spec §20 paso 3)
+//   vault.process      el único camino de escritura (§8)
+//   los dos ids        un comando que se cae del bundle no da error: no aparece
 //
 // El id del plugin no se busca acá: vive en el manifiesto y se valida abajo.
-for (const marca of ["transactionFilter", "editorInfoField", "0_inbox/tareas_", "[ ] "]) {
+for (const marca of [
+  "transactionFilter",
+  "editorInfoField",
+  "0_inbox/tareas_",
+  "[ ] ",
+  "onLayoutReady",
+  ".process(",
+  "completar-tarea-del-cursor",
+  "asignar-workbench-favorito",
+]) {
   if (!src.includes(marca)) fallas.push(`falta "${marca}" en el bundle`);
 }
 

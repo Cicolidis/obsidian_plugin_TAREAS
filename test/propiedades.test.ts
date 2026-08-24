@@ -20,7 +20,8 @@ import {
   reemplazarLinea,
   renderDocumento,
 } from "../src/documento.js";
-import { aplicarReinicio, indexar, planDeReinicio } from "../src/tareas.js";
+import { aplicarPlan, planDeReinicio } from "../src/acciones.js";
+import { indexar } from "../src/tareas.js";
 import {
   nuevoId,
   parseTaskToken,
@@ -373,7 +374,7 @@ describe("reinicio de un grupo cíclico", () => {
         const plan = planDeReinicio(doc, tareas, grupo);
         const tocadas = new Set(plan.map((c) => c.linea));
 
-        const despues = aplicarReinicio(doc, plan);
+        const despues = aplicarPlan(doc, plan);
         for (const l of doc.lineas) {
           if (tocadas.has(l.n)) continue;
           expect(despues.lineas[l.n]!.texto, `línea ${l.n}`).toBe(l.texto);
@@ -392,7 +393,7 @@ describe("reinicio de un grupo cíclico", () => {
       fc.property(conGrupos, fc.constantFrom("lunes", "mensual"), (raw, grupo) => {
         const doc = parseDocumento(raw);
         const plan = planDeReinicio(doc, indexar(doc, "n.md"), grupo);
-        const despues = aplicarReinicio(doc, plan);
+        const despues = aplicarPlan(doc, plan);
         for (const t of indexar(despues, "n.md")) {
           if (t.rec !== grupo) continue;
           expect(t.hecha, `línea ${t.linea}`).toBe(false);
@@ -407,8 +408,8 @@ describe("reinicio de un grupo cíclico", () => {
     fc.assert(
       fc.property(conGrupos, fc.constantFrom("lunes", "mensual"), (raw, grupo) => {
         const doc = parseDocumento(raw);
-        const una = aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo));
-        const dos = aplicarReinicio(una, planDeReinicio(una, indexar(una, "n.md"), grupo));
+        const una = aplicarPlan(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo));
+        const dos = aplicarPlan(una, planDeReinicio(una, indexar(una, "n.md"), grupo));
         expect(renderDocumento(dos)).toBe(renderDocumento(una));
       }),
       corridas,
@@ -427,7 +428,7 @@ describe("reinicio de un grupo cíclico", () => {
           done: "2026-08-09",
         });
         const doc = parseDocumento(raw);
-        const despues = aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), "mensual"));
+        const despues = aplicarPlan(doc, planDeReinicio(doc, indexar(doc, "n.md"), "mensual"));
         const tarea = indexar(despues, "n.md")[0]!;
         expect(tarea.workbenches).toEqual(["foco"]);
         expect(tarea.due).toBe(due);
@@ -442,7 +443,7 @@ describe("reinicio de un grupo cíclico", () => {
       fc.property(conGrupos, fc.constantFrom("lunes", "mensual"), (raw, grupo) => {
         const doc = parseDocumento(raw);
         const texto = renderDocumento(
-          aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo)),
+          aplicarPlan(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo)),
         );
         expect(renderDocumento(parseDocumento(texto))).toBe(texto);
       }),

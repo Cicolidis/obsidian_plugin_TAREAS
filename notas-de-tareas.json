@@ -3,8 +3,13 @@
     "Las notas de tareas activas (spec §D2: el plugin lee una lista explícita,",
     "no el vault entero). Un solo lugar: la consumen `src/notas.ts` y",
     "`scripts/medir-tareas.mjs`. Es el valor por omisión; la lista efectiva",
-    "vive en la configuración del plugin y el usuario puede agregar notas."
+    "vive en la configuración del plugin y el usuario puede agregar notas.",
+    "",
+    "`log` es la nota de historial (spec §12). Está en `notas` porque el plugin",
+    "escribe ahí al archivar, y está nombrada aparte porque el store NO la",
+    "parsea al arrancar: el archivo solo recibe y crece sin techo."
   ],
+  "log": "0_inbox/tareas_LOG.md",
   "notas": [
     "0_inbox/tareas_VIDA.md",
     "0_inbox/tareas_COLE.md",

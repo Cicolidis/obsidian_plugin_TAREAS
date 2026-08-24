@@ -211,6 +211,41 @@ Dos reglas, las dos por conflictos de Sync. `tareas_COLE` tiene 304 tareas en un
 1. **Nunca reescribir el archivo entero.** Solo el rango de las líneas que cambian, con `vault.process()` (lectura-modificación-escritura atómica), no `modify()` con el contenido completo. Es el §6 de Anotaciones convertido en requisito.
 2. **Ninguna escritura de mantenimiento automática.** El plugin no toca un archivo si el usuario no pidió una acción sobre una tarea de ese archivo. Ver §5.4.
 
+### El riesgo que las dos reglas no cubren
+
+**Agregado el 24/08/2026, al construir el paso 3.** Las dos reglas de arriba
+hablan de *cuánto* se escribe y *cuándo*. Falta *dónde*, y ahí estaba el agujero:
+
+> El plan dice que la tarea está en la línea 42; para cuando se escribe, ya no lo
+> está, porque alguien tecleó arriba. Escribir en la 42 igual no falla ni avisa:
+> **pisa otra tarea.**
+
+Por eso **toda escritura lleva el texto que esperaba encontrar** y se verifica
+contra el archivo en el momento de escribir, adentro de `vault.process()`, que
+es el único lugar sin carrera entre verificar y escribir. Si la línea sugerida no
+coincide, se busca ese texto exacto: **una sola aparición** se escribe, **cero o
+varias no**, y se avisa. Nunca adivinar cuál de dos líneas iguales era. Es el
+invariante 10, y vive en `src/ubicar.ts`.
+
+Dos cosas medidas que dimensionan el riesgo:
+
+- **40 de las 398 líneas de tarea del corpus (10,1%) están repetidas**: 20 textos
+  distintos, cada uno exactamente dos veces, de 30 caracteres de mediana. Todas
+  en `tareas_COLE`. Son las que, con el índice atrasado, hacen que la acción se
+  niegue en vez de escribir. Se corrige sola donde importa: **una tarea que entra
+  a un workbench recibe un `id`, y eso vuelve su línea única** (§5.4).
+- **El disco puede estar hasta 2 segundos atrasado respecto del editor.**
+  `TextFileView.requestSave` es «debounced save in 2 seconds from now», y
+  `vault.process()` lee del disco. Sin precaución, se escribe bien y el volcado
+  posterior del buffer **pisa la escritura**: el peor modo de falla, porque es
+  silencioso e intermitente, y el invariante 10 no puede atajarlo —adentro de
+  `process` el disco se ve consistente—. Por eso, antes de escribir, se fuerza
+  `save()` sobre toda vista abierta de ese archivo.
+
+**O se aplican todos los cambios de una acción o ninguno.** Media operación deja
+el árbol en un estado que el usuario no pidió, y `vault.process()` no pasa por el
+editor: Ctrl-Z no lo deshace.
+
 ---
 
 ## 9. Árboles
@@ -526,6 +561,10 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
 7. **Un token que no parsea deja la línea intacta.**
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
 9. **Parsear las siete notas y volver a escribirlas sin cambios no altera ningún byte.** Es la prueba diferencial más barata y la que más bugs de reescritura atrapa.
+10. **Ninguna escritura toca una línea cuyo texto no era el esperado**, y una
+    acción se aplica entera o no se aplica. Es el que impide el error más caro y
+    menos visible del plugin: pisar la tarea de al lado porque el índice estaba
+    atrasado. Ver §8.
 
 ---
 
