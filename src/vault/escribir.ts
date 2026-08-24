@@ -8,24 +8,42 @@
  * ## 1. Vaciar el buffer del editor antes de leer el disco
  *
  * `TextFileView.requestSave` está documentado como «Debounced save in 2 seconds
- * from now». O sea: mientras una nota está abierta y recién tecleada, **el disco
- * está atrasado respecto del editor hasta 2 segundos**, y `vault.process` lee
- * del disco.
+ * from now», y `vault.process` lee del disco. Medido el 24/08/2026 con
+ * `scripts/espia-eventos.js`, con la nota abierta y el buffer recién ensuciado:
  *
- * Esa es una falla que `ubicar.ts` **no puede atajar**: adentro de `process` el
- * disco se ve consistente —la línea está donde el store dijo, con el texto que
- * esperaba—, se escribe bien, y dos segundos después el editor vuelca su buffer
- * y pisa la escritura. El síntoma sería «el comando a veces no hace nada», que
- * es el peor modo de falla posible: silencioso e intermitente.
+ *   sin save()   disco 13354 · editor 13403   → process escribió 13393
+ *   con save()   disco 13442 · editor 13491   → process escribió 13530
  *
- * Por eso, antes de tocar el disco, se fuerza `save()` sobre toda vista abierta
- * de ese archivo. Después de eso, lo que `ubicar.ts` ve es la verdad.
+ * Los dos números de la primera línea son el hallazgo: **13393 = 13354 + 39**.
+ * O sea, `process` calculó sobre el disco viejo e ignoró los 49 bytes que el
+ * usuario acababa de escribir. La ventana existe y `process` cae adentro.
+ *
+ * **Lo que la medición refutó:** yo esperaba que el volcado posterior del editor
+ * pisara la escritura. No pasa. A los 2004 ms el editor guardó 13442 = 13403 +
+ * 39, o sea que Obsidian **fusionó** el cambio externo en el buffer sucio. Nada
+ * se perdió, ni lo tecleado ni lo escrito.
+ *
+ * **Por qué el `save()` se queda igual.** No por evitar una pérdida que no
+ * ocurre, sino porque sin él `ubicar.ts` verifica contra una foto que no incluye
+ * lo que el usuario acaba de teclear —exactamente el desfasaje del que este
+ * módulo defiende— y la corrección del resultado pasa a depender de que la
+ * fusión de Obsidian mapee bien los números de línea. Eso no está medido, es
+ * caro de medir, y con `save()` no hay ninguna fusión: `process` ve la verdad y
+ * la secuencia es lineal. Se paga 8 ms por escritura, medidos.
+ *
+ * (Una corrida por condición. Alcanza para refutar la hipótesis fuerte —un solo
+ * caso donde no pisa basta— pero no para afirmar que nunca pisa.)
  *
  * ## 2. Verificar adentro de `fn`, no antes
  *
  * `vault.process(file, fn)` es lectura-modificación-escritura atómica y `fn` es
  * **síncrona**: ve el contenido de disco del momento. Verificar afuera y
  * escribir adentro sería exactamente la carrera que este paso vino a matar.
+ *
+ * Y cuando el lote no se puede ubicar, `fn` devuelve `data` **intacto**. Eso es
+ * seguro y está medido: un `process` que devuelve lo mismo que recibió no
+ * dispara `modify` ni `changed`, y deja el `mtime` igual. Sobre un vault en Sync
+ * importa: una escritura idéntica igual sería un cambio que propagar.
  *
  * ## 3. Alimentar al store con lo que devuelve
  *

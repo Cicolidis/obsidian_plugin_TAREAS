@@ -5,34 +5,37 @@
  * importa `obsidian` y no puede: así se prueba entero offline con un puerto
  * falso (§17).
  *
- * ## Por qué el debounce vive acá y no en el store
+ * ## Por qué acá no hay debounce
  *
- * Porque es un asunto del **evento**, no del índice. El costo del parseo no es
- * el argumento —parsear las siete notas enteras cuesta 0,31 ms, medido—; lo que
- * importa es cada cuánto llega `changed`, que lo decide Obsidian. Puesto acá, el
- * store queda sin temporizadores y sus tests son síncronos.
+ * Porque se midió y no hace falta. Ver la constante de abajo.
  */
 import type { App, EventRef, TAbstractFile, TFile } from "obsidian";
-import { debounce, TFile as TFileClass } from "obsidian";
+import { TFile as TFileClass } from "obsidian";
 import type { Baja, PuertoDeNotas } from "../store.js";
 
-/**
- * Cuánto se espera antes de reparsear una nota que cambió.
+/*
+ * NO HAY DEBOUNCE, Y ESO SE MIDIÓ.
  *
- * **Este número sale de medir, no de suponer.** La §7 de la spec afirmaba que
- * reparsear `tareas_COLE` en cada tecla «es perceptible en móvil»; eso no estaba
- * verificado y el costo medido lo contradice. Lo que sí decide este valor es
- * cada cuánto llega `metadataCache.on("changed")`, que se mide con
- * `scripts/espia-eventos.js` pegado en la consola de Obsidian.
+ * Medido el 24/08/2026 con `scripts/espia-eventos.js` en la consola de
+ * Obsidian, tecleando sin parar 15 segundos sobre una nota de 388 líneas:
  *
- * Si Obsidian ya espacia el evento —y su indexado lo hace—, un debounce propio
- * **solo agrega latencia entre la acción y el redibujo**. Por eso el valor es
- * chico: junta la ráfaga de un guardado sin poner al store atrasado respecto de
- * lo que el usuario ve.
+ *   eventos                      modify×8   changed×8
+ *   hueco entre changed (ms)     mín 2023 · mediana 2100 · máx 7288
+ *   demora modify → changed (ms) mín 16 · mediana 21 · máx 28
  *
- * Un solo lugar, a propósito: una constante repetida en dos archivos diverge.
+ * `changed` **no llega por tecla**: llega una vez por guardado del editor, que
+ * es el `requestSave` de 2 segundos de `TextFileView`. Quince segundos de
+ * tecleo continuo produjeron ocho eventos.
+ *
+ * Un debounce encima de eso **no junta nada** —nada llega más junto que 2023 ms—
+ * y lo único que agrega es su propia espera entre la acción y el redibujo. La
+ * primera versión de este archivo tenía `DEBOUNCE_MS = 150` puesto por las
+ * dudas; la medición lo dejó sin trabajo que hacer.
+ *
+ * Y el costo del otro lado tampoco lo justifica: parsear las siete notas
+ * **enteras** cuesta 0,31 ms. La §7 de la spec afirmaba lo contrario y quedó
+ * corregida con estos números.
  */
-export const DEBOUNCE_MS = 150;
 
 /** El puerto sobre `App`, con las suscripciones ya registradas para su baja. */
 export function puertoObsidian(
@@ -55,23 +58,13 @@ export function puertoObsidian(
     },
 
     alCambiar(fn): Baja {
-      // El evento ya trae el contenido: el store no tiene que releer nada.
-      const pendiente = debounce(
-        (path: string, contenido: string) => fn(path, contenido),
-        DEBOUNCE_MS,
-        // `resetTimer: true` — mientras alguien escribe seguido, se espera a que
-        // pare. Sin esto el primer cambio de una ráfaga fija el reloj y el
-        // reparseo cae en el medio, con contenido que ya quedó viejo.
-        true,
-      );
+      // Directo, sin debounce: ver la medición de arriba. El evento ya trae el
+      // contenido, así que el store no tiene que releer nada.
       const ref = app.metadataCache.on("changed", (file: TFile, data: string) => {
-        pendiente(file.path, data);
+        fn(file.path, data);
       });
       registrar(ref);
-      return () => {
-        pendiente.cancel();
-        app.metadataCache.offref(ref);
-      };
+      return () => app.metadataCache.offref(ref);
     },
 
     alRenombrar(fn): Baja {

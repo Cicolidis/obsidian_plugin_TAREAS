@@ -193,14 +193,43 @@ interface Task {
 
 No es una nota ni un archivo. Es un `Map<string, Task>` en memoria dentro del proceso del plugin.
 
-1. **Arranque:** se parsean las notas de D2 y se arma el mapa.
-2. **Suscripción:** `metadataCache.on("changed")`. Cambia un archivo → se reparsea **solo ese archivo**, con debounce.
+1. **Arranque:** se parsean las notas de D2 y se arma el mapa. **Menos el LOG**, que solo recibe y crece sin techo (§12).
+2. **Suscripción:** `metadataCache.on("changed")`. Cambia un archivo → se reparsea **solo ese archivo**. **Sin debounce**, ver abajo.
 3. **Lectura:** las vistas no abren archivos nunca. Leen el store, filtran, renderizan.
-4. **Escritura:** el plugin edita el markdown → Obsidian dispara el evento → el store se actualiza → las vistas se redibujan solas.
+4. **Escritura:** el plugin edita el markdown → **`vault.process()` devuelve lo que quedó escrito y eso entra al store en el acto** → las vistas se redibujan solas. El evento llega después con lo mismo y no reparsea nada.
 
 **Un solo camino de escritura, un solo camino de lectura.** Ninguna vista se actualiza a mano después de una acción; eso es lo que evita que el workbench y la nota digan cosas distintas.
 
-Con 386 tareas esto son unos pocos MB. El debounce importa más que la estructura: reparsear las 398 líneas de `tareas_COLE` en cada tecla es invisible en escritorio y perceptible en móvil.
+### No hay debounce, y eso está medido
+
+**Revisado el 24/08/2026.** La versión anterior decía: «el debounce importa más
+que la estructura: reparsear las 398 líneas de `tareas_COLE` en cada tecla es
+invisible en escritorio y perceptible en móvil». **Las dos mitades de esa frase
+son falsas**, y ninguna estaba verificada cuando se escribió.
+
+Medido con `scripts/espia-eventos.js` en la consola de Obsidian, tecleando sin
+parar 15 segundos sobre una nota de 388 líneas:
+
+| | |
+|---|---|
+| eventos en 15 s de tecleo continuo | `modify`×8 · `changed`×8 |
+| hueco entre `changed` consecutivos | mín **2023 ms** · mediana **2100** · máx 7288 |
+| demora `modify` → `changed` | mín 16 ms · mediana **21** · máx 28 |
+| costo de parsear **las siete notas enteras** | **0,31 ms** |
+
+- **`changed` no llega por tecla.** Llega una vez por guardado del editor, que es
+  el `requestSave` de 2 segundos de `TextFileView`. No existe el caso «en cada
+  tecla» que la versión anterior quería evitar.
+- **Un debounce no junta nada**, porque nada llega más junto que 2023 ms. Lo
+  único que agregaría es su propia espera entre la acción y el redibujo.
+- **El costo tampoco lo justifica**: 0,31 ms por las siete notas, no por una.
+
+Conclusión: el store se suscribe directo. La constante `DEBOUNCE_MS = 150` que
+existió unas horas quedó sin trabajo que hacer y se borró. Si alguna vez aparece
+una fuente de eventos más rápida —Sync escribiendo el mismo archivo en ráfaga—
+se vuelve a medir antes de agregar nada.
+
+Con 406 tareas el mapa son unos pocos MB.
 
 ---
 
@@ -236,11 +265,24 @@ Dos cosas medidas que dimensionan el riesgo:
   a un workbench recibe un `id`, y eso vuelve su línea única** (§5.4).
 - **El disco puede estar hasta 2 segundos atrasado respecto del editor.**
   `TextFileView.requestSave` es «debounced save in 2 seconds from now», y
-  `vault.process()` lee del disco. Sin precaución, se escribe bien y el volcado
-  posterior del buffer **pisa la escritura**: el peor modo de falla, porque es
-  silencioso e intermitente, y el invariante 10 no puede atajarlo —adentro de
-  `process` el disco se ve consistente—. Por eso, antes de escribir, se fuerza
-  `save()` sobre toda vista abierta de ese archivo.
+  `vault.process()` lee del disco. Medido: con la nota abierta y recién
+  tecleada, disco 13354 bytes contra editor 13403, y `process` escribió
+  **13393 = 13354 + 39**. Es decir, **calculó sobre el disco viejo e ignoró lo
+  que el usuario acababa de escribir.** El invariante 10 no puede atajarlo:
+  adentro de `process` esa foto se ve perfectamente consistente.
+
+  **Lo que la medición refutó** (24/08/2026, el mismo día en que se escribió
+  esta sección): la primera versión decía que el volcado posterior del editor
+  «pisa la escritura». No pasa. A los 2004 ms el editor guardó 13442 = 13403 +
+  39, o sea que Obsidian **fusiona** el cambio externo en el buffer sucio en vez
+  de descartarlo. No se perdió ni lo tecleado ni lo escrito.
+
+  Aun así, antes de escribir se fuerza `save()` sobre toda vista abierta del
+  archivo, y no por la pérdida que no ocurre: sin él, la verificación del
+  invariante 10 corre contra una foto que no incluye lo recién tecleado —el
+  desfasaje exacto del que este mecanismo defiende— y la corrección pasa a
+  depender de que la fusión de Obsidian mapee bien los números de línea, que no
+  está medido. Con `save()` no hay fusión: la secuencia es lineal y cuesta 8 ms.
 
 **O se aplican todos los cambios de una acción o ninguno.** Media operación deja
 el árbol en un estado que el usuario no pidió, y `vault.process()` no pasa por el
