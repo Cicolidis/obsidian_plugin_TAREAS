@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarArchivado,
   bloqueParaElLog,
-  caminoDeHeadings,
+  caminoDeArchivado,
   planDeArchivado,
 } from "../../src/archivado.js";
 import { arbolDe, headingsDe, parseDocumento, recorrer, renderDocumento } from "../../src/documento.js";
 import { estadoDe } from "../../src/linea.js";
+import { indexar } from "../../src/tareas.js";
 import { notasReales, VAULT } from "./vault.js";
 
 /**
@@ -22,14 +23,15 @@ describe.skipIf(!VAULT)("archivar el corpus completo en el LOG real", () => {
   const logOriginal = notas.find((n) => n.rel === rutaLog)!.raw;
   const HOY = "2026-08-24";
 
-  /** Todas las tareas completadas del corpus, con su nota y su nodo. */
+  /** Todas las tareas completadas del corpus, con su nota, su nodo y su proyecto. */
   const completadas = notas
     .filter((n) => n.rel !== rutaLog)
     .flatMap(({ rel, raw }) => {
       const doc = parseDocumento(raw);
+      const porLinea = new Map(indexar(doc, rel).map((t) => [t.linea, t.proyecto]));
       return recorrer(arbolDe(doc))
         .filter((n) => n.rol === "tarea" && estadoDe(n.bullet) !== " ")
-        .map((nodo) => ({ rel, doc, nodo }));
+        .map((nodo) => ({ rel, doc, nodo, proyecto: porLinea.get(nodo.n) ?? null }));
     });
 
   it("hay tareas completadas para archivar", () => {
@@ -39,8 +41,8 @@ describe.skipIf(!VAULT)("archivar el corpus completo en el LOG real", () => {
 
   const archivarTodo = () => {
     let log = parseDocumento(logOriginal);
-    for (const { doc, nodo } of completadas) {
-      const camino = caminoDeHeadings(doc, nodo.n);
+    for (const { rel, doc, nodo, proyecto } of completadas) {
+      const camino = caminoDeArchivado(rel, proyecto);
       const bloque = bloqueParaElLog(doc, nodo, HOY);
       log = aplicarArchivado(log, planDeArchivado(log, camino, bloque));
     }
@@ -87,8 +89,8 @@ describe.skipIf(!VAULT)("archivar el corpus completo en el LOG real", () => {
   it("archivar todo dos veces no duplica ningún heading (invariante 6)", () => {
     const unaVez = headingsDe(archivarTodo()).map((h) => [h.heading.nivel, h.heading.texto]);
     let log = archivarTodo();
-    for (const { doc, nodo } of completadas) {
-      const camino = caminoDeHeadings(doc, nodo.n);
+    for (const { rel, doc, nodo, proyecto } of completadas) {
+      const camino = caminoDeArchivado(rel, proyecto);
       log = aplicarArchivado(log, planDeArchivado(log, camino, bloqueParaElLog(doc, nodo, HOY)));
     }
     expect(headingsDe(log).map((h) => [h.heading.nivel, h.heading.texto])).toEqual(unaVez);

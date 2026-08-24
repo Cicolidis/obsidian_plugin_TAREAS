@@ -3,8 +3,10 @@ import {
   aplicarArchivado,
   archivarPorDefecto,
   bloqueParaElLog,
-  caminoDeHeadings,
+  caminoDeArchivado,
   nodoDeTarea,
+  parseLineaArchivada,
+  parseLog,
   planDeArchivado,
 } from "../src/archivado.js";
 import { parseDocumento, renderDocumento } from "../src/documento.js";
@@ -84,15 +86,21 @@ describe("bloqueParaElLog", () => {
   });
 });
 
-describe("caminoDeHeadings", () => {
-  it("da el camino, sin los headings que ya se cerraron", () => {
-    const raw = "# INBOX\n## una sección\n# OTRA RAMA\n#### MATERIA\n- [x] la tarea";
-    const d = doc(raw);
-    expect(caminoDeHeadings(d, 4)).toEqual(["OTRA RAMA", "MATERIA"]);
+describe("caminoDeArchivado", () => {
+  it("es la nota de origen, y el proyecto si lo hay", () => {
+    expect(caminoDeArchivado("0_inbox/tareas_COLE.md", "p_6_Sheets")).toEqual([
+      "tareas_COLE",
+      "p_6_Sheets",
+    ]);
+    expect(caminoDeArchivado("0_inbox/tareas_MES.md", null)).toEqual(["tareas_MES"]);
   });
 
-  it("sin headings arriba, el camino es vacío", () => {
-    expect(caminoDeHeadings(doc("- [x] suelta"), 0)).toEqual([]);
+  it("no arrastra los andamios de la nota de trabajo", () => {
+    // `WORKBENCH`, `INBOX` y `semana 24 - 28` son secciones para organizarse
+    // hoy, no categorías de lo ya hecho. El camino literal de la §12 las
+    // llevaba al historial.
+    const camino = caminoDeArchivado("0_inbox/tareas_COLE.md", null);
+    expect(camino).toEqual(["tareas_COLE"]);
   });
 });
 
@@ -123,11 +131,8 @@ describe("planDeArchivado", () => {
     ]);
   });
 
-  it("los niveles quedan consecutivos aunque el origen tenga huecos", () => {
-    // En `tareas_COLE` un h4 cuelga directo de un h1: copiar los niveles
-    // dejaría el LOG mal formado.
-    const origen = doc("# INBOX\n#### MATERIA 1\n- [x] x");
-    const camino = caminoDeHeadings(origen, 2);
+  it("los niveles quedan consecutivos", () => {
+    const camino = caminoDeArchivado("0_inbox/tareas_COLE.md", "p_6_Sheets");
     const plan = planDeArchivado(doc(""), camino, ["- x"]);
     expect(plan.headingsNuevos.map((h) => h.nivel)).toEqual([1, 2]);
   });
@@ -193,5 +198,94 @@ describe("dónde crece el LOG", () => {
   it("en el LOG real, que no termina en salto, no agrega uno", () => {
     const plan = planDeArchivado(doc(LOG), ["ACADEMIA"], ["- nuevo"]);
     expect(renderDocumento(aplicarArchivado(doc(LOG), plan)).endsWith("- nuevo")).toBe(true);
+  });
+});
+
+/**
+ * Leer el LOG de vuelta.
+ *
+ * Es lo que convierte a `[✓ AAAA-MM-DD]` de decoración en sintaxis: el filtro
+ * «archivadas» de Buscar ordena por fecha y filtra por proyecto, y esos campos
+ * hay que recuperarlos del archivo. Una vista no relaja el requisito de
+ * formato, lo endurece.
+ */
+describe("parseLineaArchivada", () => {
+  it("separa el texto de la fecha", () => {
+    expect(parseLineaArchivada("revisar la guía 3 [✓ 2026-08-22]")).toEqual({
+      texto: "revisar la guía 3",
+      fecha: "2026-08-22",
+    });
+  });
+
+  it("sin marca, la línea entera es el texto", () => {
+    expect(parseLineaArchivada("una nota verbatim")).toEqual({
+      texto: "una nota verbatim",
+      fecha: null,
+    });
+  });
+
+  it("no se come los corchetes del texto de la tarea", () => {
+    // El corpus tiene «armar grupos de trabajo [sólo falta: 1A]». Un regex más
+    // suelto se llevaría eso por delante.
+    expect(parseLineaArchivada("armar grupos [sólo falta: 1A] [✓ 2026-08-22]")).toEqual({
+      texto: "armar grupos [sólo falta: 1A]",
+      fecha: "2026-08-22",
+    });
+    expect(parseLineaArchivada("armar grupos [sólo falta: 1A]").fecha).toBeNull();
+  });
+
+  it("una marca mal formada no es una marca", () => {
+    for (const l of ["x [✓ 22-08-2026]", "x [✓2026-08-22]", "x [2026-08-22]", "x [✓ hoy]"]) {
+      expect(parseLineaArchivada(l).fecha, l).toBeNull();
+    }
+  });
+});
+
+describe("parseLog", () => {
+  const LOG =
+    "# tareas_COLE\n\n## p_6_Sheets\n\n- revisar la guía 3 [✓ 2026-08-22]\n\t- 30 copias, doble faz\n\n# tareas_MES\n\n- pagar el alquiler [✓ 2026-08-09]";
+
+  it("recupera nota, proyecto, texto, fecha y notas", () => {
+    expect(parseLog(doc(LOG))).toEqual([
+      {
+        nota: "tareas_COLE",
+        proyecto: "p_6_Sheets",
+        texto: "revisar la guía 3",
+        fecha: "2026-08-22",
+        notas: ["\t- 30 copias, doble faz"],
+        linea: 4,
+      },
+      {
+        nota: "tareas_MES",
+        proyecto: null,
+        texto: "pagar el alquiler",
+        fecha: "2026-08-09",
+        notas: [],
+        linea: 9,
+      },
+    ]);
+  });
+
+  it("un heading de nivel 1 cierra el proyecto de la rama anterior", () => {
+    const entradas = parseLog(doc(LOG));
+    expect(entradas[1]!.proyecto).toBeNull();
+  });
+
+  it("archivar y volver a leer recupera lo que se archivó", () => {
+    const origen = doc("- [x] revisar la guía 3 %%t:id=a3f2;wb=foco;done=2026-08-22%%\n\t- 30 copias");
+    const nodo = nodoDeTarea(origen, 0)!;
+    const camino = caminoDeArchivado("0_inbox/tareas_COLE.md", "p_6_Sheets");
+    const log = aplicarArchivado(doc(""), planDeArchivado(doc(""), camino, bloqueParaElLog(origen, nodo, HOY)));
+
+    expect(parseLog(log)).toEqual([
+      {
+        nota: "tareas_COLE",
+        proyecto: "p_6_Sheets",
+        texto: "revisar la guía 3",
+        fecha: "2026-08-22",
+        notas: ["\t- 30 copias"],
+        linea: 4,
+      },
+    ]);
   });
 });

@@ -16,6 +16,7 @@ import {
   headingsDe,
   insertarLineas,
   rangoDelSubarbol,
+  recorrer,
   type Documento,
   type Nodo,
 } from "./documento.js";
@@ -28,22 +29,25 @@ export function marcaDeFecha(fecha: string): string {
 }
 
 /**
- * El camino de headings que tenía la tarea en su nota.
+ * Dónde va la tarea dentro del LOG: **nota de origen, y proyecto si lo hay**.
  *
- * La §12 dice que el archivado escribe bajo **el mismo camino**, creando los
- * que falten: el destino no se elige, ya está determinado por dónde vivía la
- * tarea. Se devuelven los textos, no los niveles: los niveles de origen tienen
- * huecos —en `tareas_COLE` un h4 cuelga directo de un h1— y copiarlos dejaría
- * el LOG mal formado. Los niveles se reasignan al escribir.
+ * La §12 decía «el mismo camino de headings que la tarea tenía en su nota», y
+ * eso al pie de la letra arrastra al historial los andamios de la nota de
+ * trabajo: `WORKBENCH`, `INBOX`, `semana 24 - 28`. Son secciones para
+ * organizarse hoy, no categorías de lo ya hecho.
+ *
+ * La §12 también dice que el LOG «pasa a organizarse por proyecto», y las dos
+ * frases se contradicen cuando el camino no tiene proyecto — que hoy es
+ * siempre, porque solo el wikilink define proyecto y todavía no hay ninguno
+ * (§4.1, migración del paso 8).
+ *
+ * La nota de origen resuelve las dos cosas: no depende de la migración, da un
+ * historial navegable desde el primer día, y es un campo que una vista puede
+ * reconstruir leyendo el heading de nivel 1.
  */
-export function caminoDeHeadings(doc: Documento, linea: number): string[] {
-  const pila: { nivel: number; texto: string }[] = [];
-  for (const h of headingsDe(doc)) {
-    if (h.n >= linea) break;
-    while (pila.length && pila[pila.length - 1]!.nivel >= h.heading.nivel) pila.pop();
-    pila.push({ nivel: h.heading.nivel, texto: h.heading.texto.trim() });
-  }
-  return pila.map((p) => p.texto);
+export function caminoDeArchivado(archivo: string, proyecto: string | null): string[] {
+  const nota = archivo.replace(/^.*\//, "").replace(/\.md$/, "");
+  return proyecto === null ? [nota] : [nota, proyecto];
 }
 
 /**
@@ -243,4 +247,77 @@ export function nodoDeTarea(doc: Documento, linea: number): Nodo | null {
     return null;
   };
   return buscar(arbolDe(doc));
+}
+
+// ------------------------------------------------- leer el LOG de vuelta
+
+/**
+ * Una entrada del historial, tal como la va a consumir el filtro «archivadas»
+ * de la pestaña Buscar (§13.2).
+ *
+ * Existe porque una vista que ordena por fecha y filtra por proyecto tiene que
+ * **recuperar** esos campos del archivo. Eso convierte a `[✓ AAAA-MM-DD]` de
+ * decoración en sintaxis, y al camino de headings en el índice. Es un requisito
+ * más duro que «que se lea lindo», no más blando, y por eso el ida y vuelta se
+ * prueba como propiedad.
+ *
+ * El archivo crece sin techo —es el único conjunto que solo recibe—, así que
+ * esto se lee **cuando se abre la vista**, nunca al arrancar el plugin: el
+ * store de la §7 se arma con las notas de trabajo, que se mantienen de tamaño.
+ */
+export interface EntradaArchivada {
+  /** Del heading de nivel 1: la nota de la que salió. */
+  nota: string | null;
+  /** Del heading de nivel 2, si lo hay. */
+  proyecto: string | null;
+  texto: string;
+  /** De la marca `[✓ AAAA-MM-DD]`, o `null` si la línea no la lleva. */
+  fecha: string | null;
+  /** El resto del bloque, verbatim y con su sangría relativa. */
+  notas: string[];
+  linea: number;
+}
+
+const MARCA_RE = /[ \t]*\[✓ (\d{4}-\d{2}-\d{2})\]$/;
+
+/**
+ * El texto y la fecha de una línea archivada.
+ *
+ * La marca se ancla al final y con forma exacta porque el texto de una tarea
+ * puede tener corchetes propios: el corpus tiene «armar grupos de trabajo
+ * [sólo falta: 1A]». Cualquier regex más suelta se comería eso.
+ */
+export function parseLineaArchivada(contenido: string): { texto: string; fecha: string | null } {
+  const m = MARCA_RE.exec(contenido);
+  if (!m) return { texto: contenido, fecha: null };
+  return { texto: contenido.slice(0, m.index), fecha: m[1]! };
+}
+
+/** Las entradas del historial, en orden de documento. */
+export function parseLog(log: Documento): EntradaArchivada[] {
+  const headings = headingsDe(log);
+  /** El heading de nivel `nivel` vigente en esa línea. */
+  const vigente = (n: number, nivel: number): string | null => {
+    let texto: string | null = null;
+    for (const h of headings) {
+      if (h.n >= n) break;
+      if (h.heading.nivel < nivel) texto = null; // se cerró la rama
+      else if (h.heading.nivel === nivel) texto = h.heading.texto.trim();
+    }
+    return texto;
+  };
+
+  const salida: EntradaArchivada[] = [];
+  for (const raiz of arbolDe(log)) {
+    const { texto, fecha } = parseLineaArchivada(raiz.bullet.contenido);
+    salida.push({
+      nota: vigente(raiz.n, 1),
+      proyecto: vigente(raiz.n, 2),
+      texto: texto.trimEnd(),
+      fecha,
+      notas: recorrer(raiz.hijos).map((h) => log.lineas[h.n]!.texto),
+      linea: raiz.n,
+    });
+  }
+  return salida;
 }

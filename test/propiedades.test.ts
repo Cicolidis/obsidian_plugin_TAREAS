@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarArchivado,
   bloqueParaElLog,
+  caminoDeArchivado,
+  nodoDeTarea,
+  parseLog,
   planDeArchivado,
 } from "../src/archivado.js";
 import {
@@ -79,12 +82,17 @@ describe("invariante 2 — setTaskToken es idempotente y estable", () => {
   });
 
   it("lo que escribe lo vuelve a leer igual", () => {
+    // La afirmación es que los metadatos sobreviven, no que siempre haya
+    // token: con todos los campos vacíos `setTaskToken` no escribe ninguno, a
+    // propósito, y ahí el estado correcto es `sin-token`. Nunca `ilegible`.
     fc.assert(
       fc.property(textoLibre, tokenValido, (t, tk) => {
         const linea = setTaskToken(`- [ ] ${t}`, tk.meta);
         const a = parseTaskToken(linea);
-        expect(a.estado).toBe("ok");
-        if (a.estado === "ok") expect(a.meta).toEqual(tk.meta);
+        expect(a.estado, linea).not.toBe("ilegible");
+        if (a.estado === "ilegible") return;
+        expect(a.meta).toEqual(tk.meta);
+        expect(a.estado).toBe(tk.token === "" ? "sin-token" : "ok");
       }),
       corridas,
     );
@@ -532,6 +540,86 @@ describe("invariante 6 — el archivado es idempotente", () => {
           expect(l, "token en el LOG").not.toContain("%%t:");
         }
       }),
+      corridas,
+    );
+  });
+});
+
+describe("el LOG se lee de vuelta (§13.2, filtro «archivadas»)", () => {
+  const nota = fc.constantFrom("0_inbox/tareas_COLE.md", "0_inbox/tareas_MES.md");
+  const proyecto = fc.option(fc.constantFrom("p_Uno", "p_Dos con espacio"), { nil: null });
+
+  it("archivar y volver a leer recupera texto, fecha, nota y proyecto", () => {
+    fc.assert(
+      fc.property(
+        documento,
+        fc.nat(),
+        nota,
+        proyecto,
+        fc.constantFrom("2026-08-24", "2026-01-01"),
+        (raw, semilla, archivo, proy, hoy) => {
+          const origen = parseDocumento(raw);
+          const tareas = recorrer(arbolDe(origen)).filter((n) => n.rol === "tarea");
+          if (tareas.length === 0) return;
+          const nodo = tareas[semilla % tareas.length]!;
+
+          const camino = caminoDeArchivado(archivo, proy);
+          const bloque = bloqueParaElLog(origen, nodo, hoy);
+          const log = aplicarArchivado(
+            parseDocumento(""),
+            planDeArchivado(parseDocumento(""), camino, bloque),
+          );
+
+          const entradas = parseLog(log);
+          expect(entradas).toHaveLength(1);
+          const e = entradas[0]!;
+          expect(e.nota).toBe(archivo.replace(/^.*\//, "").replace(/\.md$/, ""));
+          expect(e.proyecto).toBe(proy);
+          // La fecha siempre se recupera: la raíz siempre lleva marca.
+          expect(e.fecha).not.toBeNull();
+          // Y el texto es el de la tarea, sin token y sin marca.
+          expect(e.texto).not.toContain("%%t:");
+          expect(e.texto).not.toMatch(/\[✓ \d{4}-\d{2}-\d{2}\]$/);
+        },
+      ),
+      corridas,
+    );
+  });
+
+  it("el texto archivado sobrevive al ida y vuelta, carácter por carácter", () => {
+    fc.assert(
+      fc.property(textoLibre, fc.constantFrom("2026-08-22", "2026-01-01"), (t, fecha) => {
+        const origen = parseDocumento(`- [x] ${t} %%t:done=${fecha}%%`);
+        const nodo = nodoDeTarea(origen, 0)!;
+        const log = aplicarArchivado(
+          parseDocumento(""),
+          planDeArchivado(parseDocumento(""), ["nota"], bloqueParaElLog(origen, nodo, "2026-08-24")),
+        );
+        const e = parseLog(log)[0]!;
+        expect(e.texto).toBe(t);
+        expect(e.fecha).toBe(fecha);
+      }),
+      corridas,
+    );
+  });
+
+  it("N tareas archivadas dan N entradas al leer", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.tuple(textoLibre, nota, proyecto), { minLength: 1, maxLength: 6 }),
+        (filas) => {
+          let log = parseDocumento("");
+          for (const [t, archivo, proy] of filas) {
+            const origen = parseDocumento(`- [x] ${t} %%t:done=2026-08-22%%`);
+            const nodo = nodoDeTarea(origen, 0)!;
+            log = aplicarArchivado(
+              log,
+              planDeArchivado(log, caminoDeArchivado(archivo, proy), bloqueParaElLog(origen, nodo, "2026-08-24")),
+            );
+          }
+          expect(parseLog(log)).toHaveLength(filas.length);
+        },
+      ),
       corridas,
     );
   });

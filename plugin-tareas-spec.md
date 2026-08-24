@@ -345,12 +345,52 @@ El default se deriva del tamaño del bloque (p50 = 2 líneas: la mayoría son ho
 
 ### Formato del LOG
 
-`tareas_LOG.md` **pasa a organizarse por proyecto** (decisión del usuario; hoy está por curso y unidad).
+**Revisado el 24/08/2026.** La versión anterior decía «bajo el mismo camino de
+headings que la tarea tenía en su nota» y a la vez «organizado por proyecto».
+Las dos cosas se contradicen: el camino literal arrastra al historial los
+andamios de la nota de trabajo —`WORKBENCH`, `INBOX`, `semana 24 - 28`—, que son
+secciones para organizarse hoy y no categorías de lo hecho; y «por proyecto» no
+es aplicable mientras solo el wikilink defina proyecto (§4.1), porque hoy no hay
+ninguno.
 
-- El archivado escribe bajo el **mismo camino de headings que la tarea tenía en su nota**, creando los que falten. El destino no se elige: ya está determinado por dónde vivía la tarea.
-- Se escribe **bullet sin checkbox**, con la fecha al final: `- pasar ejercicios a Canvas [✓ 2026-08-22]`. Es el formato que el LOG ya usa (37 bullets, 0 checkboxes).
+- El destino es **la nota de origen, y el proyecto debajo si lo hay**:
+  `# tareas_COLE` / `## p_6_Sheets`. No se elige: sale de dónde vivía la tarea.
+  No depende de la migración del paso 8 y da un historial navegable desde el
+  primer día.
+- **Una sección nueva se agrega al final del archivo.** Un log crece por abajo.
+- Se escribe **bullet sin checkbox**: es lo que el LOG ya usa (37 bullets, 0
+  checkboxes). **La fecha al final, `[✓ 2026-08-22]`, es formato nuevo** —
+  medido: ninguno de los 37 bullets de hoy tiene fecha.
 - **Se limpia el token.** El id ya no apunta a nada vivo.
-- Va el subárbol completo, incluidas las notas sin checkbox. En el LOG actual esas líneas son el contenido valioso.
+- Va el subárbol completo, incluidas las notas sin checkbox. En el LOG actual
+  esas líneas son el contenido valioso. La fecha va en la raíz del bloque; un
+  descendiente solo la lleva si tiene un `done` escrito y **distinto**.
+
+### El LOG se lee por una vista, y el archivo sigue siendo legible solo
+
+Decisión del usuario: el historial no se consulta abriendo la nota, sino desde
+la interfaz, con orden y filtros. Va como **un origen más en la pestaña Buscar**
+(§13.2) —«archivadas», junto a los filtros que ya tiene— y no como una pestaña
+nueva: misma lista, misma virtualización, y es donde uno busca «¿dónde está eso
+que hice?». Una vista dedicada se decide más adelante, con el LOG lleno; hoy
+lleva 54 días sin tocarse y no hay evidencia de qué haría falta.
+
+Dos restricciones que salen de esa decisión:
+
+1. **El archivo se escribe como si la vista no existiera.** Es la D1: si el
+   plugin desaparece, las notas siguen siendo legibles. El historial es lo que
+   más probablemente sobreviva al plugin y lo menos re-derivable de todo el
+   vault.
+2. **La lectura endurece el formato, no lo relaja.** Para ordenar por fecha y
+   filtrar por proyecto hay que **recuperar** esos campos del archivo, así que
+   `[✓ AAAA-MM-DD]` deja de ser decoración y pasa a ser sintaxis, y el camino de
+   headings pasa a ser el índice. El ida y vuelta está probado como propiedad
+   (`parseLog`).
+
+El archivo crece sin techo —es el único conjunto que solo recibe— así que **se
+lee cuando se abre la vista, nunca al arrancar el plugin**: el store de la §7 se
+arma con las notas de trabajo, que se mantienen de tamaño porque las cosas salen
+de ellas.
 
 ---
 
@@ -482,7 +522,7 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
 3. **Reescribir una tarea nunca modifica sus bullets sin checkbox.**
 4. **Ninguna operación reescribe un archivo entero.**
 5. **Reiniciar un grupo cíclico dos veces seguidas da el mismo archivo**, y no toca una sola línea que no lleve la etiqueta de ese grupo.
-6. **Archivar y volver a parsear el LOG produce el mismo archivo** (idempotencia del archivado).
+6. **Archivar y volver a leer recupera lo archivado**: texto, fecha, nota y proyecto. Y archivar N bloques en el mismo camino crea el camino una sola vez.
 7. **Un token que no parsea deja la línea intacta.**
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
 9. **Parsear las siete notas y volver a escribirlas sin cambios no altera ningún byte.** Es la prueba diferencial más barata y la que más bugs de reescritura atrapa.
@@ -515,7 +555,7 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 4 | **Decoraciones sobre la nota**: ocultar el token, botones en hover, colores de prioridad | El frente principal (§13.0) |
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |
 | 6 | **Completar / descartar / archivar al LOG** | Resuelve el hallazgo del 7,5% |
-| 7 | Pestañas Buscar y Agenda | |
+| 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |
 | 8 | Migración (§19) | Al final: reescribe notas reales, y conviene que el parser esté probado |
 | 9 | Layout de paneles | Alcance chico, entra en cualquier hueco |
 
