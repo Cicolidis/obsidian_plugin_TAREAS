@@ -25,6 +25,12 @@ v.dispatch = (...a) => { console.log(a); return o(...a); };
 ```
 
 El argumento llega como **spec**, no como `Transaction`: `iterChanges` no existe sobre él.
+El espía completo, con las trampas ya resueltas, está en `scripts/espia.js`.
+
+Para los eventos del vault —cuándo llega `metadataCache.on("changed")`, si llega
+también para las escrituras del propio plugin, cuánto tarda, y la distancia entre
+`modify` y `changed`— está `scripts/espia-eventos.js`, que se pega igual en la
+consola.
 
 Para leer el CSS o el JS internos de Obsidian en vez de deducirlos, están los scripts de Anotaciones (`extraer-css-de-obsidian.mjs`).
 
