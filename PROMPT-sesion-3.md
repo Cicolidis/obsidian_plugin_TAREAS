@@ -43,9 +43,10 @@ Obsidian— comparándose en `npm run test:corpus`. Ese diferencial se saltea si
 que está ignorado por git y **envejece**: si cambié las notas, ese bloque se
 saltea solo y avisa.
 
-**El repositorio es público**: nada de lo que se agregue puede llevar contenido
-real de mis notas. Las fixtures son inventadas; las notas de verdad se comparan
-solo en `test:corpus`.
+**El repositorio es público** y la regla está en `CLAUDE.md`: no entra contenido
+real de mis notas, ni siquiera en un mensaje de commit. En la sesión 2 se me
+colaron una dirección y el nombre de una persona en un archivo de tests, y hubo
+que sacarlos.
 
 ## Alcance de esta sesión: el paso 3 de la §20
 
@@ -106,21 +107,25 @@ Esta es la primera sesión que toca mis notas. **Primero una nota de prueba.**
    en la línea correcta, que es `ubicarLinea` en vivo.
 3. Recién con eso en verde, habilitamos sobre las notas reales.
 
-Vale la regla dura de `CLAUDE.md`: **no escribas vos en el vault**. Hay un MCP de
-Obsidian conectado que puede hacerlo (`patch_vault_file`, `search_and_replace`,
-`delete_vault_file`) y no se usa para eso. Es instrumento de medición: sirve para
-`get_note_outline` y `get_outgoing_links`, lee del `metadataCache` —así que
-necesita la aplicación abierta y puede ir atrasado— y nunca entra en la suite
-normal.
+Vale la regla dura de `CLAUDE.md`: **no escribas vos en el vault**, ni con las
+herramientas del MCP de Obsidian, que puede. Lo que ese MCP sí es —un tercer
+instrumento de medición, y sus tres reglas— está en `CLAUDE.md`.
 
 ## Cómo quiero trabajar
 
 - **Plan primero**, y esperá que lo apruebe.
 - **Medí en vez de suponer.** `npm run medir` existe y el vault está en
-  `$OBSIDIAN_VAULT`.
+  `$OBSIDIAN_VAULT`. Y ojo: **la spec también es una medición con fecha**, y
+  algunas de sus afirmaciones ya eran falsas. Contá antes de apoyarte en un dato
+  suyo.
 - **Preguntame cuando la spec no alcance.** En la sesión 2 encontraste tres
   contradicciones adentro de la spec; si aparece otra, decila en vez de elegir
-  por tu cuenta.
+  por tu cuenta. Y si algo que yo decido contradice algo que yo mismo escribí
+  antes, decímelo con el número al lado.
+- **Cuando una propiedad falle, fijate primero si la propiedad dice la verdad.**
+  En la sesión 2 fallaron cuatro veces y tres fueron del test, no del código.
+- **Mirá la salida, no solo los tests.** El peor bug del archivado no lo agarró
+  ninguno de los 60 tests del corpus: apareció imprimiendo el archivo resultante.
 - Español en comentarios, documentación y mensajes de commit.
 
 ## Qué espero al final

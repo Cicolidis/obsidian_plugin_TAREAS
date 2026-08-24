@@ -34,6 +34,20 @@ consola.
 
 Para leer el CSS o el JS internos de Obsidian en vez de deducirlos, están los scripts de Anotaciones (`extraer-css-de-obsidian.mjs`).
 
+Hay además un **MCP conectado al Obsidian de esta máquina**. Sirve como tercer
+instrumento —`get_note_outline` y `get_outgoing_links` dan el parser propio de
+Obsidian, que es independiente de los dos míos— con tres reglas:
+
+- **`src/` no lo importa nunca.** El plugin tiene que funcionar con Obsidian
+  cerrado. Es para medir y para tests opt-in, no una dependencia.
+- **Puede escribir en el vault** (`patch_vault_file`, `search_and_replace`,
+  `delete_vault_file`) y no se usa para eso. Vale la regla dura de más abajo.
+- **Es otro instrumento y puede mentir.** Lee del `metadataCache`, así que
+  necesita la aplicación abierta y puede ir atrasado respecto del disco. Nunca en
+  la suite normal.
+
+No expone ítems de lista, así que para las tareas no hay diferencial por ese lado.
+
 ### Lógica pura primero, interfaz después
 
 Todo lo que se pueda testear sin Obsidian y sin DOM va en su propio módulo y se verifica offline. La interfaz se apoya en eso, nunca al revés.
@@ -48,7 +62,7 @@ Todo lo que se pueda testear sin Obsidian y sin DOM va en su propio módulo y se
 
 ### Nada que reescriba el documento entero
 
-El criterio no es «¿borra?» sino «¿reescribe el documento entero?». Se escribe **por rango**, con `vault.process()`, nunca `modify()` con el contenido completo. `tareas_COLE.md` tiene 304 tareas en un archivo y el vault está en Sync: un conflicto no afecta una tarea, afecta decenas.
+El criterio no es «¿borra?» sino «¿reescribe el documento entero?». Se escribe **por rango**, con `vault.process()`, nunca `modify()` con el contenido completo. `tareas_COLE.md` tiene más de 300 tareas en un archivo y el vault está en Sync: un conflicto no afecta una tarea, afecta decenas.
 
 **Ninguna escritura de mantenimiento automática.** El plugin no toca un archivo si el usuario no pidió una acción sobre una tarea de ese archivo.
 
@@ -66,9 +80,44 @@ El criterio no es «¿borra?» sino «¿reescribe el documento entero?». Se esc
 
 El corpus se midió con `scripts/medir-tareas.mjs` y los resultados están en la §2 de la spec. Si aparece una decisión que depende de cómo son las notas, medirla en vez de suponerla. La medición dimensiona, no vetea.
 
+**La spec también es una medición, y tiene fecha.** Sus afirmaciones fácticas
+envejecen y algunas ya eran falsas: la §2 decía 386 tareas y hoy son 395; la §12
+justificaba el formato `[✓ fecha]` diciendo que el LOG «ya lo usa», y ninguno de
+sus 37 bullets tiene fecha; la §7 daba por perceptible un costo de parseo que
+medido es de 0,31 ms para las siete notas. Antes de apoyar una decisión en un
+dato de la spec, contarlo. Y **ningún test hardcodea los números de la §2**: el
+corpus se sigue escribiendo.
+
+**Una foto del vault envejece rápido.** Medido: dos de las siete notas cambiaron
+en disco en las horas entre tomar el volcado de headings de Obsidian y correr el
+test. Todo instrumento que guarde una foto tiene que **detectar que quedó vieja y
+saltearse diciéndolo**, no fallar como si el código estuviera mal. Una alarma
+falsa que se repite es una alarma que se ignora.
+
 ### Un test que expone el bug antes de arreglarlo
 
 Y las propiedades encuentran lo que los casos no. Los invariantes de la §18 de la spec son propiedades, no casos: escribirlos así.
+
+**Cuando una propiedad falla, la primera pregunta es si la propiedad dice la
+verdad.** En la sesión 2 fallaron cuatro veces y **tres fueron del generador o de
+la propiedad**, no del código: un patch mal tipado que ninguna llamada real puede
+producir, un conteo que no contemplaba un camino repetido dos veces, y una
+propiedad que exigía `ok` donde lo correcto era `sin-token`. Esa última importa:
+afirmaba algo **más fuerte que la verdad**, y eso habría tapado una regresión
+real en el caso vacío.
+
+**Una propiedad que falla de forma intermitente hay que cazarla, no encogerse de
+hombros.** Pasó cinco corridas seguidas y fallaba una de cada tantas; apareció
+con `{ numRuns: 20000 }` en un archivo temporal, y el contraejemplo era de cuatro
+caracteres.
+
+### Mirar la salida, no solo los tests
+
+Los tests comprueban lo que se te ocurrió. El bug de que las secciones nuevas del
+LOG se insertaban **arriba de todo**, por encima de los headings que ya estaban,
+no lo agarró ninguno de los 60 tests del corpus: apareció imprimiendo la
+estructura del archivo resultante y mirándola. Cuando algo genera texto para que
+lo lea una persona, generarlo una vez y leerlo.
 
 ### Lo que solo puede verificar el usuario
 
@@ -110,6 +159,7 @@ solo si falta o si quedó viejo. Ver `INFORME-gramaticas.md`.
 ## Reglas duras
 
 - **No modificar `obsidian_plugin_anotaciones`.** Es referencia.
+- **El repositorio es público.** No entra contenido real de las notas: ni textos de tarea, ni nombres de proyecto, ni títulos de heading, ni en el código, ni en los tests, ni en los mensajes de commit. Las fixtures son inventadas y reproducen las **formas** de la §2; las notas de verdad se comparan solo en `npm run test:corpus`, que no está en el repositorio y no puede estarlo.
 - **No escribir en el vault** salvo que el paso lo pida explícitamente y esté aprobado.
 - Nada que borre o pise corre sin mirar primero.
 - Si la spec no cubre algo, **preguntar**. No inventar comportamiento.
