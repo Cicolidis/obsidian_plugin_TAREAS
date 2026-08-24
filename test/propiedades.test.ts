@@ -1,10 +1,16 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+  aplicarArchivado,
+  bloqueParaElLog,
+  planDeArchivado,
+} from "../src/archivado.js";
+import {
   arbolDe,
   eliminarLineas,
   insertarLineas,
   lineasDelSubarbol,
+  headingsDe,
   parseDocumento,
   rangoDelSubarbol,
   recorrer,
@@ -431,6 +437,100 @@ describe("reinicio de un grupo cíclico", () => {
           aplicarReinicio(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo)),
         );
         expect(renderDocumento(parseDocumento(texto))).toBe(texto);
+      }),
+      corridas,
+    );
+  });
+});
+
+describe("invariante 6 — el archivado es idempotente", () => {
+  /** Un camino de headings de uno a tres pasos. */
+  const camino = fc.array(fc.constantFrom("PESTALOZZI", "ACADEMIA", "unidad 1", "unidad 2", "IB"), {
+    minLength: 1,
+    maxLength: 3,
+  });
+  const bloque = fc.array(textoLibre.map((t) => `- ${t}`), { minLength: 1, maxLength: 4 });
+
+  it("archivar N bloques en el mismo camino no crea headings de más", () => {
+    // La afirmación es que el camino se crea una vez y después se reusa, no que
+    // cada texto aparezca una sola vez: un camino como `["IB", "IB"]` crea dos
+    // headings legítimamente, uno anidado en el otro.
+    fc.assert(
+      fc.property(camino, fc.array(bloque, { minLength: 2, maxLength: 4 }), (c, bloques) => {
+        let log = parseDocumento("");
+        for (const b of bloques) log = aplicarArchivado(log, planDeArchivado(log, c, b));
+
+        const uno = aplicarArchivado(parseDocumento(""), planDeArchivado(parseDocumento(""), c, bloques[0]!));
+        expect(headingsDe(log).map((h) => [h.heading.nivel, h.heading.texto])).toEqual(
+          headingsDe(uno).map((h) => [h.heading.nivel, h.heading.texto]),
+        );
+      }),
+      corridas,
+    );
+  });
+
+  it("y todos los bloques quedan adentro, en orden", () => {
+    fc.assert(
+      fc.property(camino, fc.array(bloque, { minLength: 2, maxLength: 4 }), (c, bloques) => {
+        let log = parseDocumento("");
+        for (const b of bloques) log = aplicarArchivado(log, planDeArchivado(log, c, b));
+        // Contiguos y en orden. Se compara contra el texto sin el salto final,
+        // que depende de cómo terminaba el LOG y no del archivado.
+        expect(renderDocumento(log).trimEnd().endsWith(bloques.flat().join("\n"))).toBe(true);
+      }),
+      corridas,
+    );
+  });
+
+  it("lo que escribe el archivado se vuelve a leer igual (inv. 9 sobre el LOG)", () => {
+    fc.assert(
+      fc.property(camino, bloque, (c, b) => {
+        const texto = renderDocumento(aplicarArchivado(parseDocumento(""), planDeArchivado(parseDocumento(""), c, b)));
+        expect(renderDocumento(parseDocumento(texto))).toBe(texto);
+      }),
+      corridas,
+    );
+  });
+
+  it("el camino queda realmente anidado en el LOG resultante", () => {
+    fc.assert(
+      fc.property(camino, bloque, (c, b) => {
+        const log = aplicarArchivado(parseDocumento(""), planDeArchivado(parseDocumento(""), c, b));
+        const niveles = headingsDe(log).map((h) => h.heading.nivel);
+        expect(niveles).toEqual(c.map((_, i) => i + 1));
+      }),
+      corridas,
+    );
+  });
+
+  it("archivar nunca toca una línea que ya estaba en el LOG", () => {
+    fc.assert(
+      fc.property(documento, camino, bloque, (viejo, c, b) => {
+        const log = parseDocumento(viejo);
+        const plan = planDeArchivado(log, c, b);
+        const despues = aplicarArchivado(log, plan);
+        // Todo lo viejo sigue estando, en orden y sin cambios: insertar por
+        // rango no reescribe nada (§8).
+        const sinLoNuevo = despues.lineas
+          .map((l) => l.texto)
+          .filter((_, i) => i < plan.linea || i >= plan.linea + plan.lineas.length);
+        expect(sinLoNuevo).toEqual(log.lineas.map((l) => l.texto));
+      }),
+      corridas,
+    );
+  });
+
+  it("el bloque archivado no lleva checkboxes ni tokens", () => {
+    fc.assert(
+      fc.property(documento, fc.nat(), (raw, semilla) => {
+        const doc = parseDocumento(raw);
+        const tareas = recorrer(arbolDe(doc)).filter((n) => n.rol === "tarea");
+        if (tareas.length === 0) return;
+        const nodo = tareas[semilla % tareas.length]!;
+        for (const l of bloqueParaElLog(doc, nodo, "2026-08-24")) {
+          expect(l, "checkbox en el LOG").not.toMatch(/^\s*-\s+\[.\]/);
+          expect(l, "token en el LOG").not.toContain("%%t:");
+        }
       }),
       corridas,
     );
