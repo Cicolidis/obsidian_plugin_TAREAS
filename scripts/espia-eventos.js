@@ -221,10 +221,16 @@
    * `ubicarLinea` no puede atajar: adentro de `process` el disco se ve
    * consistente.
    *
-   * Protocolo: abrir la nota de prueba, **teclear algo** y correr esto
-   * enseguida, sin esperar. Se prueba con y sin `save()` previo.
+   * **El tecleo lo hace la sonda**, no la mano. Para correr un comando en la
+   * consola hay que salir del editor, y salir puede disparar el guardado justo
+   * lo que se quiere medir: la ventana se cerraría sola y la sonda mediría el
+   * instrumento. Escribiendo por la API del editor —que es el mismo camino que
+   * una tecla— la ventana está garantizada abierta cuando `process` corre.
+   *
+   * Deja dos líneas de basura en la nota de prueba, las dos con la marca
+   * «sonda del espía». Se borran a mano; para eso está la nota de prueba.
    */
-  async function probarEditorAbierto({ conSave = false } = {}) {
+  async function probarEditorAbierto({ conSave = false, tecleando = true } = {}) {
     const f = archivoDePrueba();
     if (!f) return;
 
@@ -237,12 +243,24 @@
       return;
     }
 
+    console.log(`\n=== sonda 5: editor abierto (conSave=${conSave}) ===`);
+
+    if (tecleando) {
+      // Por la API del editor, que es por donde pasa una tecla: ensucia el
+      // buffer y arranca el `requestSave` de 2 segundos, igual que la mano.
+      const ed = vistas[0].editor;
+      const fin = { line: ed.lastLine(), ch: ed.getLine(ed.lastLine()).length };
+      ed.replaceRange(`\n<!-- sonda del espía: tecleado ${Date.now()} -->`, fin);
+      console.log("  tecleado por la API del editor; el buffer quedó sucio recién ahora");
+    }
+
     const enDisco = await app.vault.cachedRead(f);
     const enEditor = vistas[0].getViewData();
-    console.log(`\n=== sonda 5: editor abierto (conSave=${conSave}) ===`);
     console.log(
       `  disco ${enDisco.length} bytes · editor ${enEditor.length} bytes · ` +
-        (enDisco === enEditor ? "IGUALES (ya guardó: tecleá y probá de nuevo)" : "DISTINTOS ← la ventana existe"),
+        (enDisco === enEditor
+          ? "IGUALES ← el editor ya guardó: la ventana no existe en este momento"
+          : "DISTINTOS ← la ventana existe, la sonda vale"),
     );
 
     if (conSave) {
