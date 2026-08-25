@@ -330,7 +330,22 @@ porque lo primero que supuse era lo contrario. Con `[0,5)→X` y `[3,7)→Y` sob
 —como hacen dos de las cuatro reglas de `protegerTramo`— podría comerse en
 silencio la edición de otro cursor. Es peor que una excepción, porque no avisa.
 
-**4. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+**4. Recorrer el documento entero por tecla cuesta 0,65 ms en el peor caso.**
+La §7 mide 0,31 ms para las siete notas, pero eso es por **evento** del vault,
+que llega cada ~2100 ms; el `StateField` recalcula por **transacción**, o sea
+por tecla. Son dos preguntas distintas y merecían dos mediciones. Medido el
+25/08/2026 con `npm run test:corpus`, sobre las notas reales y sobre una copia
+de cada una con un token en cada línea de tarea:
+
+| Nota | Líneas | Tokens | Mediana | p90 |
+|---|---|---|---|---|
+| `tareas_COLE`, como está | 380 | 0 | 0,18 ms | 0,58 ms |
+| `tareas_COLE`, saturada | 380 | 290 | **0,65 ms** | 0,98 ms |
+
+Un cuadro a 60 fps son 16 ms. No hay ninguna razón para ser astutos, y ahora
+hay un test que avisa si eso deja de ser cierto.
+
+**5. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
 tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
 efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con
