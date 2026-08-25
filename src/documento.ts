@@ -84,6 +84,23 @@ export function parseDocumento(raw: string): Documento {
   };
 }
 
+/**
+ * El documento armado desde líneas que ya vienen partidas.
+ *
+ * Existe para la capa 3: CodeMirror parte el texto con `/\r\n?|\n/` y
+ * `parseDocumento` con `split("\n")` a secas. Con CRLF las dos dan la misma
+ * cantidad de líneas pero **no el mismo texto** —CodeMirror se come el `\r` y
+ * el otro lo conserva— y por lo tanto tampoco las mismas columnas. Una
+ * decoración calculada sobre columnas que no son las del editor reemplaza el
+ * rango equivocado.
+ *
+ * Así que la capa 3 no vuelve a partir nada: le pasa a esto las líneas que
+ * CodeMirror ya tiene.
+ */
+export function documentoDeLineas(lineas: readonly string[]): Documento {
+  return renumerar(lineas);
+}
+
 /** El archivo de vuelta. `renderDocumento(parseDocumento(x)) === x` (inv. 9). */
 export function renderDocumento(doc: Documento): string {
   return doc.lineas.map((l) => l.texto).join("\n");
