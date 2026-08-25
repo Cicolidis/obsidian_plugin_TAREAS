@@ -603,10 +603,16 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
 7. **Un token que no parsea deja la línea intacta.**
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
 9. **Parsear las siete notas y volver a escribirlas sin cambios no altera ningún byte.** Es la prueba diferencial más barata y la que más bugs de reescritura atrapa.
-10. **Ninguna escritura toca una línea cuyo texto no era el esperado**, y una
-    acción se aplica entera o no se aplica. Es el que impide el error más caro y
-    menos visible del plugin: pisar la tarea de al lado porque el índice estaba
-    atrasado. Ver §8.
+10. **Ninguna línea se identifica por su número: se identifica por su texto.**
+    Vale en los dos extremos de una acción —al **elegir** sobre qué tarea actúa
+    el usuario, y al **escribir**— porque en los dos hay una coordenada fresca
+    contra una foto vieja. Y una acción se aplica entera o no se aplica.
+
+    Es el que impide el error más caro y menos visible del plugin: actuar sobre
+    la tarea de al lado porque el índice estaba atrasado. **Verificado que hace
+    falta en los dos lados:** la primera versión de los comandos lo cumplía al
+    escribir y no al elegir, y con cinco líneas tecleadas arriba elegía otra
+    tarea y la escribía impecablemente. Ver §8.
 
 ---
 

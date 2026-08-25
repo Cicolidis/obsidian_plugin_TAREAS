@@ -60,8 +60,21 @@ export const STRINGS = {
     workbench: "Asignar la tarea del cursor al workbench favorito",
   },
   avisos: {
-    sinTarea: "El cursor no está sobre una tarea de una nota de tareas.",
+    fueraDeLaLista: "Esta nota no está en la lista de notas de tareas.",
+    sinTarea: "El cursor no está sobre una tarea.",
     sinIndice: "Esta nota todavía no está en el índice. Revisá la lista en los ajustes.",
+    /**
+     * Los dos de abajo son distintos de «no hay tarea acá»: hay una, pero el
+     * índice está desfasado y no se puede saber a cuál corresponde. Decirlo con
+     * el mensaje de «no hay tarea» fue un bug: mandaba a mirar el cursor cuando
+     * el cursor estaba bien.
+     */
+    lineaAusente:
+      "Esa tarea todavía no está en el índice. Si la acabás de escribir, esperá un " +
+      "segundo; si tenés el índice congelado, acordate de apagarlo.",
+    lineaAmbigua:
+      "Esa línea aparece repetida en la nota y el índice está desfasado: no se puede " +
+      "saber a cuál de las dos apuntás, así que no se toca ninguna.",
     yaCompleta: "Esa tarea ya está completa.",
     completadas: (n: number) => (n === 1 ? "1 tarea completada." : `${n} tareas completadas.`),
     entraAlWorkbench: (n: number, wb: string) =>

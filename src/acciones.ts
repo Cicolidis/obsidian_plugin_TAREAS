@@ -18,7 +18,9 @@
  * plan es una **sugerencia** y el texto de `antes` es el dato duro.
  */
 import { reemplazarLinea, type CambioDeLinea, type Documento } from "./documento.js";
-import { parseBullet, renderBullet } from "./linea.js";
+import { esTarea, parseBullet, renderBullet } from "./linea.js";
+import { esNotaDeTareas } from "./notas.js";
+import { seEncontro, ubicarLinea } from "./ubicar.js";
 import {
   claveDe,
   idsACompletar,
@@ -271,4 +273,78 @@ export function aplicarPlan(doc: Documento, cambios: readonly CambioDeLinea[]): 
 export function claveEnLinea(tareas: readonly Task[], archivo: string, linea: number): Clave | null {
   const c = claveDe(archivo, linea);
   return tareas.some((t) => claveDe(t.archivo, t.linea) === c) ? c : null;
+}
+
+
+// ------------------------------------------ elegir la tarea (antes del plan)
+
+/**
+ * Qué tarea eligió el usuario, o por qué no se puede saber.
+ *
+ * Los cuatro modos de fracaso están separados porque cada uno se arregla de una
+ * manera distinta, y un solo mensaje para todos fue exactamente el bug que se
+ * cuenta abajo: decía «el cursor no está sobre una tarea» cuando el cursor
+ * estaba justo encima de una.
+ */
+export type Eleccion =
+  | { estado: "ok"; clave: Clave }
+  | { estado: "fuera-de-la-lista" }
+  | { estado: "sin-indice" }
+  | { estado: "sin-tarea" }
+  | { estado: "ausente" }
+  | { estado: "ambigua" };
+
+/**
+ * La tarea que el cursor está eligiendo.
+ *
+ * ## El bug que esta función existe para no volver a cometer
+ *
+ * La primera versión hacía `claveDe(archivo, cursor.linea)` y buscaba esa clave
+ * en el índice. Eso **mezcla una coordenada fresca con una foto vieja**: la línea
+ * del cursor es de ahora y el índice puede ser de hace un rato. Con cinco líneas
+ * tecleadas arriba, el cursor dice 205 y en la 205 del índice hay otra cosa.
+ *
+ * El síntoma visible era un cartel equivocado. El síntoma **invisible** era
+ * mucho peor: si en la línea 205 del índice viejo había otra tarea, el comando
+ * la elegía a ella, armaba el plan sobre ella, y `ubicar.ts` escribía esa línea
+ * impecablemente. El invariante 10 se cumplía y el resultado estaba mal igual.
+ *
+ * Es el mismo error que el paso 3 vino a matar, un escalón más arriba: la
+ * defensa estaba en la escritura y el agujero, en la elección.
+ *
+ * ## La regla, que es la misma de `ubicar.ts`
+ *
+ * **Una línea se identifica por su texto, no por su número.** El cursor da las
+ * dos cosas; la que vale es el texto. Se traduce la coordenada del editor a la
+ * del índice con `ubicarLinea`, que ya sabe negarse cuando no puede saber.
+ *
+ * Y si la línea del cursor no es una tarea, eso se contesta **con el texto del
+ * editor** y sin consultar el índice: es la respuesta más fresca disponible y no
+ * puede equivocarse de línea.
+ */
+export function elegirTarea(
+  archivo: string | null,
+  notas: readonly string[],
+  doc: Documento | null,
+  tareas: readonly Task[],
+  cursor: { linea: number; texto: string },
+): Eleccion {
+  if (!esNotaDeTareas(archivo, notas)) return { estado: "fuera-de-la-lista" };
+  if (doc === null) return { estado: "sin-indice" };
+
+  // Con el texto vivo, no con el índice: un `- [ ]` vacío o un bullet sin
+  // checkbox se descartan acá y no hace falta traducir nada (invariante 8).
+  const b = parseBullet(cursor.texto);
+  if (!b || !esTarea(b)) return { estado: "sin-tarea" };
+
+  const u = ubicarLinea(
+    doc.lineas.map((l) => l.texto),
+    cursor.linea,
+    cursor.texto,
+  );
+  if (u.estado === "ausente") return { estado: "ausente" };
+  if (!seEncontro(u)) return { estado: "ambigua" };
+
+  const clave = claveDe(archivo!, u.linea);
+  return porClave(tareas).has(clave) ? { estado: "ok", clave } : { estado: "sin-tarea" };
 }

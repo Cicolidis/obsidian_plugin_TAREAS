@@ -23,16 +23,17 @@
  */
 import { Notice, type App, type Editor, type MarkdownFileInfo } from "obsidian";
 import {
+  elegirTarea,
   ilegiblesDelSubarbol,
   planDeCompletar,
   planDeWorkbench,
   yaEstaCompleta,
+  type Eleccion,
 } from "./acciones.js";
 import type { CambioDeLinea } from "./documento.js";
-import { esNotaDeTareas } from "./notas.js";
 import type { StoreDeTareas } from "./store.js";
 import { STRINGS } from "./strings.js";
-import { claveDe, type Clave } from "./tareas.js";
+import type { Clave } from "./tareas.js";
 import { escribir, type ResultadoDeEscritura } from "./vault/escribir.js";
 
 /** Hoy, en `AAAA-MM-DD` y en hora local. */
@@ -46,18 +47,30 @@ interface Contexto {
   clave: Clave;
 }
 
+/** El aviso que corresponde a cada modo de fracaso de `elegirTarea`. */
+const AVISO: Record<Exclude<Eleccion["estado"], "ok">, string> = {
+  "fuera-de-la-lista": STRINGS.avisos.fueraDeLaLista,
+  "sin-indice": STRINGS.avisos.sinIndice,
+  "sin-tarea": STRINGS.avisos.sinTarea,
+  ausente: STRINGS.avisos.lineaAusente,
+  ambigua: STRINGS.avisos.lineaAmbigua,
+};
+
 /**
  * La tarea que el cursor está eligiendo, o `null` con el aviso ya dado.
+ *
+ * Toda la decisión vive en `elegirTarea`, que es pura y está probada. Acá queda
+ * lo que solo se puede hacer con Obsidian delante: sacarle al editor la línea
+ * **y su texto**, y convertir el resultado en un cartel.
+ *
+ * Que se le pida el **texto** y no solo el número es el arreglo del bug de B5:
+ * la línea del cursor es de ahora y el índice puede ser de hace un rato, así que
+ * el número solo no alcanza para saber de qué tarea se está hablando.
  *
  * El segundo argumento se tipa como `MarkdownFileInfo` y no como `MarkdownView`
  * porque es lo que Obsidian pasa: el comando también se dispara desde un editor
  * embebido, que no es una vista. Lo único que se necesita —`file`— lo tienen los
  * dos.
- *
- * «La tarea del cursor» es la tarea **de esa línea**, no la más cercana hacia
- * arriba. Buscar hacia arriba haría que apretar el comando sobre una nota de
- * tarea o sobre una línea en blanco escribiera en una tarea que el usuario no
- * está mirando, y eso es la clase de sorpresa que este plugin no puede permitirse.
  */
 function tareaDelCursor(
   store: StoreDeTareas,
@@ -66,21 +79,17 @@ function tareaDelCursor(
   notas: readonly string[],
 ): Contexto | null {
   const archivo = vista.file?.path ?? null;
-  if (!esNotaDeTareas(archivo, notas)) {
-    new Notice(STRINGS.avisos.sinTarea);
-    return null;
-  }
-  if (store.documento(archivo!) === null) {
-    new Notice(STRINGS.avisos.sinIndice);
-    return null;
-  }
+  const linea = editor.getCursor().line;
+  const eleccion = elegirTarea(archivo, notas, archivo ? store.documento(archivo) : null, archivo ? store.tareasDe(archivo) : [], {
+    linea,
+    texto: editor.getLine(linea),
+  });
 
-  const clave = claveDe(archivo!, editor.getCursor().line);
-  if (!store.buscar(archivo!, clave)) {
-    new Notice(STRINGS.avisos.sinTarea);
+  if (eleccion.estado !== "ok") {
+    new Notice(AVISO[eleccion.estado], 8000);
     return null;
   }
-  return { archivo: archivo!, clave };
+  return { archivo: archivo!, clave: eleccion.clave };
 }
 
 /**

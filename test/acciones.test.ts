@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarPlan,
   claveEnLinea,
+  elegirTarea,
   planDeCompletar,
   planDeWorkbench,
   yaEstaCompleta,
@@ -301,6 +302,127 @@ describe("propiedades de los planes", () => {
           ...planDeWorkbench(doc, tareas, clave, "foco", new Set(), azar()),
         ];
         for (const c of plan) expect(c.despues.includes("\n")).toBe(false);
+      }),
+      corridas,
+    );
+  });
+});
+
+
+describe("elegirTarea — el bug de B5, y el que no se veía", () => {
+  const NOTAS = [A];
+  const cursor = (linea: number, texto: string) => ({ linea, texto });
+  const elegir = (raw: string, c: { linea: number; texto: string }, archivo = A) => {
+    const doc = parseDocumento(raw);
+    return elegirTarea(archivo, NOTAS, doc, indexar(doc, A), c);
+  };
+
+  const NOTA = ["# h", "- [ ] primera", "- [ ] segunda", "- una nota", "- [ ] "].join("\n");
+
+  it("el caso normal: índice al día, se elige la del cursor", () => {
+    expect(elegir(NOTA, cursor(2, "- [ ] segunda"))).toEqual({
+      estado: "ok",
+      clave: claveDe(A, 2),
+    });
+  });
+
+  it("una nota fuera de la lista no se toca", () => {
+    expect(elegir(NOTA, cursor(1, "- [ ] primera"), "otra.md")).toEqual({
+      estado: "fuera-de-la-lista",
+    });
+    expect(elegirTarea(null, NOTAS, null, [], cursor(0, "- [ ] x"))).toEqual({
+      estado: "fuera-de-la-lista",
+    });
+  });
+
+  it("sin índice todavía, lo dice y no adivina", () => {
+    expect(elegirTarea(A, NOTAS, null, [], cursor(1, "- [ ] primera"))).toEqual({
+      estado: "sin-indice",
+    });
+  });
+
+  it.each([
+    ["un heading", 0, "# h"],
+    ["un bullet sin checkbox", 3, "- una nota"],
+    ["un `- [ ]` vacío", 4, "- [ ] "],
+    ["una línea en blanco", 0, ""],
+  ])("sobre %s contesta «no hay tarea» con el texto vivo, sin consultar el índice", (_q, n, t) => {
+    expect(elegir(NOTA, cursor(n, t))).toEqual({ estado: "sin-tarea" });
+  });
+
+  describe("con el índice desfasado — es lo que falló en B5", () => {
+    // El índice quedó con la nota original; el editor tiene cinco líneas más
+    // arriba, así que el cursor dice 7 donde el índice dice 2.
+    const doc = parseDocumento(NOTA);
+    const tareas = indexar(doc, A);
+    const desfasada = (linea: number, texto: string) =>
+      elegirTarea(A, NOTAS, doc, tareas, cursor(linea, texto));
+
+    it("traduce la coordenada del cursor a la del índice por el texto", () => {
+      expect(desfasada(7, "- [ ] segunda")).toEqual({ estado: "ok", clave: claveDe(A, 2) });
+    });
+
+    it("**no elige la tarea equivocada**, que era el bug que no se veía", () => {
+      // Con el índice viejo, la línea 1 del cursor cae sobre «primera». Pero el
+      // usuario está parado sobre «segunda», corrida por una línea nueva arriba.
+      // La versión anterior hacía `claveDe(archivo, 1)` y completaba «primera»
+      // sin decir nada, y `ubicar.ts` escribía esa línea impecablemente.
+      const elegida = desfasada(1, "- [ ] segunda");
+      expect(elegida).toEqual({ estado: "ok", clave: claveDe(A, 2) });
+      expect(elegida).not.toEqual({ estado: "ok", clave: claveDe(A, 1) });
+    });
+
+    it("una tarea que el índice no tiene todavía se informa aparte", () => {
+      // Recién tecleada, o el índice congelado. No es «no hay tarea acá»: hay
+      // una, y mandar a mirar el cursor sería mandar a mirar donde no está.
+      expect(desfasada(9, "- [ ] tercera, recién escrita")).toEqual({ estado: "ausente" });
+    });
+
+    it("si el texto está repetido y la línea no coincide, no se adivina", () => {
+      const conDup = parseDocumento(["- [ ] igual", "- [ ] otra", "- [ ] igual"].join("\n"));
+      expect(
+        elegirTarea(A, NOTAS, conDup, indexar(conDup, A), cursor(9, "- [ ] igual")),
+      ).toEqual({ estado: "ambigua" });
+    });
+
+    it("pero si la línea del cursor coincide, se usa esa aunque el texto se repita", () => {
+      const conDup = parseDocumento(["- [ ] igual", "- [ ] otra", "- [ ] igual"].join("\n"));
+      expect(
+        elegirTarea(A, NOTAS, conDup, indexar(conDup, A), cursor(2, "- [ ] igual")),
+      ).toEqual({ estado: "ok", clave: claveDe(A, 2) });
+    });
+  });
+
+  it("propiedad: con el índice al día, elegir siempre da la tarea de esa línea", () => {
+    fc.assert(
+      fc.property(docConTarea, ({ raw, clave }) => {
+        const doc = parseDocumento(raw);
+        const tareas = indexar(doc, A);
+        const n = Number(clave.split(":")[1]);
+        expect(elegirTarea(A, NOTAS, doc, tareas, cursor(n, doc.lineas[n]!.texto))).toEqual({
+          estado: "ok",
+          clave,
+        });
+      }),
+      corridas,
+    );
+  });
+
+  it("propiedad: con k líneas tecleadas arriba, se sigue eligiendo la misma tarea", () => {
+    fc.assert(
+      fc.property(docConTarea, fc.integer({ min: 1, max: 8 }), ({ raw, clave }, k) => {
+        const doc = parseDocumento(raw);
+        const tareas = indexar(doc, A);
+        const n = Number(clave.split(":")[1]);
+        const texto = doc.lineas[n]!.texto;
+        // Solo cuando el texto es único: con uno repetido, negarse es correcto.
+        if (doc.lineas.filter((l) => l.texto === texto).length !== 1) return;
+
+        // El índice sigue siendo `doc`; el cursor viene corrido k líneas.
+        expect(elegirTarea(A, NOTAS, doc, tareas, cursor(n + k, texto))).toEqual({
+          estado: "ok",
+          clave,
+        });
       }),
       corridas,
     );
