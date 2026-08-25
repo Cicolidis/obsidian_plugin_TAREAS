@@ -178,7 +178,8 @@ Pero solo bajo **dos condiciones a la vez**, y eso es lo que vale:
 Son de CodeMirror, que Obsidian empaqueta dentro de `app.js`, y las pilas son
 puramente de scroll. Son avisos, no errores, y el editor se recupera.
 
-**Qué lo explica.** Leído en `@codemirror/view` 6.38.6, no deducido —el §1 de las
+**Qué lo explica.** Leído en `@codemirror/view` 6.38.6 (`node_modules`) **y
+verificado dentro del bundle de Obsidian 1.13.7**, no deducido —el §1 de las
 notas de método: verificar contra el sistema, no razonar sobre documentación—.
 Los dos avisos salen del mismo bucle, en `EditorView.measure`:
 
@@ -250,6 +251,28 @@ y descarta las que llegan como función.** Un `StateField` aporta el set; un
 
 > Las decoraciones del paso 4 van en un **`StateField` sobre el documento entero**,
 > nunca en un `ViewPlugin` sobre el viewport visible.
+
+Y esto no es solo lo que dice el paquete de `node_modules`: es lo que hace el
+Obsidian instalado. En el bundle de 1.13.7, minificado:
+
+```js
+function No(e){
+  var t = e.facet(Ii).filter(function(e){ return "function" != typeof e });
+  var n = e.facet(Oi).filter(function(e){ return "function" != typeof e });
+  return n.length && t.push(ct.join(n)), t
+}
+…  this.stateDeco = No(t),
+   this.heightMap = go.empty().applyChanges(this.stateDeco, …)
+```
+
+Se reproduce **desde la terminal**, sin abrir Obsidian:
+
+```bash
+grep -a -o '.\{60\}stateDeco=.\{0,110\}' ~/Library/Application\ Support/obsidian/obsidian-*.asar
+```
+
+Ahí mismo se ve que `lineWrapping` sale de si existe la clase `cm-lineWrapping`
+y no del ancho de la ventana, que es la corrección del punto anterior.
 
 Con `ViewPlugin`, cada tarea fuera de pantalla se estimaría un renglón más alta de
 lo que es; al entrar en pantalla se mide, se encoge, el ancla se mueve, y es el
