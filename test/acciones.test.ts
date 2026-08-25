@@ -5,6 +5,7 @@ import {
   claveEnLinea,
   elegirTarea,
   planDeCompletar,
+  planDePrioridad,
   planDeWorkbench,
   yaEstaCompleta,
 } from "../src/acciones.js";
@@ -207,6 +208,59 @@ const docConTarea = documento
       clave: claveDe(A, x.tareas[i]!.linea),
     })),
   );
+
+describe("planDePrioridad — la línea de la tarea, no el subárbol (§14)", () => {
+  const prioridad = (raw: string, linea: number, nivel: 0 | 1 | 2) => {
+    const { doc, tareas } = armar(raw);
+    const plan = planDePrioridad(doc, tareas, claveDe(A, linea), nivel);
+    return { plan, texto: renderDocumento(aplicarPlan(doc, plan)) };
+  };
+
+  it("escribe el campo en la tarea", () => {
+    const r = prioridad("- [ ] llamar", 0, 2);
+    expect(r.texto).toBe("- [ ] llamar %%t:p=2%%");
+  });
+
+  it("normal borra el campo, y el token entero si era lo único", () => {
+    expect(prioridad("- [ ] llamar %%t:p=1%%", 0, 0).texto).toBe("- [ ] llamar");
+    expect(prioridad("- [ ] llamar %%t:id=a3f2;p=1%%", 0, 0).texto).toBe(
+      "- [ ] llamar %%t:id=a3f2%%",
+    );
+  });
+
+  it("no toca el resto del token", () => {
+    expect(prioridad("- [ ] x %%t:id=a3f2;wb=foco;due=2026-08-29%%", 0, 1).texto).toBe(
+      "- [ ] x %%t:id=a3f2;wb=foco;due=2026-08-29;p=1%%",
+    );
+  });
+
+  // Es la diferencia con completar y con workbench, que bajan por el subárbol.
+  // El filete de los hijos es dibujo, no dato: lo pone la decoración.
+  it("no baja por el subárbol", () => {
+    const raw = ["- [ ] madre", "\t- [ ] hija", "\t\t- [ ] nieta", "\t- nota"].join("\n");
+    const r = prioridad(raw, 0, 1);
+    expect(r.plan).toHaveLength(1);
+    expect(r.texto).toBe(
+      ["- [ ] madre %%t:p=1%%", "\t- [ ] hija", "\t\t- [ ] nieta", "\t- nota"].join("\n"),
+    );
+  });
+
+  it("una línea ilegible queda intacta (invariante 7)", () => {
+    const raw = "- [ ] rota %%t:id=A3F2%%";
+    const r = prioridad(raw, 0, 2);
+    expect(r.plan).toEqual([]);
+    expect(r.texto).toBe(raw);
+  });
+
+  it("poner el nivel que ya tenía no produce plan", () => {
+    expect(prioridad("- [ ] x %%t:p=2%%", 0, 2).plan).toEqual([]);
+  });
+
+  it("una clave que no está no produce plan", () => {
+    const { doc, tareas } = armar("- [ ] x");
+    expect(planDePrioridad(doc, tareas, claveDe(A, 9), 1)).toEqual([]);
+  });
+});
 
 describe("propiedades de los planes", () => {
   it("todo cambio lleva en `antes` la línea que de verdad está ahí", () => {

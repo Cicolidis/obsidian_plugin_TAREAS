@@ -30,7 +30,13 @@ import {
   type Clave,
   type Task,
 } from "./tareas.js";
-import { nuevoId, parseTaskToken, setTaskToken, type TaskMeta } from "./token.js";
+import {
+  nuevoId,
+  parseTaskToken,
+  setTaskToken,
+  type Prioridad,
+  type TaskMeta,
+} from "./token.js";
 
 /**
  * Un cambio sobre una línea, o nada si esa línea no hay que tocarla.
@@ -214,6 +220,41 @@ export function planDeWorkbench(
     if (x) cambios.push(x);
   }
   return cambios;
+}
+
+// ------------------------------------------------------- prioridad (§14)
+
+/**
+ * Qué líneas cambia subir o bajar la prioridad: **una sola**, la de la tarea.
+ *
+ * Es la diferencia con `planDeCompletar` y `planDeWorkbench`, que bajan por el
+ * subárbol entero, y sale de la §14: «el color pinta la línea de la tarea, no
+ * el subárbol. Los hijos llevan un filete de 2px del mismo color en el borde
+ * izquierdo». El filete es **dibujo**, no dato: lo pone la decoración mirando
+ * la herencia, y no hay que escribir un `p=` en cada hija.
+ *
+ * Escribirlo en el subárbol sería además irreversible de hecho: bajarle la
+ * prioridad a la madre no podría distinguir una hija que la heredó de una que
+ * el usuario subió a mano.
+ *
+ * La prioridad normal no escribe campo (§5.2), y de eso se encarga
+ * `setTaskToken`: con `prioridad: 0` el `p=` desaparece del token, y si era lo
+ * único que tenía, desaparece el token entero.
+ */
+export function planDePrioridad(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+  nivel: Prioridad,
+): CambioDeLinea[] {
+  const t = porClave(tareas).get(clave);
+  if (!t) return [];
+  const texto = doc.lineas[t.linea]?.texto;
+  if (texto === undefined) return [];
+  // Una línea ilegible no se reescribe (invariante 7).
+  if (parseTaskToken(texto).estado === "ilegible") return [];
+  const x = cambio(doc, t.linea, setTaskToken(texto, { prioridad: nivel }));
+  return x ? [x] : [];
 }
 
 // ------------------------------------------- reinicio de un grupo (§11)

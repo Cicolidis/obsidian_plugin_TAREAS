@@ -1,7 +1,17 @@
-import { App, Plugin, PluginSettingTab, Setting, editorInfoField } from "obsidian";
+import {
+  App,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+  editorInfoField,
+  editorLivePreviewField,
+} from "obsidian";
+import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import { comandos } from "./comandos.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
+import { decoraciones } from "./editor/decoraciones.js";
+import { protegerTramo } from "./editor/protegerTramo.js";
 import { esNotaDeTareas, notasDeTrabajo, NOTAS_POR_OMISION } from "./notas.js";
 import {
   cargarSettings,
@@ -15,13 +25,24 @@ import { STRINGS } from "./strings.js";
 import { puertoObsidian } from "./vault/puertoObsidian.js";
 
 /**
- * Plugin de tareas — pasos 1 y 3 de la §20 de la spec.
+ * Plugin de tareas — pasos 1, 3 y 4a de la §20 de la spec.
  *
- * Todavía no hay decoraciones ni vistas. Lo que hay es el camino completo de
- * lectura y escritura: el índice en memoria que se mantiene solo, y dos comandos
- * que escriben por él. Antes de dibujar nada, garantizar que leer y escribir no
- * corrompe.
+ * Están el camino completo de lectura y escritura —el índice en memoria que se
+ * mantiene solo y los comandos que escriben por él— y la decoración pasiva
+ * sobre la nota: el token invisible en Live Preview y el color de la prioridad.
+ * Todavía no hay botones, menús ni vistas.
+ *
+ * Este archivo es el único de la capa 3 que importa `obsidian`, y por eso es el
+ * único que traduce «un editor de CodeMirror» a «un archivo del vault». Los
+ * módulos de `editor/` reciben esa decisión como función y se prueban enteros
+ * contra un `EditorState` pelado, sin abrir la aplicación.
  */
+/** Las clases que encienden cada indicador de prioridad. Un solo lugar. */
+const CLASES_DE_INDICADOR = {
+  filete: "tareas-ind-filete",
+  glifo: "tareas-ind-glifo",
+} as const;
+
 export default class TareasPlugin extends Plugin {
   settings: TareasSettings = { ...DEFAULT_SETTINGS };
   store!: StoreDeTareas;
@@ -29,10 +50,29 @@ export default class TareasPlugin extends Plugin {
   override async onload(): Promise<void> {
     this.settings = cargarSettings(await this.loadData());
 
-    // La extensión se registra una vez y lee la configuración por closure: así
-    // tocar el interruptor o agregar una nota tiene efecto en el momento, sin
-    // recargar el plugin ni reabrir la nota.
-    this.registerEditorExtension([checkboxAutomatico((state) => this.filtroActivo(state))]);
+    // Las extensiones se registran una vez y leen la configuración por closure:
+    // así tocar un interruptor o agregar una nota tiene efecto en el momento,
+    // sin recargar el plugin ni reabrir la nota.
+    //
+    // **El orden importa y no es cosmético.** `filterTransaction` recorre los
+    // filtros en orden inverso de precedencia —leído en @codemirror/state
+    // 6.5.0—, así que `Prec.low` hace que `protegerTramo` corra **primero** y
+    // `autoCheckbox` reciba el Enter con el token ya devuelto a su línea. Al
+    // revés, el checkbox automático deja de andar en toda tarea con token. Hay
+    // un test que lo fija.
+    this.registerEditorExtension([
+      Prec.low(protegerTramo((state) => this.enNotaDeTareas(state))),
+      checkboxAutomatico((state) => this.filtroActivo(state)),
+      decoraciones(
+        (state) => this.decorarActivo(state),
+        (ms, lineas) => {
+          if (!this.settings.registrarEventos) return;
+          console.log(`[tareas] decorar · ${lineas} líneas · ${ms.toFixed(2)} ms`);
+        },
+      ),
+    ]);
+
+    this.sincronizarIndicadores();
 
     this.store = new StoreDeTareas(
       puertoObsidian(this.app, () => this.notasDelStore(), (ref) => this.registerEvent(ref)),
@@ -66,6 +106,21 @@ export default class TareasPlugin extends Plugin {
 
   override onunload(): void {
     this.store?.detener();
+    // Las clases viven en `body` y no en el editor, así que no se van solas.
+    for (const c of Object.values(CLASES_DE_INDICADOR)) document.body.removeClass(c);
+  }
+
+  /**
+   * Los indicadores de forma de la prioridad viajan como clases en `body`.
+   *
+   * La decoración pone siempre la misma clase de nivel y **la hoja de estilos
+   * decide qué dibuja**. Es lo más barato que tiene efecto sin recargar y sin
+   * tocar la extensión: alternar un ajuste no puede obligar a reconstruir el
+   * `StateField` de cada editor abierto.
+   */
+  private sincronizarIndicadores(): void {
+    document.body.toggleClass(CLASES_DE_INDICADOR.filete, this.settings.indicadorFilete);
+    document.body.toggleClass(CLASES_DE_INDICADOR.glifo, this.settings.indicadorGlifo);
   }
 
   /**
@@ -79,20 +134,39 @@ export default class TareasPlugin extends Plugin {
   }
 
   /**
-   * ¿El filtro actúa sobre este editor?
+   * ¿Este editor está sobre una nota de la lista?
    *
    * Es el único lugar del plugin que traduce «un editor de CodeMirror» a «un
-   * archivo del vault». Vive acá y no en `autoCheckbox.ts` para que aquel
-   * módulo no importe `obsidian` y se pueda probar entero offline.
+   * archivo del vault». Vive acá y no en `editor/` para que aquellos módulos no
+   * importen `obsidian` —que además es un paquete de solo tipos— y se puedan
+   * probar enteros offline.
    */
-  private filtroActivo(state: EditorState): boolean {
-    if (!this.settings.checkboxAutomatico) return false;
+  private enNotaDeTareas(state: EditorState): boolean {
     const info = state.field(editorInfoField, false);
     return esNotaDeTareas(info?.file?.path ?? null, this.settings.notasDeTareas);
   }
 
+  /** ¿Corrige el checkbox automático acá? */
+  private filtroActivo(state: EditorState): boolean {
+    return this.settings.checkboxAutomatico && this.enNotaDeTareas(state);
+  }
+
+  /**
+   * ¿Se decora acá?
+   *
+   * Solo en Live Preview: en modo fuente el token **tiene que verse**, que es
+   * donde uno va a arreglarlo a mano, y en modo lectura se esconde solo porque
+   * `%%…%%` es comentario nativo de Obsidian (§5.1).
+   */
+  private decorarActivo(state: EditorState): boolean {
+    if (!this.settings.decoracionesEnLaNota) return false;
+    if (!state.field(editorLivePreviewField, false)) return false;
+    return this.enNotaDeTareas(state);
+  }
+
   async guardar(): Promise<void> {
     await this.saveData(this.settings);
+    this.sincronizarIndicadores();
     // Los ajustes tienen efecto sin recargar: es lo que hace que agregar una
     // nota o encender el congelado se pueda probar en el momento.
     if (this.store) {
@@ -170,6 +244,35 @@ class TareasSettingTab extends PluginSettingTab {
           await this.plugin.guardar();
         }),
       );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.decoraciones.nombre)
+      .setDesc(STRINGS.ajustes.decoraciones.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.decoracionesEnLaNota).onChange(async (v) => {
+          this.plugin.settings.decoracionesEnLaNota = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    // Los dos indicadores de forma de la §14 van por separado a propósito: uno,
+    // el otro o los dos. Es el patrón `designFlags.ts` —se prueba encendiendo—
+    // y de paso deja ver cuál de los dos, si alguno, mueve la cuenta de avisos
+    // del ciclo de medición: el glifo suma ancho al renglón y el filete no.
+    for (const [clave, textos] of [
+      ["indicadorFilete", STRINGS.ajustes.indicadorFilete],
+      ["indicadorGlifo", STRINGS.ajustes.indicadorGlifo],
+    ] as const) {
+      new Setting(containerEl)
+        .setName(textos.nombre)
+        .setDesc(textos.descripcion)
+        .addToggle((t) =>
+          t.setValue(this.plugin.settings[clave]).onChange(async (v) => {
+            this.plugin.settings[clave] = v;
+            await this.plugin.guardar();
+          }),
+        );
+    }
 
     // Andamiaje de verificación (patrón `designFlags.ts` de Anotaciones): se
     // enciende para probar, no reemplaza nada, y apagado no cambia nada.

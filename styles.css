@@ -1,11 +1,178 @@
 /*
  * Estilos del plugin de tareas.
  *
- * Todavía vacío: el prototipo del checkbox automático (spec §20 paso 1) no
- * dibuja nada. El archivo existe porque `npm run deploy` lo copia junto con
- * `main.js` y el manifiesto, y así el comando es el mismo antes y después de
- * que haya CSS.
+ * Hoy dibujan una sola cosa: la prioridad de la §14. El token no se dibuja
+ * —se esconde, y eso lo hace `Decoration.replace`, que no necesita CSS—.
+ *
+ * Tres restricciones ordenan todo lo de abajo:
+ *
+ * 1. **Nada acá cambia la altura de una línea.** Ni `line-height`, ni `padding`
+ *    o `margin` verticales. El paso 4 se apoya en que el mapa de alturas de
+ *    CodeMirror estime bien (§5.5); una regla que cambie el alto de las líneas
+ *    de tarea alimenta al mismo bucle de medición que ese diseño vino a evitar.
+ *    Por eso el filete es un `::before` posicionado y no un `border-left`: un
+ *    borde corre el texto, y correr el texto cambia dónde corta el renglón.
+ *
+ * 2. **Los colores salen de `.theme-light` / `.theme-dark`, no de
+ *    `prefers-color-scheme`.** El usuario puede forzar en Obsidian un tema
+ *    distinto al del sistema, y ahí la media query contesta lo que dice el
+ *    sistema operativo, que no es lo que se ve en pantalla.
+ *
+ * 3. **Los selectores van scopeados a `.markdown-source-view.mod-cm6`.**
+ *    Obsidian define los márgenes y el fondo de las líneas de lista con
+ *    selectores compuestos de esa forma, y le ganan a `.cm-line.tareas-p1` a
+ *    secas. En Anotaciones el mismo error apareció cuatro veces, siempre con el
+ *    síntoma «cambio el valor y no pasa nada».
+ *
+ *    **Verificado leyendo el `app.css` del asar 1.13.7 instalado**, no supuesto.
+ *    De todas las reglas de Obsidian que tocan `.cm-line` o `.cm-content`, la
+ *    única con `!important` es `.cm-content > * { margin: 0 !important }` —que
+ *    fue la que costó cara en Anotaciones y acá no aplica, porque nada de este
+ *    archivo toca `margin`—. Ninguna pinta `background-color` sobre `.cm-line`
+ *    ni usa su `::before`. O sea: hoy no hay con quién chocar.
+ *
+ * ## Los colores, medidos
+ *
+ * Contraste WCAG calculado contra los fondos por omisión de los dos temas. El
+ * peor caso es **4,63:1**, arriba del 4,5:1 que pide AA para texto — y eso
+ * aplica al glifo, que es texto; el filete es componente y le alcanzaba con
+ * 3:1. El amarillo de Anotaciones (`#c99a00`) daba **2,59:1 sobre blanco** y se
+ * descartó: es exactamente el peor caso que la §14 anticipaba sin medirlo.
  */
+
+.theme-light {
+	--tareas-alta: #8c6500;
+	--tareas-muy-alta: #c62828;
+	--tareas-alta-fondo: #fff4d1;
+	--tareas-muy-alta-fondo: #ffe3e3;
+}
+
+.theme-dark {
+	--tareas-alta: #e3c052;
+	--tareas-muy-alta: #e07070;
+	--tareas-alta-fondo: #3a3116;
+	--tareas-muy-alta-fondo: #3d2222;
+}
+
+/* Cuánto se mete el filete en el margen de la nota. Se queda afuera del texto
+   —incluida la sangría de las listas, que Obsidian resuelve con padding sobre
+   la línea— así que el mismo valor sirve para todos los niveles y el filete de
+   una tarea y el de sus hijas quedan alineados en la misma vertical.
+
+   Que un desplazamiento negativo no quede recortado está probado en el otro
+   plugin de este vault: Anotaciones dibuja la ficha de cada anotación con
+   `left: calc(-1 * 1.5em)` sobre este mismo elemento y en esta misma
+   aplicación. 0,7em es menos que eso. */
+.markdown-source-view.mod-cm6 {
+	--tareas-filete-x: 0.7em;
+	--tareas-filete-madre: 3px;
+	--tareas-filete-hija: 2px;
+}
+
+/* --- la línea de la tarea ------------------------------------------------ */
+
+.markdown-source-view.mod-cm6 .cm-line.tareas-p1,
+.markdown-source-view.mod-cm6 .cm-line.tareas-p2,
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1,
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2 {
+	/* Ancla del `::before`. No cambia el flujo ni la altura.
+
+	   Obsidian ya lo pone en `.markdown-source-view.mod-cm6 .cm-line` —leído en
+	   su `app.css`—, así que hoy es redundante. Se escribe igual: que el filete
+	   no se despegue de su línea no puede depender de una regla ajena que
+	   nadie prometió mantener. */
+	position: relative;
+}
+
+/* El color pinta **la línea de la tarea, no el subárbol** (§14): con árboles de
+   76 líneas, teñir todo deja media nota roja. */
+.markdown-source-view.mod-cm6 .cm-line.tareas-p1 {
+	background-color: var(--tareas-alta-fondo);
+}
+
+.markdown-source-view.mod-cm6 .cm-line.tareas-p2 {
+	background-color: var(--tareas-muy-alta-fondo);
+}
+
+.markdown-source-view.mod-cm6 .cm-line.tareas-p1::before,
+.markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+	content: "";
+	position: absolute;
+	left: calc(-1 * var(--tareas-filete-x));
+	top: 0;
+	bottom: 0;
+	width: var(--tareas-filete-madre);
+	border-radius: 1px;
+	background-color: var(--tareas-alta);
+}
+
+.markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+	background-color: var(--tareas-muy-alta);
+}
+
+/* Los hijos llevan un filete más fino del mismo color (§14). Sin fondo: el
+   bloque se lee como uno solo por la vertical continua, no por el tinte. */
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+	width: var(--tareas-filete-hija);
+}
+
+/* --- indicador 1: la textura del filete ---------------------------------- */
+/*
+ * §14 pide que los tres niveles se distingan **también sin color**, por
+ * accesibilidad y por pantallas al sol. Este indicador y el de abajo se
+ * encienden por separado desde los ajustes: uno, el otro o los dos.
+ *
+ * La clase vive en `body` y no en la decoración: el `StateField` pone siempre
+ * la misma clase de nivel y la hoja decide qué dibuja. Así alternar un ajuste
+ * no obliga a reconstruir las decoraciones de cada editor abierto.
+ *
+ * Solo cambia la línea de la tarea. A 2px las muescas no se leen, así que el
+ * filete de las hijas se queda liso: el nivel se comunica donde está el dato.
+ */
+body.tareas-ind-filete .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
+	width: 5px;
+	background-image: repeating-linear-gradient(
+		to bottom,
+		var(--tareas-muy-alta) 0 4px,
+		transparent 4px 7px
+	);
+	background-color: transparent;
+}
+
+/* --- indicador 2: el signo al final del texto ---------------------------- */
+/*
+ * Suma **ancho** al renglón, no alto, y por eso está apagado por omisión y
+ * separado del otro: el ancho es lo que decide si una línea entra en un renglón
+ * o en dos, y con la ventana angosta eso alimenta el bucle de medición de la
+ * §5.5. Tenerlos en dos interruptores deja ver cuál de los dos, si alguno,
+ * mueve la cuenta de avisos.
+ */
+body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p1::after,
+body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
+	margin-inline-start: 0.5em;
+	font-weight: 700;
+	/* Más chico que el texto: un `!` a tamaño completo compite con la tarea. No
+	   cambia la altura del renglón porque no supera el `line-height` heredado. */
+	font-size: 0.85em;
+	letter-spacing: 0.05em;
+	opacity: 0.9;
+}
+
+body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p1::after {
+	content: "!";
+	color: var(--tareas-alta);
+}
+
+body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
+	content: "!!";
+	color: var(--tareas-muy-alta);
+}
+
+/* --- ajustes ------------------------------------------------------------- */
 
 /* La lista de notas necesita el ancho entero: una ruta de vault no entra en
    la columna angosta que Obsidian le da por omisión a un control. */

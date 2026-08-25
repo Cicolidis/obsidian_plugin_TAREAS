@@ -29,6 +29,25 @@ export const STRINGS = {
         "A dónde va lo archivado. El plugin no la parsea al arrancar: el historial se lee " +
         "cuando se abre la vista.",
     },
+    decoraciones: {
+      nombre: "Decoraciones en la nota",
+      descripcion:
+        "Esconde el token de metadatos en Live Preview y pinta la prioridad. En modo lectura " +
+        "el token se esconde solo, porque es un comentario de Obsidian. Un token que no se " +
+        "entiende queda a la vista a propósito: es la única forma de arreglarlo.",
+    },
+    indicadorFilete: {
+      nombre: "Prioridad: filete con textura",
+      descripcion:
+        "Alta lleva un filete izquierdo sólido y muy alta uno más grueso con muescas. Se " +
+        "distinguen sin mirar el color.",
+    },
+    indicadorGlifo: {
+      nombre: "Prioridad: signo al final del texto",
+      descripcion:
+        "Un «!» para alta y «!!» para muy alta, al final de la línea. Suma ancho al renglón: " +
+        "con la ventana angosta puede empujar el corte de línea.",
+    },
     workbenchFavorito: {
       nombre: "Workbench favorito",
       descripcion:
@@ -58,7 +77,11 @@ export const STRINGS = {
   comandos: {
     completar: "Completar la tarea del cursor",
     workbench: "Asignar la tarea del cursor al workbench favorito",
+    subirPrioridad: "Subir la prioridad de la tarea del cursor",
+    bajarPrioridad: "Bajar la prioridad de la tarea del cursor",
   },
+  /** Los tres niveles de la §14, para decirlos en los avisos. */
+  prioridades: ["normal", "alta", "muy alta"] as const,
   avisos: {
     fueraDeLaLista: "Esta nota no está en la lista de notas de tareas.",
     sinTarea: "El cursor no está sobre una tarea.",
@@ -92,6 +115,12 @@ export const STRINGS = {
     noUbicada:
       "No se escribió nada: alguna línea ya no está donde estaba, o aparece repetida. " +
       "No se adivina cuál era. Volvé a intentar.",
+    prioridad: (nombre: string) => `Prioridad ${nombre}.`,
+    /**
+     * `subir` y `bajar` topan en vez de dar la vuelta, así que hay un caso en
+     * que no pasa nada. Decirlo evita que parezca que el comando no anda.
+     */
+    prioridadEnElTope: (nombre: string) => `La prioridad ya está en ${nombre}.`,
     ilegibles: (n: number) =>
       `${n === 1 ? "1 línea tiene" : `${n} líneas tienen`} el token ilegible y no se ` +
       "tocaron. Hay que arreglarlas a mano.",

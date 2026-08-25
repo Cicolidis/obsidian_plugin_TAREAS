@@ -54,6 +54,40 @@ export interface TareasSettings {
    */
   workbenchFavorito: string;
   /**
+   * Las decoraciones sobre la nota: token invisible y color de prioridad (§4a).
+   *
+   * Encendido por omisión. Existe apagado por dos razones, y ninguna es
+   * decorativa: es lo que permite medir A/B la predicción de la §5.5 sobre la
+   * misma nota y el mismo scroll —sin poder apagarlo, la línea de base no se
+   * puede comparar con nada—, y es la salida si la regresión aparece, sin
+   * desinstalar nada y sin perder el resto del plugin.
+   *
+   * **No apaga `protegerTramo`.** Aquel defiende un dato: sin decoraciones el
+   * peligro no desaparece, porque un Backspace que une dos líneas con token
+   * deja dos `%%t:` en una y la vuelve ilegible para siempre.
+   */
+  decoracionesEnLaNota: boolean;
+  /**
+   * Prioridad: el filete izquierdo cambia de grosor y de textura según el nivel.
+   *
+   * La §14 pide que los tres niveles se distingan **también sin color**, por
+   * accesibilidad y por pantallas al sol. Son dos indicadores independientes
+   * —este y el glifo— y no una lista de opciones, porque el usuario puede
+   * querer uno, el otro o los dos. Es el patrón `designFlags.ts`: un diseño se
+   * prueba encendiéndolo, no reemplazando el anterior.
+   */
+  indicadorFilete: boolean;
+  /**
+   * Prioridad: un `!` o `!!` al final de la línea.
+   *
+   * Apagado por omisión, y a propósito: **suma ancho al renglón**, y el ancho
+   * es lo que decide si una línea entra en un renglón o en dos. Con la ventana
+   * angosta eso alimenta al mismo bucle de medición que la §5.5 mide. Encender
+   * los dos indicadores por separado deja ver cuál de los dos, si alguno, mueve
+   * la cuenta de avisos.
+   */
+  indicadorGlifo: boolean;
+  /**
    * Verificación: el store deja de absorber cambios (patrón `designFlags.ts`).
    *
    * Con esto encendido el store queda deliberadamente atrasado, que es la única
@@ -113,6 +147,9 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   checkboxAutomatico: true,
   notaDeLog: NOTA_DE_LOG_POR_OMISION,
   workbenchFavorito: WORKBENCH_POR_OMISION,
+  decoracionesEnLaNota: true,
+  indicadorFilete: true,
+  indicadorGlifo: false,
   congelarStore: false,
   registrarEventos: false,
 };
@@ -143,6 +180,9 @@ export function cargarSettings(saved: unknown): TareasSettings {
         ? raw.notaDeLog.trim().normalize("NFC")
         : DEFAULT_SETTINGS.notaDeLog,
     workbenchFavorito: sanearWorkbench(raw.workbenchFavorito),
+    decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,
+    indicadorFilete: raw.indicadorFilete ?? DEFAULT_SETTINGS.indicadorFilete,
+    indicadorGlifo: raw.indicadorGlifo ?? DEFAULT_SETTINGS.indicadorGlifo,
     congelarStore: raw.congelarStore ?? DEFAULT_SETTINGS.congelarStore,
     registrarEventos: raw.registrarEventos ?? DEFAULT_SETTINGS.registrarEventos,
   };

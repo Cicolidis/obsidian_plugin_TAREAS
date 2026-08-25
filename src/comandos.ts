@@ -1,5 +1,5 @@
 /**
- * Los dos comandos de paleta: el camino de escritura de punta a punta.
+ * Los comandos de paleta: el camino de escritura de punta a punta.
  *
  * Es el mínimo para probar todo el paso 3 sin dibujar nada. Cada uno hace el
  * mismo recorrido:
@@ -26,10 +26,13 @@ import {
   elegirTarea,
   ilegiblesDelSubarbol,
   planDeCompletar,
+  planDePrioridad,
   planDeWorkbench,
   yaEstaCompleta,
   type Eleccion,
 } from "./acciones.js";
+import { bajar, subir } from "./color.js";
+import type { Prioridad } from "./token.js";
 import type { CambioDeLinea } from "./documento.js";
 import type { StoreDeTareas } from "./store.js";
 import { STRINGS } from "./strings.js";
@@ -128,6 +131,43 @@ async function aplicar(
   return r;
 }
 
+/**
+ * Subir o bajar la prioridad de la tarea del cursor.
+ *
+ * Los dos comandos son el mismo camino con una función distinta, y existen
+ * porque sin ellos **no hay forma de mirar los colores**: hoy no hay una sola
+ * tarea con `p=1` ni con `p=2` en ninguna nota. Cuando el ⋯ de la §13.0 tenga
+ * su barra de prioridad, van a llamar a este mismo plan.
+ *
+ * `subir` y `bajar` topan en vez de dar la vuelta, así que hay un caso en que
+ * no hay nada que escribir. Se dice, porque un comando que no hace nada y no
+ * avisa es indistinguible de un comando roto.
+ */
+function moverPrioridad(
+  dep: DependenciasDeComandos,
+  editor: Editor,
+  vista: MarkdownFileInfo,
+  mover: (p: Prioridad) => Prioridad,
+): void {
+  const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
+  if (!ctx) return;
+
+  const actual = dep.store.buscar(ctx.archivo, ctx.clave)?.prioridad ?? 0;
+  const nueva = mover(actual);
+  if (nueva === actual) {
+    new Notice(STRINGS.avisos.prioridadEnElTope(STRINGS.prioridades[actual]));
+    return;
+  }
+
+  void aplicar(
+    dep.app,
+    dep.store,
+    ctx.archivo,
+    planDePrioridad(dep.store.documento(ctx.archivo)!, dep.store.tareasDe(ctx.archivo), ctx.clave, nueva),
+    () => STRINGS.avisos.prioridad(STRINGS.prioridades[nueva]),
+  );
+}
+
 export interface DependenciasDeComandos {
   app: App;
   store: StoreDeTareas;
@@ -137,7 +177,7 @@ export interface DependenciasDeComandos {
   ahora?: () => string;
 }
 
-/** Los dos comandos, con la forma que `Plugin.addCommand` espera. */
+/** Los comandos, con la forma que `Plugin.addCommand` espera. */
 export function comandos(dep: DependenciasDeComandos) {
   const fecha = dep.ahora ?? (() => hoy());
 
@@ -197,6 +237,18 @@ export function comandos(dep: DependenciasDeComandos) {
               : STRINGS.avisos.saleDelWorkbench(n, wb),
         );
       },
+    },
+    {
+      id: "subir-prioridad-del-cursor",
+      name: STRINGS.comandos.subirPrioridad,
+      editorCallback: (editor: Editor, vista: MarkdownFileInfo) =>
+        moverPrioridad(dep, editor, vista, subir),
+    },
+    {
+      id: "bajar-prioridad-del-cursor",
+      name: STRINGS.comandos.bajarPrioridad,
+      editorCallback: (editor: Editor, vista: MarkdownFileInfo) =>
+        moverPrioridad(dep, editor, vista, bajar),
     },
   ];
 }

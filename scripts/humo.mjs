@@ -46,26 +46,52 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 // Cada marca es un mecanismo que, si se cae del bundle, deja al plugin
 // cargando sin hacer nada —el peor modo de falla, porque no se nota—:
 //
-//   transactionFilter  el mecanismo entero del prototipo (spec §20 paso 1)
-//   editorInfoField    el alcance por archivo; sin él intercepta el vault
-//   0_inbox/tareas_    la lista de notas, que viaja como JSON importado
-//   [ ]                lo que el filtro escribe
-//   onLayoutReady      el arranque del store (spec §20 paso 3)
-//   vault.process      el único camino de escritura (§8)
-//   los dos ids        un comando que se cae del bundle no da error: no aparece
+//   transactionFilter       el checkbox automático y la defensa del tramo
+//   editorInfoField         el alcance por archivo; sin él intercepta el vault
+//   editorLivePreviewField  las decoraciones solo van en Live Preview (§4a)
+//   StateField              las decoraciones entran al mapa de alturas (§5.5)
+//   atomicRanges            sin esto el cursor recorre el token carácter a carácter
+//   tareas-p                las clases de prioridad (§14)
+//   tareas-ind-             los dos indicadores de forma, que viven en `body`
+//   0_inbox/tareas_         la lista de notas, que viaja como JSON importado
+//   [ ]                     lo que el filtro escribe
+//   onLayoutReady           el arranque del store (spec §20 paso 3)
+//   vault.process           el único camino de escritura (§8)
+//   los cuatro ids          un comando que se cae del bundle no da error: no aparece
 //
 // El id del plugin no se busca acá: vive en el manifiesto y se valida abajo.
 for (const marca of [
   "transactionFilter",
   "editorInfoField",
+  "editorLivePreviewField",
+  "StateField",
+  "atomicRanges",
+  "tareas-p",
+  "tareas-ind-",
   "0_inbox/tareas_",
   "[ ] ",
   "onLayoutReady",
   ".process(",
   "completar-tarea-del-cursor",
   "asignar-workbench-favorito",
+  "subir-prioridad-del-cursor",
+  "bajar-prioridad-del-cursor",
 ]) {
   if (!src.includes(marca)) fallas.push(`falta "${marca}" en el bundle`);
+}
+
+// 4b) el CSS que el bundle no lleva: se copia aparte y se cae aparte.
+//
+// Sin `styles.css` en su lugar, las decoraciones se aplican y **no se ve nada**:
+// el token queda escondido —eso lo hace `Decoration.replace`— pero la prioridad
+// no pinta. Es un modo de falla que parece «la prioridad no anda».
+try {
+  const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  for (const clase of ["tareas-p1", "tareas-p2", "tareas-hija-p1", "tareas-ind-glifo"]) {
+    if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
+  }
+} catch {
+  fallas.push("no se pudo leer styles.css");
 }
 
 // 5) el manifest apunta a este archivo
