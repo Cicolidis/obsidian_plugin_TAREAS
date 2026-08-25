@@ -106,6 +106,21 @@ describe("limpiar tokens sueltos", () => {
     expect(sinTokens("\t\t1. %%t:id=a3f2%%")).toBe("\t\t1. ");
   });
 
+  // El síntoma aparece una tecla después del gesto: `- [ ]` sin su espacio
+  // sigue siendo un checkbox al final de línea, pero apenas se escribe una
+  // letra queda `- [ ]texto`, que no es una tarea para nadie.
+  it("no le come el espacio al checkbox de una tarea vacía", () => {
+    expect(sinTokens("- [ ] %%t:id=a3f2%%")).toBe("- [ ] ");
+    expect(sinTokens("- [ ]  %%t:id=a3f2%%")).toBe("- [ ] ");
+    expect(sinTokens("\t- [x] %%t:id=a3f2%%")).toBe("\t- [x] ");
+  });
+
+  it("no toca un ítem que sí tiene contenido", () => {
+    expect(sinTokens("- [ ] algo %%t:id=a3f2%%")).toBe("- [ ] algo");
+    expect(sinTokens("- [ ] algo")).toBe("- [ ] algo");
+    expect(sinTokens("- [ ] algo   ")).toBe("- [ ] algo   ");
+  });
+
   it("no inventa el cierre que falta: un `%%t:` sin `%%` queda donde está", () => {
     expect(sinTokens("- [ ] a %%t:id=a3f2")).toBe("- [ ] a %%t:id=a3f2");
     expect(parsea("- [ ] a %%t:id=a3f2")).toBe(false);

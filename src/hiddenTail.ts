@@ -78,11 +78,26 @@ const TOKEN_SUELTO = new RegExp(`[ \\t]*${TOKEN_SOURCE}`, "g");
  * del usuario. Quien llame a esto tiene que verificar el resultado.
  */
 export function sinTokens(texto: string): string {
-  const limpio = texto.replace(TOKEN_SUELTO, "");
-  // El recorte se lleva el espacio que precede al token, y eso puede dejar un
-  // marcador de lista pelado (`-` en vez de `- `), que ya no es un ítem para
-  // nadie: Obsidian lo dibuja como texto y el bullet nace roto.
-  return limpio.replace(/^([ \t]*(?:[-*+]|\d+[.)]))[ \t]*$/, "$1 ");
+  return repararMarcador(texto.replace(TOKEN_SUELTO, ""));
+}
+
+/**
+ * Un ítem de lista que quedó sin nada escrito **tiene que terminar en espacio**.
+ *
+ * El recorte se lleva el espacio que precede al token, y ese espacio puede ser
+ * el que separa el marcador —o el checkbox— de lo que viene después. `- [ ]`
+ * sin su espacio final sigue siendo un checkbox al final de línea, pero apenas
+ * el usuario escribe una letra se convierte en `- [ ]texto`, que **no es una
+ * tarea** para Obsidian, para Outliner ni para `linea.ts`. Y `-` pelado no es
+ * ni siquiera un ítem.
+ *
+ * El bug se ve una tecla después del gesto que lo causó, que es la peor
+ * distancia posible entre causa y síntoma.
+ */
+const ITEM_VACIO_RE = /^([ \t]*(?:[-*+]|\d+[.)])[ \t]*(?:\[[^[\]]\])?)[ \t]*$/;
+
+function repararMarcador(texto: string): string {
+  return texto.replace(ITEM_VACIO_RE, (_todo, item: string) => `${item.replace(/[ \t]+$/, "")} `);
 }
 
 /**
