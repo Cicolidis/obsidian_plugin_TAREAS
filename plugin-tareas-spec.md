@@ -161,30 +161,56 @@ Regla heredada: **ante cualquier rango atómico, preguntarse qué pasa cuando al
 
 ### La línea de base del ciclo de medición, tomada antes de tocarlo
 
-**Anotado el 24/08/2026, al cerrar el paso 3.** Scrolleando rápido una nota de
-tareas de 425 líneas, la consola ya tira —**sin ninguna decoración del plugin**,
-que en el paso 3 todavía no existen—:
+**Medido el 24/08/2026, al cerrar el paso 3**, sobre una nota de tareas de 425
+líneas y **sin ninguna decoración del plugin**, que todavía no existen. La
+consola de Obsidian tira:
 
 ```
-Measure loop restarted more than 5 times
-Viewport failed to stabilize
+Measure loop restarted more than 5 times     ×1
+Viewport failed to stabilize                 ×4
 ```
 
-Son de CodeMirror, que Obsidian empaqueta dentro de `app.js`; salen de su ciclo
-de medición cuando el viewport no converge: documento largo, alturas de línea
-estimadas y scroll rápido. Las pilas son puramente de scroll. Son avisos, no
-errores, y el editor se recupera.
+Pero solo bajo **dos condiciones a la vez**, y eso es lo que vale:
+
+1. **Con la ventana angostada.** A pantalla completa no aparece ninguno.
+2. **Scrolleando hacia arriba.** De arriba hacia abajo no aparece ninguno.
+
+Son de CodeMirror, que Obsidian empaqueta dentro de `app.js`, y las pilas son
+puramente de scroll. Son avisos, no errores, y el editor se recupera.
+
+**Qué lo explica** (hipótesis, no medición): CodeMirror **estima** la altura de
+las líneas que todavía no midió. Con la ventana angosta las líneas envuelven, así
+que la estimación se equivoca mucho —una línea puede ocupar tres filas en vez de
+una—. Y el sentido decide si eso importa: yendo hacia abajo, las correcciones
+caen **debajo** del ancla del scroll y no mueven lo que uno mira; yendo hacia
+arriba caen **encima**, corren la posición, eso cambia el viewport, y hay que
+medir de nuevo. Ese es el bucle que no converge.
 
 Que hoy no puedan ser del plugin es comprobable: toda su superficie sobre el
 editor es un `transactionFilter` y un `StateField<number | null>`, ninguno de los
 dos participa del layout, y `src/` no importa `@codemirror/view` en ningún lado.
 
-Se anota porque **el paso 4 sí va a participar de la medición**: `Decoration.replace`
-con `atomicRanges` cambia lo que ocupa cada línea, y las decoraciones de línea de
-la prioridad también. Con la base tomada, si después del paso 4 los avisos se
-multiplican o aparecen **sin scrollear**, se sabe de quién son. Sin la base, el
-primer reflejo sería descartarlos como ruido de siempre — que es exactamente
-cómo se pierde una regresión.
+### La restricción que esto le pone al paso 4
+
+**`Decoration.replace` sobre el token cambia la altura de la línea**, no solo su
+ancho: con envoltura, sacar `%%t:id=…;wb=…%%` puede hacer que una línea pase de
+dos filas a una. O sea que las decoraciones del paso 4 entran justo en el
+mecanismo que ya está al límite.
+
+> Las decoraciones del paso 4 se calculan sobre **el documento entero**, en un
+> `StateField`, y no solo sobre el viewport visible con un `ViewPlugin`.
+
+El patrón habitual —decorar solo lo visible— es exactamente el que rompe esto: lo
+que está fuera del viewport se estima **con** el token puesto, y al entrar en
+pantalla se encoge de golpe. Es el mismo bucle de arriba, amplificado y esta vez
+causado por nosotros. Y no hay ninguna razón para ser astutos: parsear las siete
+notas **enteras** cuesta 0,31 ms.
+
+**Predicción falsable, para el paso 4:** con la ventana angosta y scrolleando
+hacia arriba, la cuenta no tiene que pasar de la base de arriba (1 y 4). Si sube,
+o si aparecen avisos **sin scrollear**, es del plugin. Sin esta base tomada, el
+primer reflejo sería descartarlos como ruido de siempre — que es cómo se pierde
+una regresión.
 
 ---
 
