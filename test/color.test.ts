@@ -1,0 +1,58 @@
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+import { bajar, claseDeHija, colorClass, subir } from "../src/color.js";
+import type { Prioridad } from "../src/token.js";
+
+const prioridad = fc.constantFrom<Prioridad>(0, 1, 2);
+
+describe("la clase de una prioridad", () => {
+  it("normal no dibuja nada: no escribe campo y no pinta línea", () => {
+    expect(colorClass(0)).toBe("");
+    expect(claseDeHija(0)).toBe("");
+  });
+
+  it("alta y muy alta tienen su clase, y la de la hija es otra", () => {
+    expect(colorClass(1)).toBe("tareas-p1");
+    expect(colorClass(2)).toBe("tareas-p2");
+    expect(claseDeHija(1)).toBe("tareas-hija-p1");
+    expect(claseDeHija(2)).toBe("tareas-hija-p2");
+  });
+
+  it("ninguna clase se repite entre niveles ni entre madre e hija", () => {
+    const todas = [1, 2].flatMap((p) => [colorClass(p as Prioridad), claseDeHija(p as Prioridad)]);
+    expect(new Set(todas).size).toBe(todas.length);
+  });
+});
+
+describe("subir y bajar", () => {
+  it("recorren los tres niveles", () => {
+    expect(subir(0)).toBe(1);
+    expect(subir(1)).toBe(2);
+    expect(bajar(2)).toBe(1);
+    expect(bajar(1)).toBe(0);
+  });
+
+  // Con un ciclo `2 → 0`, apretar dos veces por las dudas deja en normal la
+  // tarea más urgente. Un tope no puede equivocarse en esa dirección.
+  it("topan y no dan la vuelta", () => {
+    expect(subir(2)).toBe(2);
+    expect(bajar(0)).toBe(0);
+  });
+
+  it("bajar deshace subir salvo en el tope", () => {
+    fc.assert(
+      fc.property(prioridad, (p) => {
+        expect(bajar(subir(p))).toBe(p === 2 ? 1 : p);
+        expect(subir(bajar(p))).toBe(p === 0 ? 1 : p);
+      }),
+    );
+  });
+
+  it("nunca se salen del rango", () => {
+    fc.assert(
+      fc.property(prioridad, (p) => {
+        for (const q of [subir(p), bajar(p)]) expect([0, 1, 2]).toContain(q);
+      }),
+    );
+  });
+});

@@ -19,6 +19,16 @@
  * ya salió mal, y encima escribirle arriba es la forma de perder el original.
  */
 
+/**
+ * Los tres niveles de la §14: normal, alta, muy alta.
+ *
+ * Vive acá y no en `color.ts` porque es un **dato** —lo que se guarda es un
+ * ordinal, y ordenar lo necesita (D12)—; el color es presentación y se deriva
+ * de él. En Anotaciones es al revés: ahí el color *es* el dato, porque viene de
+ * Zotero.
+ */
+export type Prioridad = 0 | 1 | 2;
+
 /** Los metadatos de una tarea (spec §5.2). */
 export interface TaskMeta {
   /** 4-8 caracteres `[a-z0-9]`. `null` hasta que la tarea entra a un workbench. */
@@ -54,7 +64,7 @@ export interface TaskMeta {
    */
   rec: string | null;
   /** 0 normal · 1 alta · 2 muy alta. La normal no escribe campo. */
-  prioridad: 0 | 1 | 2;
+  prioridad: Prioridad;
   /** `AAAA-MM-DD`. */
   done: string | null;
 }
@@ -81,12 +91,22 @@ export type Analisis =
   | { estado: "ilegible" };
 
 /**
+ * La forma del token. El grupo captura el cuerpo.
+ *
+ * Es la **única** definición de la gramática: `hiddenTail.ts` la reusa desde
+ * acá con otro anclaje —global, en cualquier posición— porque una gramática
+ * repetida en dos archivos diverge (CLAUDE.md). Es el `LINK_TOKEN_SOURCE` de
+ * Anotaciones.
+ */
+export const TOKEN_SOURCE = "%%t:([^%]*)%%";
+
+/**
  * Un token bien formado al final de la línea.
  *
  * Tolera espacios detrás al **leer** —un espacio suelto no puede congelar una
  * línea para siempre— pero al escribir el token queda pegado al final real.
  */
-const TOKEN_RE = /%%t:([^%]*)%%([ \t]*)$/;
+const TOKEN_RE = new RegExp(`${TOKEN_SOURCE}([ \\t]*)$`);
 /** Cualquier cosa que se parezca a un token, esté donde esté. Para detectar. */
 const PARECIDO_RE = /%%t:/;
 
