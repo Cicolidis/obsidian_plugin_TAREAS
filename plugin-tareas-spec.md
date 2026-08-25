@@ -159,6 +159,33 @@ Reescribir el token es una función pura y fácil. El riesgo está en la capa de
 
 Regla heredada: **ante cualquier rango atómico, preguntarse qué pasa cuando alguien borra hacia atrás desde el otro lado.**
 
+### La línea de base del ciclo de medición, tomada antes de tocarlo
+
+**Anotado el 24/08/2026, al cerrar el paso 3.** Scrolleando rápido una nota de
+tareas de 425 líneas, la consola ya tira —**sin ninguna decoración del plugin**,
+que en el paso 3 todavía no existen—:
+
+```
+Measure loop restarted more than 5 times
+Viewport failed to stabilize
+```
+
+Son de CodeMirror, que Obsidian empaqueta dentro de `app.js`; salen de su ciclo
+de medición cuando el viewport no converge: documento largo, alturas de línea
+estimadas y scroll rápido. Las pilas son puramente de scroll. Son avisos, no
+errores, y el editor se recupera.
+
+Que hoy no puedan ser del plugin es comprobable: toda su superficie sobre el
+editor es un `transactionFilter` y un `StateField<number | null>`, ninguno de los
+dos participa del layout, y `src/` no importa `@codemirror/view` en ningún lado.
+
+Se anota porque **el paso 4 sí va a participar de la medición**: `Decoration.replace`
+con `atomicRanges` cambia lo que ocupa cada línea, y las decoraciones de línea de
+la prioridad también. Con la base tomada, si después del paso 4 los avisos se
+multiplican o aparecen **sin scrollear**, se sabe de quién son. Sin la base, el
+primer reflejo sería descartarlos como ruido de siempre — que es exactamente
+cómo se pierde una regresión.
+
 ---
 
 ## 6. Modelo de datos
