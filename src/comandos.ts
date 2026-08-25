@@ -48,13 +48,20 @@ interface Contexto {
 }
 
 /** El aviso que corresponde a cada modo de fracaso de `elegirTarea`. */
-const AVISO: Record<Exclude<Eleccion["estado"], "ok">, string> = {
-  "fuera-de-la-lista": STRINGS.avisos.fueraDeLaLista,
-  "sin-indice": STRINGS.avisos.sinIndice,
-  "sin-tarea": STRINGS.avisos.sinTarea,
-  ausente: STRINGS.avisos.lineaAusente,
-  ambigua: STRINGS.avisos.lineaAmbigua,
-};
+function aviso(e: Exclude<Eleccion, { estado: "ok" }>): string {
+  switch (e.estado) {
+    case "fuera-de-la-lista":
+      return STRINGS.avisos.fueraDeLaLista;
+    case "sin-indice":
+      return STRINGS.avisos.sinIndice;
+    case "sin-tarea":
+      return STRINGS.avisos.sinTarea;
+    case "ausente":
+      return STRINGS.avisos.lineaAusente;
+    case "ambigua":
+      return STRINGS.avisos.lineaAmbigua(e.veces);
+  }
+}
 
 /**
  * La tarea que el cursor está eligiendo, o `null` con el aviso ya dado.
@@ -86,7 +93,7 @@ function tareaDelCursor(
   });
 
   if (eleccion.estado !== "ok") {
-    new Notice(AVISO[eleccion.estado], 8000);
+    new Notice(aviso(eleccion), 8000);
     return null;
   }
   return { archivo: archivo!, clave: eleccion.clave };

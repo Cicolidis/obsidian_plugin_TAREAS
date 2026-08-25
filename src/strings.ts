@@ -72,9 +72,15 @@ export const STRINGS = {
     lineaAusente:
       "Esa tarea todavía no está en el índice. Si la acabás de escribir, esperá un " +
       "segundo; si tenés el índice congelado, acordate de apagarlo.",
-    lineaAmbigua:
-      "Esa línea aparece repetida en la nota y el índice está desfasado: no se puede " +
-      "saber a cuál de las dos apuntás, así que no se toca ninguna.",
+    /**
+     * Sin «a cuál de las dos»: nada garantiza que sean dos. En el corpus de hoy
+     * todos los textos repetidos aparecen exactamente dos veces —20 de 20,
+     * medido— pero eso es una foto del vault, no una regla.
+     */
+    lineaAmbigua: (n: number) =>
+      `Esa línea aparece ${n} veces en la nota y el índice está desfasado: no se ` +
+      "puede saber a cuál apuntás, así que no se toca ninguna. Esperá un segundo y " +
+      "probá de nuevo; si tenés el índice congelado, apagalo.",
     yaCompleta: "Esa tarea ya está completa.",
     completadas: (n: number) => (n === 1 ? "1 tarea completada." : `${n} tareas completadas.`),
     entraAlWorkbench: (n: number, wb: string) =>

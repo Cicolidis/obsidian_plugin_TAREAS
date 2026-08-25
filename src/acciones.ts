@@ -292,7 +292,7 @@ export type Eleccion =
   | { estado: "sin-indice" }
   | { estado: "sin-tarea" }
   | { estado: "ausente" }
-  | { estado: "ambigua" };
+  | { estado: "ambigua"; veces: number };
 
 /**
  * La tarea que el cursor está eligiendo.
@@ -343,7 +343,7 @@ export function elegirTarea(
     cursor.texto,
   );
   if (u.estado === "ausente") return { estado: "ausente" };
-  if (!seEncontro(u)) return { estado: "ambigua" };
+  if (u.estado === "ambigua") return { estado: "ambigua", veces: u.lineas.length };
 
   const clave = claveDe(archivo!, u.linea);
   return porClave(tareas).has(clave) ? { estado: "ok", clave } : { estado: "sin-tarea" };

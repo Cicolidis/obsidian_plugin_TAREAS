@@ -382,7 +382,7 @@ describe("elegirTarea — el bug de B5, y el que no se veía", () => {
       const conDup = parseDocumento(["- [ ] igual", "- [ ] otra", "- [ ] igual"].join("\n"));
       expect(
         elegirTarea(A, NOTAS, conDup, indexar(conDup, A), cursor(9, "- [ ] igual")),
-      ).toEqual({ estado: "ambigua" });
+      ).toEqual({ estado: "ambigua", veces: 2 });
     });
 
     it("pero si la línea del cursor coincide, se usa esa aunque el texto se repita", () => {
