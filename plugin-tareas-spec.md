@@ -285,6 +285,60 @@ o si aparecen avisos **sin scrollear**, es del plugin. Sin esta base tomada, el
 primer reflejo sería descartarlos como ruido de siempre — que es cómo se pierde
 una regresión.
 
+### Lo que el paso 4a agregó a esta sección
+
+**25/08/2026, al construir las decoraciones.** Tres cosas leídas del sistema, y
+una corrección a cómo hay que leer la predicción de arriba.
+
+**1. Por qué el rango atómico tiene que incluir el salto de línea: la segunda
+razón.** La primera es de siempre —sin él bajar de línea cuesta dos flechas—. La
+segunda sale de leer `deleteBy` y `skipAtomic` adentro del asar 1.13.7
+instalado, minificados como `aH` y `sH`:
+
+```js
+function sH(e,t,n){ … r[i].between(t,t,function(e,i){ e<t && i>t && (t = n?i:e) }) … }
+…  a<r ? (n="delete.backward", a = sH(e,a,!1)) : …
+```
+
+Un Backspace desde la línea de abajo apunta al salto de línea. Si el salto está
+**adentro** del rango atómico, el objetivo se corre hasta el comienzo del rango y
+se borra el token entero: feo pero recuperable, que es exactamente el caso que
+la §5.4 acepta. Si el salto quedara **afuera**, el borrado se llevaría solo el
+`\n` y dejaría dos `%%t:` en la línea unida: **ilegible, y una línea ilegible no
+se vuelve a escribir nunca** (§5.3). De los dos daños, el rango elige el
+reversible. `src/editor/protegerTramo.ts` evita los dos.
+
+**2. Los `transactionFilter` sí se encadenan, y el orden es inverso.** Leído en
+`@codemirror/state` 6.5.0, `filterTransaction`:
+
+```js
+let filters = state.facet(transactionFilter);
+for (let i = filters.length - 1; i >= 0; i--) { … tr = resolveTransaction(state, …) }
+```
+
+Cada filtro recibe la `Transaction` que produjo el anterior, resuelta contra el
+mismo `startState`, y se recorren **de menor a mayor precedencia**. O sea que
+`Prec.low` corre **primero**. No es un detalle: si `autoCheckbox` corriera antes
+que `protegerTramo`, vería un Enter cuya primera línea perdió el token, su
+comparación `resultado[0].trimEnd() === linea.text.trimEnd()` fallaría, y **el
+checkbox automático dejaría de funcionar en toda tarea que tenga token**. Un
+mecanismo roto por el orden de registro de otro.
+
+**3. CodeMirror no tira excepción con rangos superpuestos: los fusiona.** Medido,
+porque lo primero que supuse era lo contrario. Con `[0,5)→X` y `[3,7)→Y` sobre
+`abcdefghij` devuelve `XYhij`. Un filtro que agranda el rango que reescribe
+—como hacen dos de las cuatro reglas de `protegerTramo`— podría comerse en
+silencio la edición de otro cursor. Es peor que una excepción, porque no avisa.
+
+**4. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
+tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
+efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con
+eso no prueba nada en ninguna de las dos direcciones. **Antes de medir hay que
+cargar la nota de prueba de tokens.** Y la comparación se hace A/B con el
+interruptor «decoraciones en la nota», sobre la misma nota y el mismo recorrido
+de scroll: sin poder apagarlas, la línea de base no se compara contra nada.
+
 ---
 
 ## 6. Modelo de datos
@@ -646,8 +700,60 @@ Tres niveles: normal (sin color), alta (amarillo), muy alta (rojo).
 - **Se guarda un número (`p=1`/`p=2`), se dibuja un color.** Ordenar necesita un ordinal, y guardar el nombre del color ata la paleta para siempre. En Anotaciones el color *es* el dato porque viene de Zotero; acá es presentación.
 - **El color pinta la línea de la tarea, no el subárbol.** Los hijos llevan un filete de 2px del mismo color en el borde izquierdo. Con árboles de 76 líneas, teñir todo deja media nota roja.
 - Se porta el mecanismo de Anotaciones: decoración de línea + `colorClass()` + la barra de colores rápidos configurable de `settingsData.ts`.
-- **Verificar contraste en tema claro y oscuro.** Amarillo sobre fondo claro es el peor caso. Existe `scripts/revisar-especificidad.mjs`.
+- **Verificar contraste en tema claro y oscuro.** Amarillo sobre fondo claro es el peor caso.
 - Los tres niveles deben distinguirse **también sin color** (un indicador de forma), por accesibilidad y por pantallas al sol.
+
+### Lo que el paso 4a decidió y midió
+
+**25/08/2026.**
+
+**La prioridad se escribe en la línea de la tarea y en ninguna más.** Es la
+diferencia con completar y con asignar a un workbench, que bajan por el subárbol
+entero (§9). Sale de la regla de arriba —el color pinta la línea, los hijos
+llevan filete— y de una consecuencia que la regla no dice: si el `p=` se
+escribiera en cada hija, **bajarle la prioridad a la madre no podría distinguir
+una hija que la heredó de una que el usuario subió a mano**. El filete es
+dibujo, no dato, y lo calcula la decoración mirando la herencia.
+
+**El amarillo de Anotaciones no sirve, y ahora está medido.** «Amarillo sobre
+fondo claro es el peor caso» era una anticipación correcta sin número. El
+número: `#c99a00` sobre blanco da **2,59:1**, por debajo del 3:1 que la WCAG
+1.4.11 pide para un componente y muy por debajo del 4,5:1 de texto. La paleta
+que quedó —`#8c6500` y `#c62828` en claro, `#e3c052` y `#e07070` en oscuro—
+tiene **4,63:1 en el peor de los ocho casos**.
+
+**Son dos indicadores de forma, no uno, y se encienden por separado.** Decisión
+del usuario: uno, el otro o los dos.
+
+| Indicador | Qué dibuja | Por omisión |
+|---|---|---|
+| Filete con textura | alta = filete sólido de 3px; muy alta = 5px con muescas | encendido |
+| Signo al final | `!` y `!!` después del texto | apagado |
+
+Que estén separados no es solo gusto: **el glifo suma ancho al renglón y el
+filete no**, y el ancho es lo que decide si una línea entra en un renglón o en
+dos. Con la ventana angosta eso alimenta el mismo bucle de medición de la §5.5,
+así que tenerlos en dos interruptores deja ver cuál de los dos, si alguno, mueve
+la cuenta de avisos. Es el patrón `designFlags.ts` haciendo de instrumento.
+
+Las clases viven en `body` y no en la decoración: el `StateField` pone siempre
+la misma clase de nivel y la hoja de estilos decide qué dibuja. Así alternar un
+ajuste no obliga a reconstruir las decoraciones de cada editor abierto.
+
+**`scripts/revisar-especificidad.mjs` no se portó.** Su heurística es la de
+Anotaciones —selectores de etiqueta pelada, `button:not(.clickable-icon)`— y no
+mira el riesgo de acá, que es clase contra clase sobre `.cm-line`. La pregunta
+se contestó leyendo el `app.css` del asar instalado: de las diez reglas de
+Obsidian que tocan `.cm-line` o `.cm-content` en propiedades que este plugin
+usa, la única con `!important` es `.cm-content > * { margin: 0 !important }` —la
+que costó cara en Anotaciones— y `styles.css` no toca `margin`. Ninguna pinta
+`background-color` sobre `.cm-line` ni usa su `::before`.
+
+Sí se portó **`scripts/extraer-css-de-obsidian.mjs`**, que es lo que permitió
+contestarla, con un arreglo: el de Anotaciones lee el `.asar` del instalador en
+`/Applications`, y Obsidian se actualiza solo y corre el de
+`~/Library/Application Support/obsidian/obsidian-N.asar`. Medir la versión
+equivocada es peor que no medir.
 
 ---
 
@@ -765,7 +871,8 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 1 | **Prototipo del `transactionFilter`** del checkbox automático, conviviendo con Outliner, probado en escritorio **y en el teléfono** | Es lo único que puede salir mal de un modo que cambie el diseño. Si falla, §15 punto 2 |
 | 2 | **Capa 1 completa con tests**: parser de las cuatro clases de línea, token, árboles, reinicio de cíclicas, archivado | Lógica pura primero, interfaz después. Y da los invariantes 2, 3, 5, 6, 7, 8, 9 sin tocar Obsidian |
 | 3 | **Store + capa de escritura**, con el invariante 9 como prueba diferencial contra las siete notas reales | Antes de dibujar nada, garantizar que leer y escribir no corrompe |
-| 4 | **Decoraciones sobre la nota**: ocultar el token, botones en hover, colores de prioridad | El frente principal (§13.0) |
+| 4a | **Decoración pasiva sobre la nota**: ocultar el token, defender el rango atómico, colores de prioridad | El frente principal (§13.0). Es un port re-arquitecturado con las trampas ya documentadas |
+| 4b | **La fila de botones** de la §13.0: ★ ◐ → ⋯ | Código sin precedente: Anotaciones no tiene botones sobre la línea, tiene una barra global y gutters |
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |
 | 6 | **Completar / descartar / archivar al LOG** | Resuelve el hallazgo del 7,5% |
 | 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |

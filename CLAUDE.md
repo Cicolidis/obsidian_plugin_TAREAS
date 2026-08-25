@@ -75,6 +75,10 @@ El criterio no es «¿borra?» sino «¿reescribe el documento entero?». Se esc
 - La continuación de listas de Obsidian no pasa por el keymap. Lo que ve todo cambio es `EditorState.transactionFilter`.
 - Un `transactionFilter` no puede encadenar specs: se resuelven contra el documento original. Hay que corregir la entrada, no el resultado.
 - **La forma de una edición depende de qué plugins haya instalados.** Con Outliner (instalado acá) Enter reemplaza la línea entera; sin él inserta el salto. Escribir reglas que **no miren la forma**.
+- **Varios `transactionFilter` sí se encadenan, y corren de menor a mayor precedencia.** Cada uno recibe la transacción del anterior, resuelta contra el mismo `startState`. `Prec.low` corre **primero**. El orden entre dos filtros que tocan el mismo gesto es una decisión de diseño, no un detalle de registro: fijala con un test.
+- **Rangos superpuestos no tiran excepción: se fusionan.** `[0,5)→X` y `[3,7)→Y` sobre `abcdefghij` da `XYhij`. Un filtro que agranda el rango que reescribe puede comerse en silencio la edición de otro cursor, y eso es peor que un error visible.
+- **Las decoraciones tienen que ir en un `StateField`, no en un `ViewPlugin`.** El mapa de alturas hace `filter(d => typeof d != "function")` y descarta las que aporta un `ViewPlugin`. El síntoma no se ve en pantalla: se ve en el ciclo de medición, meses después.
+- **Obsidian se actualiza solo y el `.asar` del instalador no es el que corre.** El que vale está en `~/Library/Application Support/obsidian/obsidian-N.asar`. Leer el de `/Applications` es medir otra versión y creerle.
 
 ### Medir antes de diseñar, y antes de optimizar
 
