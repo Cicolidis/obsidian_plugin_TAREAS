@@ -178,33 +178,83 @@ Pero solo bajo **dos condiciones a la vez**, y eso es lo que vale:
 Son de CodeMirror, que Obsidian empaqueta dentro de `app.js`, y las pilas son
 puramente de scroll. Son avisos, no errores, y el editor se recupera.
 
-**Qué lo explica** (hipótesis, no medición): CodeMirror **estima** la altura de
-las líneas que todavía no midió. Con la ventana angosta las líneas envuelven, así
-que la estimación se equivoca mucho —una línea puede ocupar tres filas en vez de
-una—. Y el sentido decide si eso importa: yendo hacia abajo, las correcciones
-caen **debajo** del ancla del scroll y no mueven lo que uno mira; yendo hacia
-arriba caen **encima**, corren la posición, eso cambia el viewport, y hay que
-medir de nuevo. Ese es el bucle que no converge.
+**Qué lo explica.** Leído en `@codemirror/view` 6.38.6, no deducido —el §1 de las
+notas de método: verificar contra el sistema, no razonar sobre documentación—.
+Los dos avisos salen del mismo bucle, en `EditorView.measure`:
 
-Que hoy no puedan ser del plugin es comprobable: toda su superficie sobre el
-editor es un `transactionFilter` y un `StateField<number | null>`, ninguno de los
-dos participa del layout, y `src/` no importa `@codemirror/view` en ningún lado.
+```js
+let newAnchorHeight = ... this.viewState.lineBlockAt(scrollAnchorPos).top;
+let diff = newAnchorHeight - scrollAnchorHeight;
+if (diff > 1 || diff < -1) {
+    scrollTop = scrollTop + diff;
+    sDOM.scrollTop = scrollTop / this.scaleY;
+    scrollAnchorHeight = -1;
+    continue;                    // ← otra vuelta; a la séptima, el aviso
+}
+```
+
+CodeMirror ancla el scroll a un bloque y recuerda su `top`. Después de medir lo
+recalcula: si se movió más de 1 px, es que **la altura de todo lo que está por
+encima del ancla cambió**, compensa el `scrollTop` y vuelve a empezar. A la
+séptima vuelta avisa y corta.
+
+Eso explica las dos condiciones exactamente:
+
+- **Hacia arriba y no hacia abajo.** Bajando, las líneas que se miden por primera
+  vez están *debajo* del ancla y su `top` no se mueve: `diff` es 0 y el bucle
+  corta en la primera vuelta. Subiendo, lo que se mide está *encima*.
+- **Angosta y no a pantalla completa.** No es que la envoltura se encienda —en
+  Obsidian está siempre—, es qué tan mal estima. En `HeightOracle`:
+
+  ```js
+  heightForLine(length) {
+      if (!this.lineWrapping) return this.lineHeight;   // exacto
+      let lines = 1 + Math.max(0, Math.ceil((length - this.lineLength) /
+                                            Math.max(1, this.lineLength - 5)));
+      return lines * this.lineHeight;
+  }
+  ```
+
+  Si la línea entra en un renglón (`length <= lineLength`) la estimación es
+  **exacta**. Angostando, `lineLength` —el promedio de caracteres por renglón—
+  baja, muchas líneas lo superan, y entra a jugar una cuenta de caracteres que
+  **ignora dónde cortan las palabras**. De ahí el error.
+
+**Y los dos mensajes no son lo mismo:** `this.measureRequests.length ? "Measure
+loop restarted more than 5 times" : "Viewport failed to stabilize"`. El primero
+solo aparece si alguien pidió una medición con `requestMeasure`, o sea **una
+extensión**. El segundo es puro vaivén del viewport. Hoy el plugin no llama a
+`requestMeasure` en ningún lado.
 
 ### La restricción que esto le pone al paso 4
 
 **`Decoration.replace` sobre el token cambia la altura de la línea**, no solo su
-ancho: con envoltura, sacar `%%t:id=…;wb=…%%` puede hacer que una línea pase de
-dos filas a una. O sea que las decoraciones del paso 4 entran justo en el
-mecanismo que ya está al límite.
+ancho: el token lleva unos 40 caracteres (`%%t:id=k3f9;wb=foco;due=2026-08-29;p=2%%`)
+y con la ventana angosta eso es del orden de un renglón por tarea.
 
-> Las decoraciones del paso 4 se calculan sobre **el documento entero**, en un
-> `StateField`, y no solo sobre el viewport visible con un `ViewPlugin`.
+Y hay una trampa que decide el diseño, leída en la misma versión:
 
-El patrón habitual —decorar solo lo visible— es exactamente el que rompe esto: lo
-que está fuera del viewport se estima **con** el token puesto, y al entrar en
-pantalla se encoge de golpe. Es el mismo bucle de arriba, amplificado y esta vez
-causado por nosotros. Y no hay ninguna razón para ser astutos: parsear las siete
-notas **enteras** cuesta 0,31 ms.
+```js
+this.stateDeco = state.facet(decorations).filter(d => typeof d != "function");
+this.heightMap = this.heightMap.applyChanges(this.stateDeco, ...);
+```
+
+**El mapa de alturas se arma solo con las decoraciones que son un `DecorationSet`,
+y descarta las que llegan como función.** Un `StateField` aporta el set; un
+`ViewPlugin` aporta la función. O sea:
+
+| De dónde salen | ¿Las ve el mapa de alturas? |
+|---|---|
+| `StateField` | **Sí.** `addLineDeco` hace `line.collapsed += length` y la estimación descuenta el token |
+| `ViewPlugin` | **No.** Cada línea de fuera de pantalla se estima **con** los 40 caracteres puestos |
+
+> Las decoraciones del paso 4 van en un **`StateField` sobre el documento entero**,
+> nunca en un `ViewPlugin` sobre el viewport visible.
+
+Con `ViewPlugin`, cada tarea fuera de pantalla se estimaría un renglón más alta de
+lo que es; al entrar en pantalla se mide, se encoge, el ancla se mueve, y es el
+bucle de arriba —amplificado, y esta vez causado por nosotros—. Y no hay ninguna
+razón para ser astutos: parsear las siete notas **enteras** cuesta 0,31 ms.
 
 **Predicción falsable, para el paso 4:** con la ventana angosta y scrolleando
 hacia arriba, la cuenta no tiene que pasar de la base de arriba (1 y 4). Si sube,
