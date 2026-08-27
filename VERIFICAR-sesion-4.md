@@ -15,6 +15,12 @@ Hay dos consolas y conviene no confundirlas:
 
 Cada bloque dice cuál usa.
 
+**Las teclas están escritas para este Mac.** No hay tecla `Fin` ni `Inicio` en
+el teclado del portátil: van `Cmd+→` y `Cmd+←`, que en Obsidian corren el mismo
+comando que `End` y `Home` —verificado adentro del asar 1.13.7, donde
+`key:"End"` y `mac:"Cmd-ArrowRight"` apuntan a la misma función—. `Fn+→` y
+`Fn+←` también sirven: producen el código de `End` y `Home`.
+
 ---
 
 ## 0. Antes de empezar
@@ -93,9 +99,10 @@ tenga token**.
 |---|---|---|---|
 | B1 | Cursor al final del texto visible. **Flecha derecha una vez** | El cursor salta al **principio de la línea de abajo** | Si hace falta apretarla dos veces, el rango atómico no incluye el salto de línea |
 | B2 | Cursor al principio de la línea de abajo. **Flecha izquierda una vez** | Cae al **final del texto visible** de arriba, no en el medio de la nada | Ídem B1, del otro lado |
-| B3 | Apretar **Fin** sobre la tarea | El cursor queda al final del texto visible | El cursor se está metiendo adentro del tramo |
-| B4 | **Shift+Fin** desde el medio del texto | Selecciona hasta el final del **texto**, y no se ve una selección fantasma más allá | Ídem B3 |
+| B3 | Apretar **Cmd+→** sobre la tarea (es el «Fin» de este teclado) | El cursor queda al final del texto visible | El cursor se está metiendo adentro del tramo |
+| B4 | **Cmd+Shift+→** desde el medio del texto | Selecciona hasta el final del **texto**, y no se ve una selección fantasma más allá | Ídem B3 |
 | B5 | **Doble clic** sobre la última palabra de la tarea | Selecciona la palabra sola | — |
+| B7 | **Cmd+←** (el «Inicio») desde el final visible | Va al principio de la línea, sin escalas raras | — |
 | B6 | Cursor al final del texto visible, escribir una letra | La letra aparece **antes** del token, o sea al final del texto | Sin esto el token queda en el medio de la línea y deja de parsear |
 
 ---
@@ -215,7 +222,7 @@ scrolleando **hacia arriba**. A pantalla completa, o bajando, no aparece ninguno
    dos renglones. Cerrá los paneles laterales para que la columna quede angosta.
 3. Abrí la consola: *Ver → Alternar herramientas de desarrollo*.
 4. **Apagá** «Decoraciones en la nota» en los ajustes.
-5. Volvé a la nota, andá al **final** (Ctrl/Cmd+↓ o Ctrl+End).
+5. Volvé a la nota, andá al **final** (**Cmd+↓**).
 6. Limpiá la consola (el ⊘ arriba a la izquierda del panel, o escribí
    `console.clear()`).
 7. **Scrolleá hacia arriba** con la rueda, de a poco, hasta el principio.
@@ -262,7 +269,7 @@ mirarlo.
 | J2 | Repetir **D1** con `stickCursor` de Outliner en «Never» | Cambia dónde puede pararse el cursor |
 | J3 | Abrir una nota que **no** esté en la lista (`1_proyectos/…`) | **Nada cambia**: ni decoración, ni filtro |
 | J4 | Abrir dos paneles con `tareas_PRUEBA.md` y editar en uno | El otro se redibuja igual |
-| J5 | Alt+clic para poner **dos cursores** en dos tareas con token y apretar Backspace | No se pierde ninguna de las dos ediciones. Puede perderse un token: es el daño recuperable |
+| J5 | **Opción+clic** para poner **dos cursores** en dos tareas con token y apretar Backspace | No se pierde ninguna de las dos ediciones. Puede perderse un token: es el daño recuperable |
 
 ---
 
@@ -312,6 +319,7 @@ B3  ok / MAL:
 B4  ok / MAL:
 B5  ok / MAL:
 B6  ok / MAL:
+B7  ok / MAL:
 
 ## C — Backspace desde abajo
 C1  ok / MAL:
