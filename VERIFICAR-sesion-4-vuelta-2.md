@@ -131,6 +131,22 @@ Después de cada una, **mirá en modo fuente** dónde quedó el token.
 
 ---
 
+## S. Partir una tarea al medio *(cambio nuevo)*
+
+Es la decisión que tomaste: **la mitad de arriba se queda con el token**, y con
+él el workbench, el `due`, el `rec` y la prioridad. Antes bajaba con la segunda
+mitad.
+
+| # | Qué hacer | Qué tiene que quedar |
+|---|---|---|
+| S1 | Tarea con token, cursor **en el medio del texto** → **Enter** | Arriba: la primera mitad **con el token**. Abajo: la segunda mitad **sin token** |
+| S2 | Confirmar S1 en **modo fuente** | Un solo `%%t:` y está en la línea de **arriba** |
+| S3 | Tarea que esté en un workbench, partida al medio | La mitad de **arriba** sigue en el workbench. La de abajo sale — y eso es esperado: alguna de las dos sale sí o sí |
+| S4 | Cursor **al comienzo del texto** (justo después del `- [ ] `) → **Enter** | Arriba queda una tarea vacía **sin token**, y el token **baja** con el texto. Es el límite de la regla: si no, una tarea vacía sería la dueña del workbench |
+| S5 | Cursor **al final del texto visible** → **Enter** | Lo de siempre: el token se queda arriba y abajo nace `- [ ] ` |
+
+---
+
 ## R. Que no haya roto lo que ya andaba *(regresión rápida)*
 
 Son cinco, no la lista entera.
@@ -236,6 +252,13 @@ T1   ok / MAL:
 T2   ok / MAL:
 T3   ok / MAL:
 T4   ok / MAL:
+
+## S — partir al medio
+S1   ok / MAL:
+S2   ok / MAL:
+S3   ok / MAL:          ← ¿te resultó razonable en el uso?
+S4   ok / MAL:
+S5   ok / MAL:
 
 ## R — regresión
 R1   ok / MAL:
