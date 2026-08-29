@@ -345,7 +345,28 @@ de cada una con un token en cada línea de tarea:
 Un cuadro a 60 fps son 16 ms. No hay ninguna razón para ser astutos, y ahora
 hay un test que avisa si eso deja de ser cierto.
 
-**5. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+**5. Dos formas de cambio que ninguna regla había previsto**, encontradas
+usando el plugin (verificación de la sesión 4, 25/08/2026). Las dos rompían
+datos y las dos salían del mismo error: **reglas que preguntan de qué forma vino
+el cambio**, que es lo que la §8 de las notas de método prohíbe y yo escribí
+igual.
+
+| Forma | Qué pasaba |
+|---|---|
+| Con Outliner, unir dos líneas **reemplaza las dos por una** | El token quedaba en el medio de la línea unida, visible; con token en las dos, quedaban los dos y la línea, ilegible |
+| Una escritura del propio plugin vuelve al editor como **un diff adentro del token** (`…;wb=foco%%` → `…;wb=foco;p=1%%`) | El filtro lo confundía con alguien tecleando adentro del tramo y sacaba el `;p=1` afuera: **la prioridad no se escribía nunca** |
+
+El filtro se reescribió alrededor de **reconocer el defecto y no el gesto**: se
+calcula en qué quedaría el documento, se pregunta si eso está mal —alguna línea
+ilegible, el token movido, el token perdido en una unión— y solo entonces se
+corrige. Un cambio que deja todo bien pasa intacto, venga de donde venga, y eso
+es lo que deja pasar las escrituras del plugin.
+
+**6. El tramo oculto se lleva un solo espacio.** Llevarse todos los finales
+hacía que escribir un espacio al final de una tarea lo metiera adentro del tramo
+y **desapareciera**: se apretaba la barra y no pasaba nada. Solo se ve usándolo.
+
+**7. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
 tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
 efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con

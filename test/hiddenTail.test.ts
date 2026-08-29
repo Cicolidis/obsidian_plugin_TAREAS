@@ -24,8 +24,21 @@ describe("dónde empieza el tramo oculto", () => {
     expect(tramoDe("- [ ] x %%t:id=a3f2%%").startsWith(" ")).toBe(true);
   });
 
-  it("varios espacios antes del token también entran al tramo", () => {
-    expect(visibleDe("- [ ] x   %%t:id=a3f2%%")).toBe("- [ ] x");
+  /**
+   * El tramo se lleva **un** espacio, el separador que escribe el plugin, y no
+   * todos los que haya.
+   *
+   * La primera versión se los llevaba todos, y eso tenía una consecuencia que
+   * solo se ve usándolo: al escribir un espacio al final de una tarea, el
+   * espacio nuevo caía adentro del tramo y desaparecía. Se apretaba la barra y
+   * no pasaba nada. Es la falla B6 de la verificación de la sesión 4.
+   */
+  it("se lleva un solo espacio: los que el usuario escriba se ven", () => {
+    expect(visibleDe("- [ ] x %%t:id=a3f2%%")).toBe("- [ ] x");
+    expect(visibleDe("- [ ] x  %%t:id=a3f2%%")).toBe("- [ ] x ");
+    expect(visibleDe("- [ ] x   %%t:id=a3f2%%")).toBe("- [ ] x  ");
+    // Sin espacio separador tampoco se come nada del texto.
+    expect(visibleDe("- [ ] x%%t:id=a3f2%%")).toBe("- [ ] x");
   });
 
   it("espacios después del token: el tramo llega hasta el final de la línea", () => {
@@ -83,7 +96,10 @@ describe("propiedades del tramo", () => {
       fc.property(documento, (doc) => {
         for (const l of lineasDe(doc)) {
           if (parseTaskToken(l).estado !== "ok") continue;
-          expect(visibleDe(l)).toBe(stripTaskToken(l));
+          // `trimEnd` porque los dos recortan distinto a propósito: al escribir
+          // se normaliza a un espacio, y al esconder se deja ver lo que el
+          // usuario haya tecleado de más.
+          expect(visibleDe(l).trimEnd()).toBe(stripTaskToken(l));
         }
       }),
     );

@@ -45,7 +45,16 @@ import { parseTaskToken, TOKEN_SOURCE } from "./token.js";
 export function inicioDelTramo(texto: string): number {
   const a = parseTaskToken(texto);
   if (a.estado !== "ok") return texto.length;
-  return a.texto.replace(/[ \t]+$/, "").length;
+  // **Un solo espacio**, no todos los que haya.
+  //
+  // El tramo se lleva el separador que escribe el plugin y nada más. Comerse
+  // todos los espacios finales tenía una consecuencia que solo se ve usándolo:
+  // al escribir un espacio al final de una tarea, el espacio nuevo caía adentro
+  // del tramo y **desaparecía**. Se apretaba la barra y no pasaba nada, que es
+  // el peor modo de falla de un editor. Reportado en la verificación de la
+  // sesión 4, prueba B6.
+  const antes = a.texto;
+  return antes.endsWith(" ") || antes.endsWith("\t") ? antes.length - 1 : antes.length;
 }
 
 /** El tramo, verbatim. `slice(0, inicioDelTramo(t)) + tramoDe(t) === t` siempre. */
@@ -79,6 +88,26 @@ const TOKEN_SUELTO = new RegExp(`[ \\t]*${TOKEN_SOURCE}`, "g");
  */
 export function sinTokens(texto: string): string {
   return repararMarcador(texto.replace(TOKEN_SUELTO, ""));
+}
+
+/**
+ * El texto sin **este** token, dejando los demás donde están.
+ *
+ * `sinTokens` limpia todo y sirve para la línea que va a recibir el tramo de
+ * vuelta. Para las otras hace falta ser más quirúrgico: si un corte manda una
+ * línea entera hacia abajo, esa línea puede tener **su propio** token, que es
+ * suyo y no hay que tocarlo. Lo único que sobra ahí es el que se filtró desde
+ * arriba.
+ */
+export function sinEsteToken(texto: string, token: string): string {
+  const escapado = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return repararMarcador(texto.replace(new RegExp(`[ \\t]*${escapado}`, "g"), ""));
+}
+
+/** El token de esta línea, o `null` si no tiene uno que parsee. */
+export function tokenDe(texto: string): string | null {
+  const a = parseTaskToken(texto);
+  return a.estado === "ok" ? a.token : null;
 }
 
 /**

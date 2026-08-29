@@ -129,6 +129,63 @@ function backspaceDesdeAbajo(st: EditorState, nLinea: number): string {
   return texto(st, { from: inicio, to: abajo.from, insert: "" });
 }
 
+/**
+ * Las cinco formas de la **misma** unión.
+ *
+ * Igual que con Enter, ninguna es inventada. Y esta tabla es la que faltaba: la
+ * verificación de la sesión 4 encontró que con Outliner instalado unir dos
+ * líneas **no borra el salto, reemplaza las dos líneas por una**, y ahí la
+ * regla de unir —que preguntaba si el borrado empezaba después del tramo— no
+ * reconocía el gesto. El token quedaba en el medio de la línea unida, visible,
+ * y con los dos tokens si las dos tareas tenían.
+ */
+const UNIONES: Record<string, (s: EditorState) => ChangeSpec> = {
+  "CodeMirror con el rango atómico: borra desde el tramo": (s) => ({
+    from: s.doc.line(1).from + inicioDelTramo(s.doc.line(1).text),
+    to: s.doc.line(2).from,
+    insert: "",
+  }),
+  "CodeMirror sin el rango atómico: borra solo el salto": (s) => ({
+    from: s.doc.line(1).to,
+    to: s.doc.line(2).from,
+    insert: "",
+  }),
+  "Outliner: del fin de arriba al comienzo del contenido de abajo": (s) => ({
+    from: s.doc.line(1).to,
+    to: s.doc.line(2).from + 6,
+    insert: "",
+  }),
+  "Outliner: reemplaza las dos líneas por una": (s) => {
+    const a = s.doc.line(1), b = s.doc.line(2);
+    return { from: a.from, to: b.to, insert: a.text + b.text.slice(6) };
+  },
+  "Outliner: reemplaza desde el contenido de arriba": (s) => {
+    const a = s.doc.line(1), b = s.doc.line(2);
+    return { from: a.from + 6, to: b.to, insert: a.text.slice(6) + b.text.slice(6) };
+  },
+};
+
+describe("unir: el token de arriba queda entero, al final y único", () => {
+  for (const [nombre, forma] of Object.entries(UNIONES)) {
+    it(`con token abajo también — ${nombre}`, () => {
+      const st = solo(`- [ ] arriba ${TOKEN}\n- [ ] abajo ${OTRO}`);
+      const salida = texto(st, forma(st));
+      expect(parsea(salida)).toBe(true);
+      expect(salida.match(/%%t:/g)).toHaveLength(1);
+      expect(salida).toContain(TOKEN);
+      expect(salida).not.toContain(OTRO);
+      expect(salida.endsWith(TOKEN)).toBe(true);
+    });
+
+    it(`sin token abajo — ${nombre}`, () => {
+      const st = solo(`- [ ] arriba ${TOKEN}\n- [ ] abajo`);
+      const salida = texto(st, forma(st));
+      expect(parsea(salida)).toBe(true);
+      expect(salida.endsWith(TOKEN)).toBe(true);
+    });
+  }
+});
+
 describe("R1 — unir: sobrevive el token de arriba", () => {
   it("con la línea de abajo vacía, el token no se pierde", () => {
     const st = solo(`- [ ] llamar ${TOKEN}\n`);
@@ -170,20 +227,58 @@ describe("R1 — unir: sobrevive el token de arriba", () => {
 
 // ----------------------------------------------------- R3 y R4: el tramo
 
-describe("R3 — un borrado no parte el tramo: se lo lleva entero", () => {
-  it("borrar el cierre del token se lleva el token", () => {
-    const doc = `- [ ] x ${TOKEN}`;
-    const st = solo(doc);
-    expect(texto(st, { from: doc.length - 2, to: doc.length, insert: "" })).toBe("- [ ] x");
+describe("cambios adentro del tramo", () => {
+  /**
+   * Un cambio que deja el token **entero y al final** pasa tal cual, aunque
+   * caiga adentro del token.
+   *
+   * No es indulgencia: es cómo llegan las escrituras del propio plugin. Cuando
+   * `vault.process` escribe en el disco, Obsidian mete el cambio en el editor
+   * abierto como un diff, y el diff de `…;wb=foco%%` → `…;wb=foco;p=1%%` es una
+   * inserción adentro del token. La primera versión del filtro la confundía con
+   * alguien tecleando y la sacaba afuera: la prioridad no se escribía nunca y
+   * quedaba «;p=1» como texto a la vista. Es la falla F de la sesión 4.
+   *
+   * El cursor no puede llegar ahí —el rango atómico no lo deja— así que el
+   * único tránsito real por este camino son las escrituras del plugin y lo que
+   * llega por Sync.
+   */
+  it("el diff con que el plugin escribe la prioridad pasa intacto", () => {
+    const antes = `- [ ] llamar ${TOKEN}`;
+    const st = solo(antes);
+    const cierre = antes.lastIndexOf("%%");
+    expect(texto(st, { from: cierre, to: cierre, insert: ";p=1" })).toBe(
+      "- [ ] llamar %%t:id=a3f2;wb=foco;p=1%%",
+    );
   });
 
-  it("borrar por el medio del token también", () => {
-    const doc = `- [ ] x ${TOKEN}`;
-    const st = solo(doc);
-    expect(texto(st, { from: doc.length - 6, to: doc.length - 3, insert: "" })).toBe("- [ ] x");
+  it("y también un cambio que reemplaza parte del token", () => {
+    const antes = `- [ ] llamar ${TOKEN}`;
+    const st = solo(antes);
+    const desde = antes.indexOf("foco");
+    expect(texto(st, { from: desde, to: desde + 4, insert: "mudanza" })).toBe(
+      "- [ ] llamar %%t:id=a3f2;wb=mudanza%%",
+    );
   });
 
-  it("un borrado que ya se lleva el tramo entero pasa tal cual", () => {
+  it("un cambio que dejaría el token partido no se aplica: el tramo es atómico", () => {
+    const doc = `- [ ] x ${TOKEN}`;
+    const st = solo(doc);
+    // Borrar el cierre dejaría `%%t:id=a3f2;wb=foco` y la línea sería ilegible
+    // para siempre. Como el cursor no puede pararse ahí, el gesto no existe: no
+    // hacer nada es más seguro que destruir metadatos.
+    expect(texto(st, { from: doc.length - 2, to: doc.length, insert: "" })).toBe(doc);
+  });
+
+  it("un cambio que deja texto DESPUÉS del token lo devuelve al final", () => {
+    const doc = `- [ ] x ${TOKEN}`;
+    const st = solo(doc);
+    expect(texto(st, { from: doc.length, to: doc.length, insert: "z" })).toBe(
+      `- [ ] xz ${TOKEN}`,
+    );
+  });
+
+  it("borrar el tramo entero a propósito sí se lo lleva", () => {
     const doc = `- [ ] x ${TOKEN}`;
     const st = solo(doc);
     const inicio = inicioDelTramo(doc);
@@ -196,30 +291,16 @@ describe("R3 — un borrado no parte el tramo: se lo lleva entero", () => {
     const inicio = inicioDelTramo(doc);
     expect(texto(st, { from: inicio - 1, to: inicio, insert: "" })).toBe(`- [ ] x ${TOKEN}`);
   });
-});
 
-describe("R4 — escribir adentro del tramo escribe antes del tramo", () => {
-  it("una inserción en el medio del token va delante", () => {
-    const doc = `- [ ] x ${TOKEN}`;
-    const st = solo(doc);
-    expect(texto(st, { from: doc.length - 4, to: doc.length - 4, insert: "z" })).toBe(
-      `- [ ] xz ${TOKEN}`,
-    );
-  });
-
-  it("una inserción después del token también", () => {
-    const doc = `- [ ] x ${TOKEN}`;
-    const st = solo(doc);
-    expect(texto(st, { from: doc.length, to: doc.length, insert: "z" })).toBe(
-      `- [ ] xz ${TOKEN}`,
-    );
-  });
-
-  it("escribir en el final visible no se corrige: ya está bien", () => {
-    const doc = `- [ ] x ${TOKEN}`;
+  // La falla B6 de la sesión 4: el espacio caía adentro del tramo y desaparecía.
+  // Se apretaba la barra y no pasaba nada.
+  it("escribir un espacio al final del texto visible se ve", () => {
+    const doc = `- [ ] llamar ${TOKEN}`;
     const st = solo(doc);
     const inicio = inicioDelTramo(doc);
-    expect(texto(st, { from: inicio, to: inicio, insert: "z" })).toBe(`- [ ] xz ${TOKEN}`);
+    const salida = texto(st, { from: inicio, to: inicio, insert: " " });
+    expect(salida).toBe(`- [ ] llamar  ${TOKEN}`);
+    expect(salida.slice(0, inicioDelTramo(salida))).toBe("- [ ] llamar ");
   });
 });
 
@@ -338,6 +419,43 @@ describe("varios cursores", () => {
   });
 });
 
+// ------------------------------------------- lo que NO tiene que tocar
+
+describe("cambios que dejan todo bien pasan intactos", () => {
+  /**
+   * Es la mitad que la primera versión no tenía, y de donde salieron sus tres
+   * fallas: un filtro que corrige por la forma del gesto toca cosas que estaban
+   * bien. Estos casos son todos reales y ninguno necesita arreglo.
+   */
+  it("des-indentar un bloque entero no cambia ni un byte", () => {
+    const antes = [
+      "\t- [ ] madre %%t:id=a3f2%%",
+      "\t\t- [ ] hija %%t:id=b4g3%%",
+      "\t\t- [ ] otra",
+    ].join("\n");
+    const st = solo(antes);
+    // Outliner des-indenta reemplazando el bloque entero por su versión con un
+    // tab menos. Todas las líneas resultantes están bien, así que no hay nada
+    // que corregir — y corregir acá borraría el token de la hija.
+    const bloque = antes.split("\n").map((l) => l.slice(1)).join("\n");
+    expect(texto(st, { from: 0, to: st.doc.length, insert: bloque })).toBe(bloque);
+  });
+
+  it("escribir el token entero de cero pasa intacto", () => {
+    const antes = "- [ ] llamar a la escuela";
+    const st = solo(antes);
+    expect(texto(st, { from: antes.length, to: antes.length, insert: ` ${TOKEN}` })).toBe(
+      `${antes} ${TOKEN}`,
+    );
+  });
+
+  it("teclear en el medio del texto de una tarea con token", () => {
+    const doc = `- [ ] llamar ${TOKEN}`;
+    const st = solo(doc);
+    expect(texto(st, { from: 8, to: 8, insert: "X" })).toBe(`- [ ] llXamar ${TOKEN}`);
+  });
+});
+
 // ------------------------------------------------------------- propiedad
 
 /**
@@ -393,12 +511,20 @@ describe("propiedad: nada que no escriba un % puede dejar una línea ilegible", 
   });
 
   /**
-   * Y la otra mitad: el filtro **mueve** tokens, nunca los inventa. Sin esto,
-   * un `pegarTramo` que se olvidara de limpiar antes dejaría dos copias y la
-   * línea sería ilegible — que la primera propiedad sí agarraría — o, peor, dos
-   * tareas distintas con el mismo id, que no la agarraría ninguna.
+   * Y la otra mitad: el filtro **mueve** tokens, nunca los duplica. Sin esto,
+   * un `pegarTramo` que se olvidara de limpiar antes dejaría dos copias, y dos
+   * tareas distintas con el mismo id son la misma para el workbench, que es
+   * peor que un error.
+   *
+   * **La primera versión de esta propiedad no decía la verdad.** Exigía que
+   * ningún token apareciera más veces que antes, y eso prohíbe también
+   * *modificarlo*: borrar un carácter adentro de `id=0a00000a` deja
+   * `id=a00000a`, que es un token nuevo con una aparición y cero antes. La
+   * propiedad fallaba con razón sobre un caso que tiene que estar permitido —es
+   * cómo llegan las escrituras del propio plugin— y afirmaba algo más fuerte
+   * que la verdad. Lo que importa es que nada quede **repetido**.
    */
-  it("ningún token aparece más veces de las que ya estaba", () => {
+  it("ningún token queda repetido si no lo estaba", () => {
     fc.assert(
       fc.property(documento, fc.nat(), fc.nat(), inserto, (raw, a, b, ins) => {
         fc.pre(raw.split("\n").every(parsea));
@@ -411,8 +537,9 @@ describe("propiedad: nada que no escriba un % puede dejar una línea ilegible", 
           to: Math.max(x, y),
           insert: ins,
         }).doc.toString();
+        const antes = contar(raw);
         for (const [tk, veces] of contar(salida)) {
-          expect(veces).toBeLessThanOrEqual(contar(raw).get(tk) ?? 0);
+          if (veces > 1) expect(veces).toBeLessThanOrEqual(antes.get(tk) ?? 0);
         }
       }),
       { numRuns: 500 },

@@ -2,10 +2,11 @@ import {
   EditorState,
   Transaction,
   type Extension,
+  type Line,
   type Text,
   type TransactionSpec,
 } from "@codemirror/state";
-import { inicioDelTramo, parsea, sinTokens } from "../hiddenTail.js";
+import { inicioDelTramo, parsea, sinEsteToken, sinTokens, tokenDe } from "../hiddenTail.js";
 
 /**
  * Que editar alrededor de una tarea nunca rompa su token.
@@ -17,27 +18,56 @@ import { inicioDelTramo, parsea, sinTokens } from "../hiddenTail.js";
  * | Gesto | Qué pasa sin este filtro |
  * |---|---|
  * | Enter al final de una tarea | el token **baja** a la línea nueva y la tarea pierde su id |
- * | Backspace desde la línea de abajo | el rango atómico se borra entero: se va el token |
- * | Borrar hacia adelante desde el final | queda medio token, la línea es ilegible y **no se vuelve a escribir nunca** (§5.3) |
+ * | Backspace desde la línea de abajo | el token queda **en el medio** de la línea unida, o se pierde |
+ * | Unir dos tareas que tienen token | quedan **dos** `%%t:` en una línea |
  *
- * El tercero es el peor de los tres y es el que ordena el módulo: perder el id
- * es recuperable —«el peor caso es volver a poner la estrella», §5.4— pero una
- * línea ilegible queda congelada, porque el plugin se niega a reescribirla.
+ * El tercero es el peor y es el que ordena el módulo: perder el id es
+ * recuperable —«el peor caso es volver a poner la estrella», §5.4— pero una
+ * línea con dos tokens es **ilegible**, y una línea ilegible queda congelada:
+ * el plugin se niega a reescribirla (§5.3).
  *
- * ## Las reglas no miran la forma del cambio
+ * ## Se reconoce el **defecto**, no el gesto
  *
- * Es la lección de `autoCheckbox.ts` y de Anotaciones: la forma de una edición
- * depende de qué plugins haya instalados. Con Outliner y `betterEnter`, Enter
- * reemplaza la línea entera; sin él, Obsidian inserta el salto desde el
- * carácter anterior al cursor; sin ninguno de los dos, CodeMirror inserta el
- * salto pelado. Enumerar formas es una lista siempre incompleta. Cada regla de
- * acá calcula **en qué quedaría el texto** y decide sobre eso.
+ * La primera versión tenía cuatro reglas, una por gesto: unir, partir, borrar
+ * adentro del tramo, escribir adentro del tramo. Cada una preguntaba de qué
+ * forma venía el cambio —`fromA >= inicio`, «es una inserción», «es un
+ * borrado»— y **las tres fallas de la verificación de la sesión 4 salieron de
+ * ahí**:
+ *
+ * - Con Outliner, unir dos líneas no borra el salto: **reemplaza las dos líneas
+ *   por una**. Ahí `fromA` queda antes del tramo, la regla de unir no se
+ *   reconocía, y el token terminaba en el medio de la línea, visible.
+ * - Cuando el plugin escribe en el disco, Obsidian mete el cambio en el editor
+ *   abierto como un diff, y el diff de `…;wb=foco%%` → `…;wb=foco;p=1%%` es una
+ *   **inserción adentro del token**. La regla de escribir adentro del tramo lo
+ *   confundía con alguien tecleando y sacaba el `;p=1` afuera del token: la
+ *   prioridad no se escribía nunca y quedaba `;p=1` como texto a la vista.
+ *
+ * Es la lección de `autoCheckbox.ts` y de Anotaciones, que yo no había aplicado
+ * acá: **la forma de una edición depende de qué plugins haya instalados, y
+ * enumerar formas es una lista siempre incompleta.** Ahora hay un solo camino:
+ * se calcula en qué quedaría el documento, se pregunta si eso está mal, y solo
+ * entonces se corrige.
+ *
+ * Que el criterio sea el defecto y no el gesto tiene una consecuencia que vale
+ * la pena decir: **un cambio que deja todo bien pasa intacto**, venga de donde
+ * venga. Es lo que deja pasar las escrituras del propio plugin.
+ *
+ * ## Los tres defectos
+ *
+ * | | Qué es | Ejemplo |
+ * |---|---|---|
+ * | **ilegible** | alguna línea resultante ya no parsea | dos `%%t:` en una línea |
+ * | **movido** | el token de la primera línea sobrevive, pero no al final de ella | Enter: se fue abajo |
+ * | **perdido** | hubo una unión, el token no sobrevive, y la línea unida conserva el texto que lo llevaba | Backspace desde una línea vacía |
+ *
+ * Si no hay ninguno, el cambio pasa tal cual.
  *
  * ## Un `transactionFilter` no puede encadenar specs
  *
  * Todas las que devuelva se resuelven contra el documento **original**, así que
  * no se puede reparar mirando el resultado: hay que corregir la entrada. Por
- * eso cada corrección se expresa como un `ChangeSpec` sobre posiciones de
+ * eso la corrección se expresa como un reemplazo sobre posiciones de
  * `tr.startState.doc`.
  *
  * ## Corre **antes** que `autoCheckbox`, y eso no es cosmético
@@ -50,19 +80,17 @@ import { inicioDelTramo, parsea, sinTokens } from "../hiddenTail.js";
  * Si corriera después, `autoCheckbox` vería un Enter cuya primera línea
  * resultante perdió el token, su comparación
  * `resultado[0].trimEnd() === linea.text.trimEnd()` fallaría, y **el checkbox
- * automático dejaría de funcionar en toda tarea que tenga token**. Un bug en un
- * mecanismo por culpa del orden de registro de otro. Hay un test que lo fija.
+ * automático dejaría de funcionar en toda tarea que tenga token**. Hay un test
+ * que lo fija.
  *
  * ## No se toca ninguna línea que no se entienda
  *
  * Si alguna de las líneas del rango tiene un token que no parsea, el cambio
  * pasa tal cual. La §5.3 es explícita —nunca reparar a ciegas— y limpiar un
- * token roto «de paso», mientras se corrige otra cosa, es exactamente reparar a
- * ciegas: se lo llevaría sin que nadie lo pidiera y sin que se note.
+ * token roto «de paso», mientras se corrige otra cosa, es exactamente eso.
  *
  * @param activo Si hay que defender este editor. **No** depende del interruptor
- *   de las decoraciones: sin decoraciones el peligro no desaparece —un
- *   Backspace que une dos líneas con token deja dos `%%t:` en una— y esto
+ *   de las decoraciones: sin decoraciones el peligro no desaparece, y esto
  *   defiende un dato, no una comodidad.
  */
 export function protegerTramo(activo: (state: EditorState) => boolean): Extension {
@@ -89,28 +117,25 @@ function corregirCambios(tr: Transaction): TransactionSpec | Transaction {
       return;
     }
     corregido = true;
-    nuevos.push(...arreglo.changes);
+    nuevos.push(arreglo.cambio);
     cursor = arreglo.cursor;
   });
 
   if (!corregido) return tr;
-  // R1 y R2 **agrandan** el rango que reescriben —hasta la línea de abajo, una;
-  // hasta el final de la línea, la otra—, y con varios cursores el rango
-  // agrandado puede pisar el cambio del cursor siguiente.
+  // La corrección **agranda** el rango que reescribe —hasta el final de la
+  // última línea tocada— y con varios cursores eso puede pisar el cambio del
+  // cursor siguiente.
   //
   // Medido, porque lo primero que supuse era falso: CodeMirror **no** tira
   // excepción con rangos superpuestos, los **fusiona**. Con `[0,5)→X` y
   // `[3,7)→Y` sobre `abcdefghij` devuelve `XYhij`: el segundo cambio pierde en
   // silencio la parte que ya estaba borrada. O sea que la corrección de un
   // cursor se comería la edición del otro sin que nada avise, que es peor que
-  // una excepción. Ante la duda no se corrige: el cambio original nunca se
-  // superpone consigo mismo.
+  // una excepción. Ante la duda no se corrige.
   if (seSuperponen(nuevos)) return tr;
 
   return {
     changes: nuevos,
-    // Con varios cursores no hay una sola posición que poner: se deja que
-    // CodeMirror mapee las selecciones como sepa.
     ...(cursor !== null && cambios === 1 ? { selection: { anchor: cursor } } : {}),
     scrollIntoView: true,
     // Se conserva tal cual, no se aplasta a "input": CodeMirror discrimina por
@@ -126,152 +151,100 @@ interface Rango {
   insert: string;
 }
 
-/** ¿Alguno de estos rangos pisa al anterior? */
-function seSuperponen(rangos: readonly Rango[]): boolean {
-  const orden = [...rangos].sort((a, b) => a.from - b.from);
-  for (let i = 1; i < orden.length; i++) {
-    if (orden[i]!.from < orden[i - 1]!.to) return true;
-  }
-  return false;
-}
-
-/** Una corrección: los cambios sobre el documento original y dónde va el cursor. */
 interface Arreglo {
-  changes: Rango[];
+  cambio: Rango;
   /** Posición en el documento ya corregido, o `null` para que CodeMirror mapee. */
   cursor: number | null;
 }
 
+const FIN = /[ \t]+$/;
+
 /** `null` significa «este cambio se deja pasar tal cual». */
 function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo | null {
-  const linea = doc.lineAt(fromA);
+  const L1 = doc.lineAt(fromA);
+  const L2 = doc.lineAt(toA);
 
   // Camino rápido, y hace falta: esto corre en cada tecla de cada nota de la
-  // lista. Sin `%%` en la línea no hay tramo que defender, y lo que pase en las
-  // de abajo no puede romper nada — el token de la de abajo ya está al final y
-  // ahí se queda.
-  if (linea.text.indexOf("%%") === -1) return null;
+  // lista. Sin un `%%` en ninguna de las líneas tocadas no hay token que se
+  // pueda romper ni mover.
+  if (!algunaTiene(doc, L1.number, L2.number)) return null;
+  // El guardia de la §5.3, antes de mirar nada.
+  if (!todasParsean(doc, L1.number, L2.number)) return null;
 
-  const inicioCol = inicioDelTramo(linea.text);
-  const tramo = linea.text.slice(inicioCol);
-  if (tramo === "") return null;
-  const inicio = linea.from + inicioCol;
+  const inicioCol = inicioDelTramo(L1.text);
+  const tramo = L1.text.slice(inicioCol);
+  const visible = L1.text.slice(0, inicioCol).replace(FIN, "");
+  const token = tokenDe(L1.text);
 
-  const ultima = doc.lineAt(toA);
-  if (!todasParsean(doc, linea.number, ultima.number)) return null;
+  // 1) En qué quedaría el documento si no se tocara nada.
+  const crudo = partir(L1, L2, fromA - L1.from, toA - L2.from, texto);
 
-  // --- R1. Unión: el cambio se sale de la línea y el tramo sobreviviría en el medio
+  // 2) ¿Hay algo mal?
+  const ilegible = crudo.some((l) => !parsea(l));
+  const sobrevive = token !== null && crudo.some((l) => l.includes(token));
+  // La primera línea resultante sigue siendo, reconocible, la de arriba.
+  const conserva = sinTokens(crudo[0]!).startsWith(visible);
+  // Y lo es **exactamente**: no le agregaron ni le sacaron texto visible.
+  const mismoVisible = sinTokens(crudo[0]!).replace(FIN, "") === visible;
+  const unio = crudo.length < L2.number - L1.number + 1;
+
+  // El token se fue abajo. La igualdad estricta es la que distingue **partir al
+  // final** de **cortar al medio**: si el texto visible de arriba cambió, el
+  // usuario partió la tarea en dos y el token acompaña a lo que quedó abajo.
+  // Cuál de las dos mitades «es» la tarea original es ambiguo, y adivinar sería
+  // peor que no tocar.
+  const movido = sobrevive && tokenDe(crudo[0]!) !== token && mismoVisible;
+  const perdido = token !== null && !sobrevive && unio && conserva;
+
+  if (!ilegible && !movido && !perdido) return null;
+
+  // 3) El arreglo. Los cortes se acotan al borde del tramo, que es atómico:
+  //    partirlo por la mitad deja como texto visible una basura que nadie
+  //    escribió.
+  const izq = Math.min(fromA - L1.from, inicioCol);
+  const inicio2 = inicioDelTramo(L2.text);
+  const der = toA - L2.from > inicio2 ? L2.text.length : toA - L2.from;
+  const acotado = partir(L1, L2, izq, der, texto);
+
+  // La primera línea se limpia entera y recibe el tramo de vuelta; las otras
+  // solo pierden el token que se les filtró desde arriba, porque el suyo —si lo
+  // tienen— es suyo.
+  const partes = acotado.map((l, i) =>
+    i === 0 ? sinTokens(l) : token === null ? l : sinEsteToken(l, token),
+  );
+
+  // Se devuelve el tramo salvo cuando el cambio se lo llevó **a propósito**: un
+  // cambio que se queda adentro de la línea, abarca el tramo entero y **no lo
+  // vuelve a escribir en ningún lado** es alguien borrando el final de la
+  // tarea, no una unión ni una partición.
   //
-  // Es el Backspace desde la línea de abajo, y también el Delete desde el final
-  // de esta. Verificado dentro del asar de Obsidian 1.13.7 (`deleteBy` →
-  // `skipAtomic`): el objetivo del borrado es el salto de línea, que cae
-  // adentro del rango atómico, así que se corre hasta el comienzo del rango.
-  //
-  // La línea unida ocupa la posición de **esta**: hereda su lugar en el árbol,
-  // su proyecto y sus hijos. Así que sobrevive **este** tramo, y el token de la
-  // línea absorbida se limpia — dos `%%t:` en una línea la vuelven ilegible.
-  if (toA > linea.to && fromA >= inicio) {
-    // El corte izquierdo se acota a donde empieza el tramo. Vale siempre —esta
-    // regla solo corre con `fromA >= inicio`— y no es cosmético: si `fromA` cae
-    // **adentro** del token, sin acotar el `pre` se queda con medio token
-    // (`%%t:`) y la línea unida es ilegible con arreglo y sin él. Lo encontró la
-    // propiedad, no un caso.
-    const pre = linea.text.slice(0, inicioCol);
-    const post = ultima.text.slice(toA - ultima.from);
-    // Se parte primero y se limpia cada línea después: un borrado que junta el
-    // principio de un token con el final de otro los deja en la misma línea, y
-    // ahí `sinTokens` los ve. Y el arreglo del marcador vacío es por línea.
-    const partes = (pre + texto + post).split("\n").map(sinTokens);
-    // El tramo vuelve a la **primera**, que es la que hereda la posición de la
-    // original. Con un pegado de varias líneas en el medio, las de abajo son
-    // texto nuevo y no tienen por qué llevárselo.
+  // El `!sobrevive` no es defensivo: sin él, la forma con que Outliner parte
+  // una línea —reemplaza la línea entera, así que abarca el tramo— se leía como
+  // un borrado deliberado y el token se perdía en cada Enter.
+  const aPropósito =
+    !sobrevive && fromA - L1.from <= inicioCol && toA >= L1.to && L1.number === L2.number;
+  if (tramo !== "" && !aPropósito && sinTokens(acotado[0]!).startsWith(visible)) {
     partes[0] = pegarTramo(partes[0]!, tramo);
-    if (!partes.every(parsea)) return null;
-    return {
-      changes: [{ from: linea.from, to: ultima.to, insert: partes.join("\n") }],
-      // Donde termina lo que había arriba, que es donde estaba el cursor.
-      cursor:
-        linea.from +
-        Math.min(partes[0].length, sinTokens(pre + texto).split("\n")[0]!.replace(FIN, "").length),
-    };
   }
 
-  // --- R2. Partir la línea, sea cual sea la forma del cambio
-  //
-  // El cursor «al final del texto» está **antes** del tramo, así que partir ahí
-  // se lo lleva abajo: la tarea de arriba pierde su id y la nueva nace con uno
-  // ajeno. Es el bug que `hiddenTail.ts` de Anotaciones existe para no repetir.
-  if (texto.includes("\n") && toA <= linea.to) {
-    // El corte se acota al borde del tramo: puede caer adentro —el cursor
-    // recorre posiciones que no se ven moverse— y ahí partir en crudo dejaría
-    // medio token suelto como texto visible.
-    const corteIzq = Math.min(fromA - linea.from, inicioCol);
-    // Si el corte **entra** en el tramo, se lleva el tramo entero: es atómico,
-    // y dejar la mitad de abajo como texto visible es basura que el usuario no
-    // escribió. La corrección de más abajo se lo devuelve entero a la primera
-    // línea.
-    const corteDer = toA - linea.from > inicioCol ? linea.text.length : inicioCol;
-    const crudo =
-      linea.text.slice(0, corteIzq) + texto + linea.text.slice(corteDer);
-    const resultado = crudo.split("\n");
-    if (resultado.length < 2) return null;
+  const nuevo = partes.join("\n");
+  if (nuevo === crudo.join("\n")) return null; // ya estaba bien
+  // Si el arreglo dejaría algo ilegible, no se arregla: dejar algo peor de lo
+  // que había es la forma más cara de ayudar.
+  if (!partes.every(parsea)) return null;
 
-    const arriba = sinTokens(resultado[0]!).replace(FIN, "");
-    // La condición que distingue **partir al final** de **cortar al medio**: el
-    // texto visible de la línea tiene que quedar igual. Si cambió, el usuario
-    // cortó la tarea en dos y el token acompaña a lo que quedó abajo. Las dos
-    // líneas son válidas y no hay nada congelado; cuál de las dos mitades «es»
-    // la tarea original es ambiguo, y adivinar sería peor que no tocar.
-    if (arriba !== linea.text.slice(0, inicioCol).replace(FIN, "")) return null;
-
-    const primera = pegarTramo(arriba, tramo);
-    const resto = resultado.slice(1).map(sinTokens);
-    const nuevo = [primera, ...resto].join("\n");
-    if (nuevo === crudo) return null; // ya estaba bien
-    if (!nuevo.split("\n").every(parsea)) return null;
-    return {
-      changes: [{ from: linea.from, to: linea.to, insert: nuevo }],
-      // Al final de la segunda línea: después del bullet nuevo, que es donde
-      // uno espera seguir escribiendo.
-      cursor: linea.from + primera.length + 1 + (resto[0]?.length ?? 0),
-    };
-  }
-
-  // --- R3. Un borrado que parte el tramo en vez de llevárselo entero
-  //
-  // El tramo es invisible y atómico: cortarlo por la mitad no puede ser lo que
-  // alguien quiso. Y el remanente —`%%t:id=a3f2` sin su cierre— vuelve la línea
-  // ilegible, que es el único daño irreversible de este módulo.
-  if (toA > fromA && toA > inicio && toA <= linea.to && !(fromA <= inicio && toA >= linea.to)) {
-    const desde = Math.min(fromA, inicio);
-    const nueva =
-      linea.text.slice(0, desde - linea.from) + texto + linea.text.slice(linea.to - linea.from);
-    if (!parsea(nueva)) return null;
-    return {
-      changes: [{ from: desde, to: linea.to, insert: texto }],
-      cursor: desde + texto.length,
-    };
-  }
-
-  // --- R4. Escribir adentro del tramo
-  //
-  // El rango atómico no deja entrar al cursor, pero el teclado por composición
-  // y los plugins que despachan `replaceRange` con posiciones propias sí llegan.
-  // Insertar ahí deja el token en el medio de la línea, y un token que no está
-  // al final tampoco parsea.
-  if (fromA === toA && texto !== "" && fromA > inicio && fromA <= linea.to) {
-    const nueva = linea.text.slice(0, inicioCol) + texto + tramo;
-    if (!parsea(nueva)) return null;
-    return {
-      changes: [{ from: inicio, to: inicio, insert: texto }],
-      cursor: inicio + texto.length,
-    };
-  }
-
-  return null;
+  return {
+    cambio: { from: L1.from, to: L2.to, insert: nuevo },
+    cursor: L1.from + (partes.length > 1
+      ? partes[0]!.length + 1 + partes[1]!.length
+      : Math.min(partes[0]!.length, sinTokens(L1.text.slice(0, izq) + texto).split("\n")[0]!.replace(FIN, "").length)),
+  };
 }
 
-const FIN = /[ \t]+$/;
+/** Las líneas que reemplazarían a `L1..L2` si el cambio se aplicara. */
+function partir(L1: Line, L2: Line, izq: number, der: number, texto: string): string[] {
+  return (L1.text.slice(0, izq) + texto + L2.text.slice(der)).split("\n");
+}
 
 /** El tramo pegado al final, sin duplicar el espacio que ya trae adelante. */
 function pegarTramo(base: string, tramo: string): string {
@@ -279,14 +252,21 @@ function pegarTramo(base: string, tramo: string): string {
   return limpia === "" ? tramo.replace(/^[ \t]+/, "") : limpia + tramo;
 }
 
-/**
- * ¿Todas las líneas de este rango se entienden?
- *
- * Es el guardia de §5.3 puesto **antes** de mirar nada: una línea con el token
- * roto no se toca ni de refilón. Limpiarla «de paso» mientras se corrige otra
- * cosa se la llevaría sin que nadie lo pidiera.
- */
+function algunaTiene(doc: Text, desde: number, hasta: number): boolean {
+  for (let n = desde; n <= hasta; n++) if (doc.line(n).text.includes("%%")) return true;
+  return false;
+}
+
 function todasParsean(doc: Text, desde: number, hasta: number): boolean {
   for (let n = desde; n <= hasta; n++) if (!parsea(doc.line(n).text)) return false;
   return true;
+}
+
+/** ¿Alguno de estos rangos pisa al anterior? */
+function seSuperponen(rangos: readonly Rango[]): boolean {
+  const orden = [...rangos].sort((a, b) => a.from - b.from);
+  for (let i = 1; i < orden.length; i++) {
+    if (orden[i]!.from < orden[i - 1]!.to) return true;
+  }
+  return false;
 }
