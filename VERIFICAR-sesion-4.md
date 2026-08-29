@@ -280,7 +280,20 @@ mirarlo.
 | J2 | Repetir **D1** con `stickCursor` de Outliner en «Never» | Cambia dónde puede pararse el cursor |
 | J3 | Abrir una nota que **no** esté en la lista (`1_proyectos/…`) | **Nada cambia**: ni decoración, ni filtro |
 | J4 | Abrir dos paneles con `tareas_PRUEBA.md` y editar en uno | El otro se redibuja igual |
-| J5 | **Opción+clic** para poner **dos cursores** en dos tareas con token y apretar Backspace | No se pierde ninguna de las dos ediciones. Puede perderse un token: es el daño recuperable |
+| J5 | Ver abajo | Ver abajo |
+
+**J5 con más detalle**, que la primera versión daba por sabido:
+
+1. Poné el cursor al final del texto de una tarea con token.
+2. **Cmd+Opción+clic** (o Opción+clic, según tu configuración) al final del
+   texto de **otra** tarea con token, unas líneas más abajo. Ahora hay dos
+   cursores parpadeando.
+3. Apretá **Suprimir** una vez. Cada cursor une su línea con la de abajo.
+4. Lo que hay que mirar: que **las dos** uniones hayan ocurrido, y que ninguna
+   línea haya quedado con dos `%%t:` (miralo en modo fuente).
+
+Puede perderse alguno de los dos tokens y no es un error: con varios cursores el
+filtro prefiere no corregir antes que comerse la edición del otro cursor.
 
 ---
 
