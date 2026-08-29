@@ -53,6 +53,17 @@ por omisión la primera vez. Es lo correcto: el glifo arranca apagado a propósi
 También conviene dejar **«Registrar eventos en la consola»** encendido — ya lo
 está — porque el bloque I lo usa.
 
+### 0.2.1 — Un atajo para el modo fuente
+
+Los bloques A y C piden pasar a modo fuente muchas veces, y **ese comando no
+trae atajo por omisión**. En *Configuración → Atajos de teclado*, buscá
+`fuente`: el comando es **«Alternar entre vista previa en vivo y modo de código
+fuente»** (`editor:toggle-source`). `Cmd+Option+S` está libre en tu
+configuración; si Obsidian lo marca en rojo, elegí otro.
+
+Ojo con no confundirlo con `Cmd+E`, que alterna **lectura/edición**, que es otra
+cosa.
+
 ### 0.3 — Cargar la nota de prueba de tokens
 
 Todo se prueba en **`0_inbox/tareas_PRUEBA.md`**. Hoy tiene 13 tokens en 436
