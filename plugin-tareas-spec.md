@@ -362,11 +362,28 @@ ilegible, el token movido, el token perdido en una unión— y solo entonces se
 corrige. Un cambio que deja todo bien pasa intacto, venga de donde venga, y eso
 es lo que deja pasar las escrituras del plugin.
 
-**6. El tramo oculto se lleva un solo espacio.** Llevarse todos los finales
+**6. Al partir una tarea al medio, el token se queda arriba.** Decisión del
+usuario, 25/08/2026. Es la misma regla que en la unión —la línea que hereda la
+posición hereda el token— y la razón es que el token **no se ve**: con el
+comportamiento anterior, partir una tarea la sacaba del workbench sin que se
+notara, porque la mitad que quedaba adentro era el texto nuevo y no la tarea que
+uno reconoce. El workbench pasaba a mostrar «y pan».
+
+Alguna de las dos mitades queda afuera del workbench sí o sí; ninguna regla
+evita eso sin que el plugin **invente** un `id` y una asignación a partir de un
+Enter, que se descartó por ahora. Lo que la regla elige es **cuál**: que sea la
+mitad nueva, que es la que se nota en el acto y cuesta una tecla arreglar. Por el
+token viajan también el `due`, el `rec` y la prioridad.
+
+Con un límite: si la mitad de arriba queda **sin texto** —apretar Enter al
+comienzo, para abrir una línea arriba— el token baja. Si no, quedaría en una
+tarea vacía que sería la dueña del workbench.
+
+**7. El tramo oculto se lleva un solo espacio.** Llevarse todos los finales
 hacía que escribir un espacio al final de una tarea lo metiera adentro del tramo
 y **desapareciera**: se apretaba la barra y no pasaba nada. Solo se ve usándolo.
 
-**7. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+**8. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
 tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
 efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con

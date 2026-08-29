@@ -7,6 +7,7 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { inicioDelTramo, parsea, sinEsteToken, sinTokens, tokenDe } from "../hiddenTail.js";
+import { parseBullet } from "../linea.js";
 
 /**
  * Que editar alrededor de una tarea nunca rompa su token.
@@ -182,19 +183,12 @@ function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo
   // 2) ¿Hay algo mal?
   const ilegible = crudo.some((l) => !parsea(l));
   const sobrevive = token !== null && crudo.some((l) => l.includes(token));
-  // La primera línea resultante sigue siendo, reconocible, la de arriba.
-  const conserva = sinTokens(crudo[0]!).startsWith(visible);
-  // Y lo es **exactamente**: no le agregaron ni le sacaron texto visible.
-  const mismoVisible = sinTokens(crudo[0]!).replace(FIN, "") === visible;
   const unio = crudo.length < L2.number - L1.number + 1;
+  const heredera = esHeredera(crudo[0]!, visible);
 
-  // El token se fue abajo. La igualdad estricta es la que distingue **partir al
-  // final** de **cortar al medio**: si el texto visible de arriba cambió, el
-  // usuario partió la tarea en dos y el token acompaña a lo que quedó abajo.
-  // Cuál de las dos mitades «es» la tarea original es ambiguo, y adivinar sería
-  // peor que no tocar.
-  const movido = sobrevive && tokenDe(crudo[0]!) !== token && mismoVisible;
-  const perdido = token !== null && !sobrevive && unio && conserva;
+  // El token se fue a otra línea, o se perdió en una unión.
+  const movido = sobrevive && tokenDe(crudo[0]!) !== token && heredera;
+  const perdido = token !== null && !sobrevive && unio && heredera;
 
   if (!ilegible && !movido && !perdido) return null;
 
@@ -223,7 +217,7 @@ function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo
   // un borrado deliberado y el token se perdía en cada Enter.
   const aPropósito =
     !sobrevive && fromA - L1.from <= inicioCol && toA >= L1.to && L1.number === L2.number;
-  if (tramo !== "" && !aPropósito && sinTokens(acotado[0]!).startsWith(visible)) {
+  if (tramo !== "" && !aPropósito && esHeredera(acotado[0]!, visible)) {
     partes[0] = pegarTramo(partes[0]!, tramo);
   }
 
@@ -239,6 +233,37 @@ function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo
       ? partes[0]!.length + 1 + partes[1]!.length
       : Math.min(partes[0]!.length, sinTokens(L1.text.slice(0, izq) + texto).split("\n")[0]!.replace(FIN, "").length)),
   };
+}
+
+/**
+ * ¿Esta línea resultante **hereda** la de arriba, y por lo tanto su token?
+ *
+ * Dos condiciones, y cada una atája un caso concreto:
+ *
+ * 1. **Su texto visible es el de la original, o un comienzo de él.** Cubre las
+ *    tres formas de quedarse con la línea: partir al final (queda igual), unir
+ *    (queda con lo de abajo pegado atrás) y **cortar al medio** (queda la
+ *    primera parte). Que en el corte al medio el token se quede arriba es la
+ *    decisión de la sesión 4: es la misma regla que en la unión —la línea que
+ *    hereda la posición hereda el token— y sin eso partir una tarea la sacaba
+ *    del workbench sin que se notara, porque la mitad que quedaba adentro era
+ *    el texto nuevo y no la tarea que uno reconoce.
+ *
+ * 2. **Le queda algo escrito.** Sin esto, apretar Enter con el cursor al
+ *    comienzo del texto —para abrir una línea arriba— dejaría al token en una
+ *    tarea vacía, que sería la dueña del workbench. Ahí el token tiene que
+ *    bajar con el texto.
+ */
+function esHeredera(resultante: string, visible: string): boolean {
+  const limpia = sinTokens(resultante).replace(FIN, "");
+  if (!tieneTexto(limpia)) return false;
+  return limpia.startsWith(visible) || visible.startsWith(limpia);
+}
+
+/** ¿Queda algo escrito, más allá del marcador de lista y del checkbox? */
+function tieneTexto(linea: string): boolean {
+  const b = parseBullet(linea);
+  return b === null ? linea.trim() !== "" : b.contenido.trim() !== "";
 }
 
 /** Las líneas que reemplazarían a `L1..L2` si el cambio se aplicara. */

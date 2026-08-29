@@ -90,13 +90,38 @@ describe("R2 — partir: el token se queda arriba", () => {
     );
   });
 
-  // Cuál de las dos mitades «es» la tarea original es ambiguo, y adivinar sería
-  // peor que no tocar. Lo que sí tiene que valer es que ninguna quede ilegible.
-  it("cortar al medio no se corrige, y las dos mitades parsean", () => {
+  /**
+   * Cortar al medio: **el token se queda arriba**.
+   *
+   * Es la misma regla que en la unión —la línea que hereda la posición hereda
+   * el token— y la razón es que el token no se ve: con el comportamiento
+   * anterior, partir una tarea la sacaba del workbench sin que se notara,
+   * porque la mitad que quedaba adentro era el texto nuevo y no la tarea que
+   * uno reconoce. El workbench pasaba a mostrar «y pan».
+   *
+   * Alguna de las dos mitades queda afuera sí o sí. Que sea la nueva es la que
+   * se nota en el acto, y arreglarla cuesta una tecla estando ahí.
+   */
+  it("cortar al medio deja el token arriba y la mitad nueva sin metadatos", () => {
     const doc2 = `- [ ] comprar leche y pan ${TOKEN}`;
     const st = solo(doc2);
     const salida = texto(st, { from: 19, to: 19, insert: "\n- [ ] " });
-    expect(salida).toBe(`- [ ] comprar leche\n- [ ]  y pan ${TOKEN}`);
+    expect(salida).toBe(`- [ ] comprar leche ${TOKEN}\n- [ ]  y pan`);
+    for (const l of salida.split("\n")) expect(parsea(l)).toBe(true);
+  });
+
+  /**
+   * Y el límite: si la mitad de arriba queda **sin texto**, el token baja.
+   *
+   * Es apretar Enter con el cursor al comienzo del texto, para abrir una línea
+   * arriba. Sin este límite el token quedaría en una tarea vacía, que sería la
+   * dueña del workbench.
+   */
+  it("si la mitad de arriba queda vacía, el token baja con el texto", () => {
+    const doc2 = `- [ ] comprar leche ${TOKEN}`;
+    const st = solo(doc2);
+    const salida = texto(st, { from: 6, to: 6, insert: "\n- [ ] " });
+    expect(salida).toBe(`- [ ] \n- [ ] comprar leche ${TOKEN}`);
     for (const l of salida.split("\n")) expect(parsea(l)).toBe(true);
   });
 
