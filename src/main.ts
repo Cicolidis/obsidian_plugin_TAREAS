@@ -10,6 +10,7 @@ import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import { comandos } from "./comandos.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
+import { clicAlFinal } from "./editor/clicAlFinal.js";
 import { decoraciones } from "./editor/decoraciones.js";
 import { protegerTramo } from "./editor/protegerTramo.js";
 import { unirLimpio } from "./editor/unirLimpio.js";
@@ -70,6 +71,9 @@ export default class TareasPlugin extends Plugin {
       Prec.lowest(unirLimpio((state) => this.unirActivo(state))),
       Prec.low(protegerTramo((state) => this.enNotaDeTareas(state))),
       checkboxAutomatico((state) => this.filtroActivo(state)),
+      // Va con el mismo predicado que las decoraciones: sin token escondido no
+      // hay nada que corregir en el clic, y con el interruptor apagado tampoco.
+      clicAlFinal((state) => this.decorarActivo(state)),
       decoraciones(
         (state) => this.decorarActivo(state),
         (ms, lineas) => {

@@ -52,6 +52,7 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   editorLivePreviewField  las decoraciones solo van en Live Preview (§4a)
 //   StateField              las decoraciones entran al mapa de alturas (§5.5)
 //   atomicRanges            sin esto el cursor recorre el token carácter a carácter
+//   domEventHandlers        el clic al final de la línea, que si no salta abajo
 //   tareas-p                las clases de prioridad (§14)
 //   tareas-estilo-          el estilo de prioridad, que viaja como clase de `body`
 //   0_inbox/tareas_         la lista de notas, que viaja como JSON importado
@@ -68,6 +69,7 @@ for (const marca of [
   "editorLivePreviewField",
   "StateField",
   "atomicRanges",
+  "domEventHandlers",
   "tareas-p",
   "tareas-estilo-",
   "0_inbox/tareas_",
