@@ -401,7 +401,33 @@ dependiera de algo del momento que no quedó registrado. **La §5.5 dice que una
 medición tiene fecha; esta acaba de mostrar cuánto dura.** Si el bucle vuelve a
 aparecer, hay que medir la base de nuevo antes de sacar conclusiones.
 
-**9. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+**9. Tres cosas más que salieron de usarlo**, 25/08/2026.
+
+**Los comandos de prioridad parten del nivel que se ve, no del propio.** Una hija
+sin `p=` se dibuja con la prioridad de su madre (§14), así que actuar sobre su
+cero hacía que subirle la prioridad a una hija que heredaba «muy alta» la dejara
+en «alta»: parecía que bajaba. `prioridadEfectiva` usa la misma regla que dibuja
+`decorar.ts` —gana la propia, y arriba la ancestra más cercana— porque si no, el
+comando y el color dirían cosas distintas sobre la misma línea.
+
+Queda un agujero del modelo, y va dicho en vez de tapado: como «normal» no
+escribe campo, sin campo la hija vuelve a heredar, así que **no se puede bajar
+sola**. Cerrarlo pide un `p=0` explícito, que cambia el formato del token.
+
+**Unir dos tareas deja una línea limpia**: con un espacio y sin el marcador de la
+absorbida. Vive en un módulo aparte de la defensa del token, y la razón es de
+diseño y no de prolijidad: aquella solo interviene cuando hay un token que
+defender, así que la limpieza aparecería únicamente en las tareas con metadatos
+—que son invisibles—. Un comportamiento del editor que cambia según algo que no
+se ve no se puede aprender. La división queda: **`unirLimpio` decide el texto,
+`protegerTramo` el token, `autoCheckbox` el checkbox.**
+
+**Un clic al final de una tarea ya no salta abajo.** `skipAtomsForSelection`
+resuelve con `bias 0`, y con el rango atómico llegando hasta el salto, el final
+de la línea queda a un carácter del borde de abajo. Es el precio de que la flecha
+cruce de un teclazo, y se paga corrigiendo el clic, no achicando el rango.
+
+**10. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
 tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
 efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con
