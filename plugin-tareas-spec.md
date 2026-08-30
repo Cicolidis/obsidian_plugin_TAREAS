@@ -383,7 +383,25 @@ tarea vacía que sería la dueña del workbench.
 hacía que escribir un espacio al final de una tarea lo metiera adentro del tramo
 y **desapareciera**: se apretaba la barra y no pasaba nada. Solo se ve usándolo.
 
-**8. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+**8. La línea de base ya no se reproduce, y eso invalida la predicción.**
+Medido el 25/08/2026 con 122 tokens en la nota, la ventana angostada y
+scrolleando en las dos direcciones: **no aparece ningún aviso**, ni con las
+decoraciones encendidas ni con ellas apagadas. Ni `Measure loop restarted` ni
+`Viewport failed to stabilize`.
+
+O sea que la base de «1 y 4» tomada al cerrar el paso 3 **no se reproduce hoy**,
+y la predicción falsable que se apoyaba en ella no se puede evaluar: no hay con
+qué comparar. Lo único que se puede afirmar, y es poco, es que las decoraciones
+**no agregaron** avisos donde antes no los había.
+
+No hay que anotarlo como «verde». Hay tres explicaciones posibles y ninguna está
+descartada: que la ventana no llegara al ancho donde el fenómeno aparece, que
+alguna versión de Obsidian del medio lo haya cambiado, o que la base original
+dependiera de algo del momento que no quedó registrado. **La §5.5 dice que una
+medición tiene fecha; esta acaba de mostrar cuánto dura.** Si el bucle vuelve a
+aparecer, hay que medir la base de nuevo antes de sacar conclusiones.
+
+**9. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
 tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
 efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con

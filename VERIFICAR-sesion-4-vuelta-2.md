@@ -204,8 +204,12 @@ no en el código.
 ## C. Varios cursores *(era J5, ahora explicada)*
 
 1. Cursor al final del texto de una tarea con token.
-2. **Cmd+Opción+clic** al final del texto de **otra** tarea con token, unas
-   líneas más abajo. Dos cursores parpadeando.
+2. **Opción+clic** —Opción **sola**, sin Cmd— al final del texto de **otra**
+   tarea con token, unas líneas más abajo. Dos cursores parpadeando.
+
+   > Verificado adentro del asar 1.13.7: Obsidian agrega cursores con
+   > `e.altKey && !e.ctrlKey && !e.metaKey`. Con Cmd apretado **no** los agrega,
+   > que es por qué la primera vez el cursor simplemente saltaba.
 3. **Suprimir** una vez: cada cursor une su línea con la de abajo.
 4. Mirar: que **las dos** uniones hayan ocurrido, y que ninguna línea quede con
    dos `%%t:` (en modo fuente).
