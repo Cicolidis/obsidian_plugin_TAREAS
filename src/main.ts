@@ -12,6 +12,7 @@ import { comandos } from "./comandos.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
 import { decoraciones } from "./editor/decoraciones.js";
 import { protegerTramo } from "./editor/protegerTramo.js";
+import { unirLimpio } from "./editor/unirLimpio.js";
 import { esNotaDeTareas, notasDeTrabajo, NOTAS_POR_OMISION } from "./notas.js";
 import {
   cargarSettings,
@@ -61,6 +62,12 @@ export default class TareasPlugin extends Plugin {
     // revés, el checkbox automático deja de andar en toda tarea con token. Hay
     // un test que lo fija.
     this.registerEditorExtension([
+      // El orden de los tres filtros es una decisión de diseño y está fijado por
+      // tests: `unirLimpio` decide el **texto** de la línea unida, `protegerTramo`
+      // acomoda el **token** sobre ese resultado, y `autoCheckbox` mira el
+      // checkbox al final. Van de menor a mayor precedencia porque es el orden en
+      // que `filterTransaction` los recorre.
+      Prec.lowest(unirLimpio((state) => this.unirActivo(state))),
       Prec.low(protegerTramo((state) => this.enNotaDeTareas(state))),
       checkboxAutomatico((state) => this.filtroActivo(state)),
       decoraciones(
@@ -149,6 +156,11 @@ export default class TareasPlugin extends Plugin {
     return esNotaDeTareas(info?.file?.path ?? null, this.settings.notasDeTareas);
   }
 
+  /** ¿Se limpia la línea al unir dos tareas acá? */
+  private unirActivo(state: EditorState): boolean {
+    return this.settings.unirLimpio && this.enNotaDeTareas(state);
+  }
+
   /** ¿Corrige el checkbox automático acá? */
   private filtroActivo(state: EditorState): boolean {
     return this.settings.checkboxAutomatico && this.enNotaDeTareas(state);
@@ -227,6 +239,16 @@ class TareasSettingTab extends PluginSettingTab {
           this.display();
         }),
     );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.unirLimpio.nombre)
+      .setDesc(STRINGS.ajustes.unirLimpio.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.unirLimpio).onChange(async (v) => {
+          this.plugin.settings.unirLimpio = v;
+          await this.plugin.guardar();
+        }),
+      );
 
     new Setting(containerEl)
       .setName(STRINGS.ajustes.notaDeLog.nombre)

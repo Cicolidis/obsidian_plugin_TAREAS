@@ -93,6 +93,17 @@ export interface TareasSettings {
    */
   estiloDePrioridad: EstiloDePrioridad;
   /**
+   * Al unir dos tareas, la línea queda limpia: con un espacio y sin el marcador
+   * de la absorbida.
+   *
+   * Sin esto, unir `- [ ] comprar` con `- [ ] pan` deja
+   * `- [ ] comprar- [ ] pan`. Encendido por omisión porque es lo que uno espera
+   * de un outliner —Outliner ya lo hace con Backspace, y esto lo empareja para
+   * el resto de los gestos— y con interruptor porque cambia el comportamiento
+   * del teclado, que es lo que más molesta cuando no se puede apagar.
+   */
+  unirLimpio: boolean;
+  /**
    * Prioridad: un `!` o `!!` al final de la línea.
    *
    * Apagado por omisión, y a propósito: **suma ancho al renglón**, y el ancho
@@ -172,6 +183,7 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   decoracionesEnLaNota: true,
   estiloDePrioridad: "barra",
   indicadorGlifo: false,
+  unirLimpio: true,
   congelarStore: false,
   registrarEventos: false,
 };
@@ -205,6 +217,7 @@ export function cargarSettings(saved: unknown): TareasSettings {
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,
     estiloDePrioridad: sanearEstilo(raw.estiloDePrioridad),
     indicadorGlifo: raw.indicadorGlifo ?? DEFAULT_SETTINGS.indicadorGlifo,
+    unirLimpio: raw.unirLimpio ?? DEFAULT_SETTINGS.unirLimpio,
     congelarStore: raw.congelarStore ?? DEFAULT_SETTINGS.congelarStore,
     registrarEventos: raw.registrarEventos ?? DEFAULT_SETTINGS.registrarEventos,
   };

@@ -53,6 +53,12 @@ export const STRINGS = {
         "Un «!» para alta y «!!» para muy alta, al final de la línea. Se suma al estilo " +
         "elegido arriba. Suma ancho al renglón: medido, empuja el corte unas tres letras.",
     },
+    unirLimpio: {
+      nombre: "Unir tareas deja una línea limpia",
+      descripcion:
+        "Al unir dos tareas, el texto de la de abajo se pega con un espacio y sin su «- [ ] ». " +
+        "Sin esto queda «- [ ] comprar- [ ] pan». Apagado, se une como antes.",
+    },
     workbenchFavorito: {
       nombre: "Workbench favorito",
       descripcion:

@@ -4,6 +4,7 @@ import { marcasDe } from "../../src/decorar.js";
 import { parseDocumento } from "../../src/documento.js";
 import { checkboxAutomatico } from "../../src/editor/autoCheckbox.js";
 import { protegerTramo } from "../../src/editor/protegerTramo.js";
+import { unirLimpio } from "../../src/editor/unirLimpio.js";
 import { inicioDelTramo, parsea } from "../../src/hiddenTail.js";
 import { notasReales, VAULT } from "./vault.js";
 
@@ -53,7 +54,11 @@ describe.skipIf(!VAULT)("decoraciones sobre el corpus real", () => {
       it("Enter y Backspace en cada línea no dejan nada ilegible", () => {
         const st = EditorState.create({
           doc: raw,
-          extensions: [Prec.low(protegerTramo(() => true)), checkboxAutomatico(() => true)],
+          extensions: [
+            Prec.lowest(unirLimpio(() => true)),
+            Prec.low(protegerTramo(() => true)),
+            checkboxAutomatico(() => true),
+          ],
         });
 
         for (let n = 1; n <= st.doc.lines; n++) {

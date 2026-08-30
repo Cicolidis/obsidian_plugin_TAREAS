@@ -46,7 +46,8 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 // Cada marca es un mecanismo que, si se cae del bundle, deja al plugin
 // cargando sin hacer nada —el peor modo de falla, porque no se nota—:
 //
-//   transactionFilter       el checkbox automático y la defensa del tramo
+//   transactionFilter       el checkbox automático, la defensa del tramo y la unión
+//   unirLimpio              el ajuste que la enciende; sin él el filtro no corre nunca
 //   editorInfoField         el alcance por archivo; sin él intercepta el vault
 //   editorLivePreviewField  las decoraciones solo van en Live Preview (§4a)
 //   StateField              las decoraciones entran al mapa de alturas (§5.5)
@@ -62,6 +63,7 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 // El id del plugin no se busca acá: vive en el manifiesto y se valida abajo.
 for (const marca of [
   "transactionFilter",
+  "unirLimpio",
   "editorInfoField",
   "editorLivePreviewField",
   "StateField",
