@@ -23,7 +23,7 @@ import {
  * | Gesto | Antes | Después |
  * |---|---|---|
  * | Enter al final de `- 1A` | nace `- ` | nace `- [ ] ` |
- * | Backspace sobre `- [ ] ` vacía | se une con la línea de arriba | queda `- ` |
+ * | Backspace al comienzo del texto de una tarea | borra `]`, de a un carácter | queda `- texto` |
  *
  * ## Por qué un `transactionFilter` y no un keymap
  *
@@ -254,7 +254,7 @@ function ponerCheckbox(doc: Text, fromA: number, toA: number, texto: string): Ar
 }
 
 /**
- * Regla B: Backspace sobre una tarea vacía le saca el checkbox.
+ * Regla B: Backspace al comienzo del contenido le saca el checkbox a la tarea.
  *
  * Es la salida para escribir una **nota de tarea** (spec §4.3): el bullet sin
  * checkbox que cuelga de una tarea y donde viven los instructivos y los datos
@@ -278,9 +278,20 @@ function quitarCheckbox(doc: Text, fromA: number, toA: number): Arreglo | null {
   const linea = doc.lineAt(toA);
   const b = parseBullet(linea.text);
   if (b === null || b.checkbox === null) return null;
-  // Solo la tarea vacía. Con algo escrito, Backspace ahí es un borrado normal.
-  if (b.contenido !== "") return null;
   if (toA !== linea.from + columnaDelContenido(b)) return null;
+
+  // **Con texto escrito, solo si el borrado se queda adentro de la línea.**
+  //
+  // La primera versión solo actuaba sobre la tarea vacía, y en el uso resultó
+  // arbitrario: si borrar el checkbox de una tarea recién nacida la convierte en
+  // bullet, borrar el de una con texto tendría que hacer lo mismo. Sin esto, ahí
+  // el Backspace se pone a borrar `]`, ` `, `[`… de a un carácter.
+  //
+  // Pero el caso que cruza líneas no se puede tratar igual: en una tarea vacía
+  // es Outliner uniendo con la de arriba, y ahí sacar el checkbox es lo que se
+  // quiere; en una con texto, unir es unir, y convertirla en bullet sería
+  // cambiarle el gesto al usuario.
+  if (b.contenido !== "" && fromA < linea.from) return null;
 
   // Que el borrado no se lleve nada más. Sin esto, seleccionar medio documento
   // hasta acá y apretar Delete se convertiría en «sacale el checkbox»: la

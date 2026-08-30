@@ -1,6 +1,14 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { bajar, claseDeHija, colorClass, subir } from "../src/color.js";
+import {
+  bajar,
+  CLASES_DE_ESTILO,
+  claseDeHija,
+  clasesDelEstilo,
+  colorClass,
+  subir,
+} from "../src/color.js";
+import { ESTILOS_DE_PRIORIDAD } from "../src/settingsData.js";
 import type { Prioridad } from "../src/token.js";
 
 const prioridad = fc.constantFrom<Prioridad>(0, 1, 2);
@@ -54,5 +62,29 @@ describe("subir y bajar", () => {
         for (const q of [subir(p), bajar(p)]) expect([0, 1, 2]).toContain(q);
       }),
     );
+  });
+});
+
+describe("las clases de cada estilo", () => {
+  it("cada estilo suelto enciende una sola clase", () => {
+    expect(clasesDelEstilo("barra")).toEqual(["tareas-estilo-barra"]);
+    expect(clasesDelEstilo("checkbox")).toEqual(["tareas-estilo-checkbox"]);
+    expect(clasesDelEstilo("fondo")).toEqual(["tareas-estilo-fondo"]);
+  });
+
+  // El combinado no tiene clase propia: enciende las dos. Así la hoja de
+  // estilos no necesita saber que existe y cada regla mira una sola clase.
+  it("el combinado enciende las dos", () => {
+    expect(clasesDelEstilo("barra-checkbox")).toEqual([
+      "tareas-estilo-barra",
+      "tareas-estilo-checkbox",
+    ]);
+  });
+
+  it("`CLASES_DE_ESTILO` las cubre todas, sin repetir", () => {
+    for (const e of ESTILOS_DE_PRIORIDAD) {
+      for (const c of clasesDelEstilo(e)) expect(CLASES_DE_ESTILO).toContain(c);
+    }
+    expect(new Set(CLASES_DE_ESTILO).size).toBe(CLASES_DE_ESTILO.length);
   });
 });

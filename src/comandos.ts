@@ -156,7 +156,7 @@ function moverPrioridad(
   // con la prioridad de su madre, y actuar sobre el 0 hacía que subirle la
   // prioridad a una hija que heredaba «muy alta» la dejara en «alta».
   const tareas = dep.store.tareasDe(ctx.archivo);
-  const { nivel, heredada } = prioridadEfectiva(tareas, ctx.clave);
+  const { nivel, deArriba } = prioridadEfectiva(tareas, ctx.clave);
   const nueva = mover(nivel);
 
   if (nueva === nivel) {
@@ -168,7 +168,11 @@ function moverPrioridad(
   // forma de declararla normal adentro de un bloque urgente sin un `p=0`
   // explícito, que cambiaría el formato del token. Callarlo sería un comando
   // que no hace nada.
-  if (nueva === 0 && heredada) {
+  //
+  // Se mira `deArriba` y no de dónde venía el nivel actual: una hija con `p=1`
+  // propio adentro de un bloque `p=2` **sí** tiene prioridad propia, y bajarla
+  // igual la deja heredando rojo. Esa era la falla A3.
+  if (nueva === 0 && deArriba !== 0) {
     new Notice(STRINGS.avisos.prioridadHeredada, 8000);
     return;
   }

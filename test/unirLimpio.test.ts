@@ -76,6 +76,27 @@ describe("unir dos tareas deja una línea limpia", () => {
     expect(tr.state.selection.main.head).toBe("- [ ] comprar".length);
   });
 
+  /**
+   * La de abajo no tiene por qué ser un ítem de lista, y hay dos casos reales
+   * donde no lo es: texto suelto debajo de una tarea, y una tarea a la que el
+   * usuario ya le borró el checkbox a mano antes de unir —que es lo que pasa al
+   * unir con Backspace y `stickCursor`—. En los dos falta el espacio igual.
+   */
+  it("con texto suelto abajo también se separa", () => {
+    const st = solo("- [ ] comprar\ntexto suelto");
+    expect(texto(st, { from: 13, to: 14, insert: "" })).toBe("- [ ] comprar texto suelto");
+  });
+
+  it("con una tarea a la que ya le borraron el checkbox", () => {
+    const st = solo("- [ ] comprar\npan");
+    expect(texto(st, { from: 13, to: 14, insert: "" })).toBe("- [ ] comprar pan");
+  });
+
+  it("la sangría de la línea suelta no se arrastra", () => {
+    const st = solo("- [ ] comprar\n\t\ttexto");
+    expect(texto(st, { from: 13, to: 14, insert: "" })).toBe("- [ ] comprar texto");
+  });
+
   it("una tarea vacía arriba también se une bien", () => {
     const st = solo("- [ ] \n- [ ] pan");
     expect(texto(st, { from: 6, to: 7, insert: "" })).toBe("- [ ] pan");
@@ -83,11 +104,6 @@ describe("unir dos tareas deja una línea limpia", () => {
 });
 
 describe("lo que no se toca", () => {
-  it("si la de abajo no es un ítem de lista", () => {
-    const st = solo("- [ ] comprar\ntexto suelto");
-    expect(texto(st, { from: 13, to: 14, insert: "" })).toBe("- [ ] comprartexto suelto");
-  });
-
   it("si la de arriba no es un ítem de lista", () => {
     const st = solo("texto suelto\n- [ ] pan");
     expect(texto(st, { from: 12, to: 13, insert: "" })).toBe("texto suelto- [ ] pan");

@@ -173,33 +173,45 @@ describe("prioridadEfectiva — el nivel que se ve", () => {
     "- [ ] ajena",
   ].join("\n");
 
-  it("la propia gana, y no se marca como heredada", () => {
-    expect(efectiva(ARBOL, 0)).toEqual({ nivel: 2, heredada: false });
-    expect(efectiva(ARBOL, 3)).toEqual({ nivel: 1, heredada: false });
+  it("la propia gana sobre la del árbol", () => {
+    expect(efectiva(ARBOL, 0)).toEqual({ nivel: 2, deArriba: 0 });
+    expect(efectiva(ARBOL, 3)).toEqual({ nivel: 1, deArriba: 2 });
   });
 
   it("la hija hereda de la madre", () => {
-    expect(efectiva(ARBOL, 1)).toEqual({ nivel: 2, heredada: true });
+    expect(efectiva(ARBOL, 1)).toEqual({ nivel: 2, deArriba: 2 });
   });
 
   it("la herencia baja más de un nivel", () => {
-    expect(efectiva(ARBOL, 2)).toEqual({ nivel: 2, heredada: true });
+    expect(efectiva(ARBOL, 2)).toEqual({ nivel: 2, deArriba: 2 });
+  });
+
+  /**
+   * `deArriba` se calcula aunque la tarea tenga prioridad propia, y ahí estaba
+   * el bug A3: bajar a normal una hija con `p=1` propio adentro de un bloque
+   * `p=2` le saca el campo y la deja heredando rojo, mientras el aviso decía
+   * «Prioridad normal». Para saber si bajar sirve de algo hay que mirar qué
+   * queda **después** de sacarle lo suyo.
+   */
+  it("una tarea con prioridad propia igual sabe qué heredaría sin ella", () => {
+    expect(efectiva(ARBOL, 3).deArriba).toBe(2);
+    expect(efectiva(ARBOL, 0).deArriba).toBe(0);
   });
 
   // La misma regla que dibuja `decorar.ts`: si el comando y el color no usaran
   // la misma, dirían cosas distintas sobre la misma línea.
   it("gana la ancestra más cercana", () => {
-    expect(efectiva(ARBOL, 4)).toEqual({ nivel: 1, heredada: true });
+    expect(efectiva(ARBOL, 4)).toEqual({ nivel: 1, deArriba: 1 });
   });
 
   it("sin nadie arriba con prioridad, es normal", () => {
-    expect(efectiva(ARBOL, 5)).toEqual({ nivel: 0, heredada: false });
+    expect(efectiva(ARBOL, 5)).toEqual({ nivel: 0, deArriba: 0 });
   });
 
   it("una clave que no existe no rompe", () => {
     expect(prioridadEfectiva(indexarTexto(ARBOL), claveDe("n.md", 99))).toEqual({
       nivel: 0,
-      heredada: false,
+      deArriba: 0,
     });
   });
 
@@ -210,7 +222,7 @@ describe("prioridadEfectiva — el nivel que se ve", () => {
       "\t- [ ] madre rota %%t:p=2;id=A3F2%%",
       "\t\t- [ ] hija",
     ].join("\n");
-    expect(efectiva(raw, 1)).toEqual({ nivel: 1, heredada: true });
-    expect(efectiva(raw, 2)).toEqual({ nivel: 1, heredada: true });
+    expect(efectiva(raw, 1)).toEqual({ nivel: 1, deArriba: 1 });
+    expect(efectiva(raw, 2)).toEqual({ nivel: 1, deArriba: 1 });
   });
 });

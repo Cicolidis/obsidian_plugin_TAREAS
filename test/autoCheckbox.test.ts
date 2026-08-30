@@ -202,6 +202,46 @@ function backspace(doc: string, forma: "carácter" | "unión"): string {
   return st.update({ changes: cambio }).state.doc.toString();
 }
 
+describe("regla B: también con texto escrito", () => {
+  const borrarEnElComienzo = (doc: string) => {
+    const st = estado(doc);
+    const fin = columnaDelContenido(parseBullet(doc)!);
+    return st.update({ changes: { from: fin - 1, to: fin, insert: "" } }).state.doc.toString();
+  };
+
+  /**
+   * Pedido en el uso, y la razón es de coherencia: si borrar el checkbox de una
+   * tarea recién nacida la convierte en bullet, borrar el de una con texto
+   * tendría que hacer lo mismo. Sin esto, ahí el Backspace se pone a borrar `]`,
+   * ` `, `[`… de a un carácter, que no es nada.
+   */
+  it("Backspace al comienzo del texto deja el bullet pelado", () => {
+    expect(borrarEnElComienzo("- [ ] llamar a la escuela")).toBe("- llamar a la escuela");
+  });
+
+  it("con sangría, con `[x]` y con lista numerada también", () => {
+    expect(borrarEnElComienzo("\t\t- [ ] hija")).toBe("\t\t- hija");
+    expect(borrarEnElComienzo("- [x] hecha")).toBe("- hecha");
+    expect(borrarEnElComienzo("\t1. [ ] numerada")).toBe("\t1. numerada");
+  });
+
+  /**
+   * Pero un borrado que **cruza líneas** sobre una tarea con texto es una unión,
+   * y convertirla en bullet sería cambiarle el gesto al usuario. En la tarea
+   * vacía sí se convierte: ahí es Outliner uniendo, y sacar el checkbox es
+   * justamente lo que se quiere.
+   */
+  it("un borrado que viene de la línea de arriba no la convierte", () => {
+    const doc = "- [ ] madre\n- [ ] hija";
+    const st = estado(doc);
+    const abajo = st.doc.line(2);
+    const fin = abajo.from + columnaDelContenido(parseBullet(abajo.text)!);
+    expect(
+      st.update({ changes: { from: st.doc.line(1).to, to: fin, insert: "" } }).state.doc.toString(),
+    ).toBe("- [ ] madrehija");
+  });
+});
+
 describe("regla B: Backspace sobre una tarea vacía le saca el checkbox", () => {
   const casos: [string, string, string][] = [
     ["tarea vacía al ras", "- [ ] tarea\n- [ ] ", "- [ ] tarea\n- "],

@@ -36,8 +36,8 @@ import { parseBullet } from "../linea.js";
  *
  * ## Qué NO toca
  *
- * - Uniones donde la línea absorbida no es un ítem de lista: ahí no hay
- *   marcador que sobre, y meter un espacio sería inventar.
+ * - Uniones donde la de **arriba** no es un ítem de lista: no es una tarea que
+ *   siga existiendo, es otra cosa.
  * - Uniones donde la absorbida no tiene contenido: no hay nada que separar.
  * - Cambios externos (`userEvent: "set"`), por la misma razón que en
  *   `protegerTramo`: es un documento que otro ya decidió.
@@ -116,14 +116,22 @@ function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo
   // Hubo unión si quedan menos líneas de las que se consumieron.
   if (crudo.length >= L2.number - L1.number + 1) return null;
 
+  // La de arriba tiene que ser un ítem de lista: es la que sigue existiendo, y
+  // es lo que hace que esto sea «unir una tarea con lo que venía abajo».
+  if (!parseBullet(L1.text)) return null;
+
+  // La de abajo puede no serlo, y hay dos casos reales donde no lo es: texto
+  // suelto debajo de una tarea, y una tarea a la que el usuario ya le borró el
+  // checkbox a mano antes de unir. En los dos falta el espacio igual. La
+  // primera versión pedía que fuera un ítem y por eso no hacía nada ahí.
   const abajo = parseBullet(L2.text);
-  if (!parseBullet(L1.text) || !abajo) return null;
+  const contenido = abajo ? abajo.contenido : L2.text.replace(/^[ \t]+/, "");
 
   // El texto de arriba es el **visible**: si la línea tiene token, el token es
   // cosa de `protegerTramo`, que corre después y lo devuelve al final. Acá se
   // decide el texto, allá los metadatos.
   const izq = visibleDe(L1.text).replace(FIN, "");
-  const der = sinTokens(abajo.contenido).replace(FIN, "");
+  const der = sinTokens(contenido).replace(FIN, "");
   if (der === "") return null; // sin contenido abajo no hay nada que separar
 
   // La condición que distingue **unir** de **borrar**: los dos textos tienen que
@@ -138,7 +146,7 @@ function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo
   if (limpia.length < izq.length + der.length) return null;
   if (!limpia.startsWith(izq) || !limpia.endsWith(der)) return null;
 
-  const nuevo = [`${izq} ${abajo.contenido.replace(FIN, "")}`, ...crudo.slice(1)].join("\n");
+  const nuevo = [`${izq} ${contenido.replace(FIN, "")}`, ...crudo.slice(1)].join("\n");
   if (nuevo === crudo.join("\n")) return null; // ya estaba bien
 
   return {

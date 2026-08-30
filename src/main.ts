@@ -9,6 +9,7 @@ import {
 import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import { comandos } from "./comandos.js";
+import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
 import { clicAlFinal } from "./editor/clicAlFinal.js";
 import { decoraciones } from "./editor/decoraciones.js";
@@ -41,8 +42,7 @@ import { puertoObsidian } from "./vault/puertoObsidian.js";
  * módulos de `editor/` reciben esa decisión como función y se prueban enteros
  * contra un `EditorState` pelado, sin abrir la aplicación.
  */
-/** La clase que enciende cada estilo de prioridad, y la del glifo. */
-const CLASE_DE_ESTILO = (estilo: string): string => `tareas-estilo-${estilo}`;
+/** La clase del glifo. Las de los estilos las da `color.ts`. */
 const CLASE_DE_GLIFO = "tareas-ind-glifo";
 
 export default class TareasPlugin extends Plugin {
@@ -118,7 +118,7 @@ export default class TareasPlugin extends Plugin {
   override onunload(): void {
     this.store?.detener();
     // Las clases viven en `body` y no en el editor, así que no se van solas.
-    for (const e of ESTILOS_DE_PRIORIDAD) document.body.removeClass(CLASE_DE_ESTILO(e));
+    for (const c of CLASES_DE_ESTILO) document.body.removeClass(c);
     document.body.removeClass(CLASE_DE_GLIFO);
   }
 
@@ -131,9 +131,8 @@ export default class TareasPlugin extends Plugin {
    * `StateField` de cada editor abierto.
    */
   private sincronizarIndicadores(): void {
-    for (const e of ESTILOS_DE_PRIORIDAD) {
-      document.body.toggleClass(CLASE_DE_ESTILO(e), e === this.settings.estiloDePrioridad);
-    }
+    const encendidas = new Set(clasesDelEstilo(this.settings.estiloDePrioridad));
+    for (const c of CLASES_DE_ESTILO) document.body.toggleClass(c, encendidas.has(c));
     document.body.toggleClass(CLASE_DE_GLIFO, this.settings.indicadorGlifo);
   }
 

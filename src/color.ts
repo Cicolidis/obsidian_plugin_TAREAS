@@ -15,6 +15,7 @@
  * se encienden por separado desde los ajustes; acá no cambia nada, porque la
  * clase es la misma.
  */
+import { ESTILOS_DE_PRIORIDAD, type EstiloDePrioridad } from "./settingsData.js";
 import type { Prioridad } from "./token.js";
 
 export const PRIORIDAD_MINIMA: Prioridad = 0;
@@ -56,3 +57,22 @@ export function subir(p: Prioridad): Prioridad {
 export function bajar(p: Prioridad): Prioridad {
   return p <= PRIORIDAD_MINIMA ? PRIORIDAD_MINIMA : ((p - 1) as Prioridad);
 }
+
+/**
+ * Las clases de `body` que enciende cada estilo de prioridad.
+ *
+ * Viven acá y no en `main.ts` por lo mismo que `colorClass`: es la traducción de
+ * un dato a una clase de CSS, y en un solo lugar. El estilo combinado no tiene
+ * clase propia —enciende las dos— así que la hoja de estilos no necesita saber
+ * que existe: cada regla sigue mirando una sola clase.
+ */
+export function clasesDelEstilo(estilo: EstiloDePrioridad): readonly string[] {
+  return estilo === "barra-checkbox"
+    ? ["tareas-estilo-barra", "tareas-estilo-checkbox"]
+    : [`tareas-estilo-${estilo}`];
+}
+
+/** Todas las clases que este módulo puede poner, para poder sacarlas al salir. */
+export const CLASES_DE_ESTILO: readonly string[] = ESTILOS_DE_PRIORIDAD.flatMap((e) =>
+  clasesDelEstilo(e),
+).filter((c, i, xs) => xs.indexOf(c) === i);

@@ -42,6 +42,7 @@ export const STRINGS = {
         "Los tres se ven distinto y los tres distinguen los niveles sin depender del color. " +
         "Se cambian en caliente: alcanza con mirar la nota al lado.",
       opciones: {
+        "barra-checkbox": "Barra corta + checkbox coloreado",
         barra: "Barra corta en el margen (la altura dice el nivel)",
         checkbox: "El checkbox de la tarea, coloreado",
         fondo: "Línea teñida con filete (el primero)",

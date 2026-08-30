@@ -231,7 +231,7 @@ export function subarbolDe(tareas: readonly Task[], clave: Clave): Task[] {
 }
 
 /**
- * El nivel de prioridad que **se ve** en esta tarea, y si es suyo o lo hereda.
+ * El nivel de prioridad que **se ve** en esta tarea, y el que le daría el árbol.
  *
  * La §14 dice que el color pinta la línea de la tarea y que los hijos llevan
  * una marca del mismo color: o sea que una hija sin `p=` propio igual **se ve**
@@ -246,16 +246,23 @@ export function subarbolDe(tareas: readonly Task[], clave: Clave): Task[] {
  *
  * Una tarea con el token ilegible cuenta como prioridad 0 y **no corta la
  * herencia**: no se le pudo leer nada, no que se le haya leído un cero.
+ *
+ * `deArriba` se calcula **siempre**, tenga la tarea prioridad propia o no, y esa
+ * es la parte que costó un bug: bajar a normal una hija que tenía `p=1` propio
+ * adentro de un bloque `p=2` le sacaba el campo y la dejaba heredando rojo otra
+ * vez, mientras el aviso decía «Prioridad normal». Para saber si bajar sirve de
+ * algo no alcanza con mirar de dónde viene el nivel actual: hay que mirar qué
+ * queda **después** de sacarle el suyo.
  */
 export function prioridadEfectiva(
   tareas: readonly Task[],
   clave: Clave,
-): { nivel: Prioridad; heredada: boolean } {
+): { nivel: Prioridad; deArriba: Prioridad } {
   const indice = porClave(tareas);
   const propia = indice.get(clave);
-  if (!propia) return { nivel: 0, heredada: false };
-  if (propia.prioridad !== 0) return { nivel: propia.prioridad, heredada: false };
+  if (!propia) return { nivel: 0, deArriba: 0 };
 
+  let deArriba: Prioridad = 0;
   const vistas = new Set<Clave>([clave]);
   for (let c = propia.padre; c !== null; ) {
     // Un ciclo no puede pasar —`padre` sale de un árbol— pero un índice
@@ -264,10 +271,14 @@ export function prioridadEfectiva(
     vistas.add(c);
     const t = indice.get(c);
     if (!t) break;
-    if (t.prioridad !== 0) return { nivel: t.prioridad, heredada: true };
+    if (t.prioridad !== 0) {
+      deArriba = t.prioridad;
+      break;
+    }
     c = t.padre;
   }
-  return { nivel: 0, heredada: false };
+
+  return { nivel: propia.prioridad !== 0 ? propia.prioridad : deArriba, deArriba };
 }
 
 /**

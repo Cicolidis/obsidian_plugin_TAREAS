@@ -8,7 +8,7 @@
 import { NOTA_DE_LOG_POR_OMISION, NOTAS_POR_OMISION } from "./notas.js";
 
 /** Los tres estilos de la §14. Un solo lugar: los consumen los ajustes y el CSS. */
-export const ESTILOS_DE_PRIORIDAD = ["barra", "checkbox", "fondo"] as const;
+export const ESTILOS_DE_PRIORIDAD = ["barra-checkbox", "barra", "checkbox", "fondo"] as const;
 export type EstiloDePrioridad = (typeof ESTILOS_DE_PRIORIDAD)[number];
 
 /**
@@ -83,9 +83,13 @@ export interface TareasSettings {
    *
    * | | Qué dibuja | Cómo se lee el nivel sin color |
    * |---|---|---|
+   * | `barra-checkbox` | las dos cosas juntas | por la altura y por el anillo |
    * | `barra` | una marca corta en el margen | por su **altura** |
    * | `checkbox` | el checkbox de la tarea, coloreado | por un anillo de más |
    * | `fondo` | la línea teñida más un filete | por el grosor y las muescas |
+   *
+   * El combinado es el que pidió el usuario después de mirar los tres sueltos, y
+   * por eso es el de por omisión.
    *
    * La §14 pide que los tres niveles se distingan **también sin color**, por
    * accesibilidad y por pantallas al sol; por eso los tres estilos lo resuelven
@@ -171,7 +175,7 @@ export const WORKBENCH_POR_OMISION = "foco";
 export function sanearEstilo(valor: unknown): EstiloDePrioridad {
   return (ESTILOS_DE_PRIORIDAD as readonly unknown[]).includes(valor)
     ? (valor as EstiloDePrioridad)
-    : "barra";
+    : "barra-checkbox";
 }
 
 export const DEFAULT_SETTINGS: TareasSettings = {
@@ -181,7 +185,7 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   notaDeLog: NOTA_DE_LOG_POR_OMISION,
   workbenchFavorito: WORKBENCH_POR_OMISION,
   decoracionesEnLaNota: true,
-  estiloDePrioridad: "barra",
+  estiloDePrioridad: "barra-checkbox",
   indicadorGlifo: false,
   unirLimpio: true,
   congelarStore: false,

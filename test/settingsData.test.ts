@@ -64,11 +64,11 @@ describe("el estilo de prioridad", () => {
   // cualquier cosa que llegue tiene que caer parada, no romper el plugin.
   it("cualquier otra cosa cae en el de por omisión", () => {
     for (const v of ["filete", "", null, undefined, 3, {}, ["barra"]]) {
-      expect(sanearEstilo(v)).toBe("barra");
+      expect(sanearEstilo(v)).toBe("barra-checkbox");
     }
   });
 
   it("una configuración vieja, sin el campo, arranca en el de por omisión", () => {
-    expect(cargarSettings({ indicadorFilete: true }).estiloDePrioridad).toBe("barra");
+    expect(cargarSettings({ indicadorFilete: true }).estiloDePrioridad).toBe("barra-checkbox");
   });
 });
