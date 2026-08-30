@@ -54,22 +54,20 @@
 	--tareas-muy-alta-fondo: #3d2222;
 }
 
-/* Cuánto se mete el filete en el margen de la nota. Se queda afuera del texto
-   —incluida la sangría de las listas, que Obsidian resuelve con padding sobre
-   la línea— así que el mismo valor sirve para todos los niveles y el filete de
-   una tarea y el de sus hijas quedan alineados en la misma vertical.
+/* Cuánto se corre hacia el margen la marca de prioridad.
 
    Que un desplazamiento negativo no quede recortado está probado en el otro
    plugin de este vault: Anotaciones dibuja la ficha de cada anotación con
    `left: calc(-1 * 1.5em)` sobre este mismo elemento y en esta misma
-   aplicación. 0,7em es menos que eso. */
+   aplicación. */
 .markdown-source-view.mod-cm6 {
-	--tareas-filete-x: 0.7em;
-	--tareas-filete-madre: 3px;
-	--tareas-filete-hija: 2px;
+	/* Cuánto se corre la marca hacia el margen. Obsidian ancla el control de
+	   plegado adentro de la línea, a `--list-bullet-end-padding` (1.3rem), así
+	   que menos que eso lo pisa: es lo que pasaba con 0.7em. */
+	--tareas-barra-x: 1.9rem;
 }
 
-/* --- la línea de la tarea ------------------------------------------------ */
+/* --- dónde se apoya cada estilo ------------------------------------------ */
 
 .markdown-source-view.mod-cm6 .cm-line.tareas-p1,
 .markdown-source-view.mod-cm6 .cm-line.tareas-p2,
@@ -78,62 +76,128 @@
 	/* Ancla del `::before`. No cambia el flujo ni la altura.
 
 	   Obsidian ya lo pone en `.markdown-source-view.mod-cm6 .cm-line` —leído en
-	   su `app.css`—, así que hoy es redundante. Se escribe igual: que el filete
-	   no se despegue de su línea no puede depender de una regla ajena que
-	   nadie prometió mantener. */
+	   su `app.css`—, así que hoy es redundante. Se escribe igual: que la marca
+	   no se despegue de su línea no puede depender de una regla ajena que nadie
+	   prometió mantener. */
 	position: relative;
 }
 
-/* El color pinta **la línea de la tarea, no el subárbol** (§14): con árboles de
-   76 líneas, teñir todo deja media nota roja. */
-.markdown-source-view.mod-cm6 .cm-line.tareas-p1 {
+.markdown-source-view.mod-cm6 .cm-line.tareas-p1 { --tareas-color: var(--tareas-alta); }
+.markdown-source-view.mod-cm6 .cm-line.tareas-p2 { --tareas-color: var(--tareas-muy-alta); }
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1 { --tareas-color: var(--tareas-alta); }
+.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2 { --tareas-color: var(--tareas-muy-alta); }
+
+/* --- estilo «barra»: una marca corta en el margen ------------------------- */
+/*
+ * El nivel se lee por la **altura** de la barra, no solo por el color: alta es
+ * corta, muy alta es larga. Eso cumple la §14 —los tres niveles distinguibles
+ * sin color— sin agregar ancho al renglón, que era el costo del glifo, y sin
+ * teñir la línea entera, que era lo que no convencía del estilo anterior.
+ *
+ * Dos tareas contiguas de distinta prioridad quedan como **dos marcas
+ * separadas** en vez de una franja continua que cambia de color, que era la
+ * otra objeción.
+ *
+ * `--tareas-barra-x` la corre lo suficiente para no pisar el control de
+ * plegado. No es un número al azar: Obsidian ancla ese control adentro de la
+ * línea con `inset-inline-end: calc(var(--list-bullet-end-padding) * -1)`, y
+ * `--list-bullet-end-padding` es 1.3rem. Con 1.9rem la barra queda afuera de esa
+ * zona, incluso en las tareas que nacen en el borde de la nota, que eran las que
+ * se pisaban.
+ */
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p1::before,
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+	content: "";
+	position: absolute;
+	left: calc(-1 * var(--tareas-barra-x, 1.9rem));
+	top: 50%;
+	transform: translateY(-50%);
+	width: 3px;
+	border-radius: 2px;
+	background-color: var(--tareas-color);
+}
+
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p1::before {
+	height: 0.5em;
+}
+
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
+	height: 1.05em;
+}
+
+/* Los hijos: una hairline tenue, para que el bloque se lea como uno sin que la
+   marca del subárbol compite con la de la tarea. */
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
+body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+	top: 0;
+	bottom: 0;
+	height: auto;
+	transform: none;
+	width: 1px;
+	border-radius: 0;
+	opacity: 0.35;
+}
+
+/* --- estilo «checkbox»: el color va en el checkbox ------------------------ */
+/*
+ * Cero impacto sobre el layout y cero riesgo de pisar nada: se cambian dos
+ * variables que Obsidian ya expone —`--checkbox-border-color` para la tarea
+ * pendiente y `--checkbox-color` para la completada— y el checkbox se dibuja
+ * solo. Es la marca más chica posible y está sobre el elemento que *es* la
+ * tarea.
+ *
+ * El nivel se distingue sin color por el **anillo**: muy alta lleva uno de más.
+ * Los hijos no llevan nada, a propósito: es la respuesta más simple a «cómo
+ * marcar distinto la madre y los hijos», y con árboles de 76 líneas puede ser
+ * la que mejor se lee.
+ */
+body.tareas-estilo-checkbox .markdown-source-view.mod-cm6 .cm-line.tareas-p1,
+body.tareas-estilo-checkbox .markdown-source-view.mod-cm6 .cm-line.tareas-p2 {
+	--checkbox-border-color: var(--tareas-color);
+	--checkbox-border-color-hover: var(--tareas-color);
+	--checkbox-color: var(--tareas-color);
+	--checkbox-color-hover: var(--tareas-color);
+}
+
+body.tareas-estilo-checkbox
+	.markdown-source-view.mod-cm6
+	.cm-line.tareas-p2
+	input[type="checkbox"] {
+	box-shadow: 0 0 0 2px var(--tareas-color);
+}
+
+/* --- estilo «fondo»: el de la primera versión ----------------------------- */
+/*
+ * Se conserva para poder comparar, que es el patrón `designFlags.ts`: un diseño
+ * nuevo se prueba encendiéndolo, no tirando el anterior.
+ */
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-p1 {
 	background-color: var(--tareas-alta-fondo);
 }
 
-.markdown-source-view.mod-cm6 .cm-line.tareas-p2 {
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-p2 {
 	background-color: var(--tareas-muy-alta-fondo);
 }
 
-.markdown-source-view.mod-cm6 .cm-line.tareas-p1::before,
-.markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
-.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
-.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-p1::before,
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
 	content: "";
 	position: absolute;
-	left: calc(-1 * var(--tareas-filete-x));
+	/* Corrido a 1.9rem por la misma razón que la barra: a 0.7rem pisaba el
+	   control de plegado de las tareas que nacen en el borde de la nota. */
+	left: calc(-1 * var(--tareas-barra-x, 1.9rem));
 	top: 0;
 	bottom: 0;
-	width: var(--tareas-filete-madre);
+	width: 3px;
 	border-radius: 1px;
-	background-color: var(--tareas-alta);
+	background-color: var(--tareas-color);
 }
 
-.markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
-.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
-	background-color: var(--tareas-muy-alta);
-}
-
-/* Los hijos llevan un filete más fino del mismo color (§14). Sin fondo: el
-   bloque se lee como uno solo por la vertical continua, no por el tinte. */
-.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
-.markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
-	width: var(--tareas-filete-hija);
-}
-
-/* --- indicador 1: la textura del filete ---------------------------------- */
-/*
- * §14 pide que los tres niveles se distingan **también sin color**, por
- * accesibilidad y por pantallas al sol. Este indicador y el de abajo se
- * encienden por separado desde los ajustes: uno, el otro o los dos.
- *
- * La clase vive en `body` y no en la decoración: el `StateField` pone siempre
- * la misma clase de nivel y la hoja decide qué dibuja. Así alternar un ajuste
- * no obliga a reconstruir las decoraciones de cada editor abierto.
- *
- * Solo cambia la línea de la tarea. A 2px las muescas no se leen, así que el
- * filete de las hijas se queda liso: el nivel se comunica donde está el dato.
- */
-body.tareas-ind-filete .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
 	width: 5px;
 	background-image: repeating-linear-gradient(
 		to bottom,
@@ -143,33 +207,32 @@ body.tareas-ind-filete .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before 
 	background-color: transparent;
 }
 
-/* --- indicador 2: el signo al final del texto ---------------------------- */
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
+body.tareas-estilo-fondo .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
+	width: 2px;
+}
+
+/* --- el signo al final del texto, independiente del estilo ---------------- */
 /*
- * Suma **ancho** al renglón, no alto, y por eso está apagado por omisión y
- * separado del otro: el ancho es lo que decide si una línea entra en un renglón
- * o en dos, y con la ventana angosta eso alimenta el bucle de medición de la
- * §5.5. Tenerlos en dos interruptores deja ver cuál de los dos, si alguno,
- * mueve la cuenta de avisos.
+ * Suma **ancho** al renglón, no alto: medido en el uso, empuja el corte de
+ * línea unas tres letras antes. Por eso está apagado por omisión y va aparte.
  */
 body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p1::after,
 body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
 	margin-inline-start: 0.5em;
 	font-weight: 700;
-	/* Más chico que el texto: un `!` a tamaño completo compite con la tarea. No
-	   cambia la altura del renglón porque no supera el `line-height` heredado. */
 	font-size: 0.85em;
 	letter-spacing: 0.05em;
 	opacity: 0.9;
+	color: var(--tareas-color);
 }
 
 body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p1::after {
 	content: "!";
-	color: var(--tareas-alta);
 }
 
 body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
 	content: "!!";
-	color: var(--tareas-muy-alta);
 }
 
 /* --- ajustes ------------------------------------------------------------- */

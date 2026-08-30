@@ -233,6 +233,17 @@ describe("R1 — unir: sobrevive el token de arriba", () => {
     expect(parsea(salida)).toBe(true);
   });
 
+  // Reportado en la segunda vuelta: el cursor quedaba al final de la línea
+  // unida. Después de un Backspace uno espera el cursor donde estaba borrando.
+  it("el cursor queda en la costura, no al final de la línea unida", () => {
+    const st = solo(`- [ ] llamar ${TOKEN}\n- [ ] otra`);
+    const arriba = st.doc.line(1);
+    const inicio = arriba.from + inicioDelTramo(arriba.text);
+    const tr = st.update({ changes: { from: inicio, to: st.doc.line(2).from, insert: "" } });
+    expect(tr.state.selection.main.head).toBe("- [ ] llamar".length);
+    expect(tr.state.doc.toString()).toBe(`- [ ] llamar- [ ] otra ${TOKEN}`);
+  });
+
   it("borrar hacia adelante desde el final visible es la misma unión", () => {
     const doc = `- [ ] llamar ${TOKEN}\n- [ ] otra`;
     const st = solo(doc);

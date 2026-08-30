@@ -36,17 +36,22 @@ export const STRINGS = {
         "el token se esconde solo, porque es un comentario de Obsidian. Un token que no se " +
         "entiende queda a la vista a propósito: es la única forma de arreglarlo.",
     },
-    indicadorFilete: {
-      nombre: "Prioridad: filete con textura",
+    estiloDePrioridad: {
+      nombre: "Prioridad: cómo se dibuja",
       descripcion:
-        "Alta lleva un filete izquierdo sólido y muy alta uno más grueso con muescas. Se " +
-        "distinguen sin mirar el color.",
+        "Los tres se ven distinto y los tres distinguen los niveles sin depender del color. " +
+        "Se cambian en caliente: alcanza con mirar la nota al lado.",
+      opciones: {
+        barra: "Barra corta en el margen (la altura dice el nivel)",
+        checkbox: "El checkbox de la tarea, coloreado",
+        fondo: "Línea teñida con filete (el primero)",
+      },
     },
     indicadorGlifo: {
       nombre: "Prioridad: signo al final del texto",
       descripcion:
-        "Un «!» para alta y «!!» para muy alta, al final de la línea. Suma ancho al renglón: " +
-        "con la ventana angosta puede empujar el corte de línea.",
+        "Un «!» para alta y «!!» para muy alta, al final de la línea. Se suma al estilo " +
+        "elegido arriba. Suma ancho al renglón: medido, empuja el corte unas tres letras.",
     },
     workbenchFavorito: {
       nombre: "Workbench favorito",

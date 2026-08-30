@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { NOTAS_POR_OMISION } from "../src/notas.js";
-import { cargarSettings, FORMAT_VERSION, sanearNotas } from "../src/settingsData.js";
+import {
+  cargarSettings,
+  ESTILOS_DE_PRIORIDAD,
+  FORMAT_VERSION,
+  sanearEstilo,
+  sanearNotas,
+} from "../src/settingsData.js";
 
 /**
  * Esto se lee de un `data.json` que el usuario puede haber editado a mano, así
@@ -46,5 +52,23 @@ describe("cargarSettings", () => {
 
   it("no pisa la versión de formato que ya tenía el vault", () => {
     expect(cargarSettings({ formatVersion: 0 }).formatVersion).toBe(0);
+  });
+});
+
+describe("el estilo de prioridad", () => {
+  it("acepta los tres conocidos", () => {
+    for (const e of ESTILOS_DE_PRIORIDAD) expect(sanearEstilo(e)).toBe(e);
+  });
+
+  // Se lee de un `data.json` que el usuario puede editar a mano, así que
+  // cualquier cosa que llegue tiene que caer parada, no romper el plugin.
+  it("cualquier otra cosa cae en el de por omisión", () => {
+    for (const v of ["filete", "", null, undefined, 3, {}, ["barra"]]) {
+      expect(sanearEstilo(v)).toBe("barra");
+    }
+  });
+
+  it("una configuración vieja, sin el campo, arranca en el de por omisión", () => {
+    expect(cargarSettings({ indicadorFilete: true }).estiloDePrioridad).toBe("barra");
   });
 });

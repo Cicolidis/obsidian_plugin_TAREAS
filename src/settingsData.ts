@@ -7,6 +7,10 @@
  */
 import { NOTA_DE_LOG_POR_OMISION, NOTAS_POR_OMISION } from "./notas.js";
 
+/** Los tres estilos de la §14. Un solo lugar: los consumen los ajustes y el CSS. */
+export const ESTILOS_DE_PRIORIDAD = ["barra", "checkbox", "fondo"] as const;
+export type EstiloDePrioridad = (typeof ESTILOS_DE_PRIORIDAD)[number];
+
 /**
  * Versión del **formato de lo que el plugin escribe en las notas**.
  *
@@ -68,15 +72,26 @@ export interface TareasSettings {
    */
   decoracionesEnLaNota: boolean;
   /**
-   * Prioridad: el filete izquierdo cambia de grosor y de textura según el nivel.
+   * Cómo se dibuja la prioridad. Tres estilos, uno a la vez.
+   *
+   * Los tres salieron de usar el primero: teñir la línea entera resultó pesado,
+   * la distinción madre/hijos por fondo contra filete no convenció, y dos
+   * tareas contiguas de distinta prioridad formaban una franja continua que
+   * cambiaba de color. Es el patrón `designFlags.ts` llevado a su forma útil
+   * acá: los tres conviven y se comparan **en Obsidian**, que es el único lugar
+   * donde se puede juzgar cómo se ve algo.
+   *
+   * | | Qué dibuja | Cómo se lee el nivel sin color |
+   * |---|---|---|
+   * | `barra` | una marca corta en el margen | por su **altura** |
+   * | `checkbox` | el checkbox de la tarea, coloreado | por un anillo de más |
+   * | `fondo` | la línea teñida más un filete | por el grosor y las muescas |
    *
    * La §14 pide que los tres niveles se distingan **también sin color**, por
-   * accesibilidad y por pantallas al sol. Son dos indicadores independientes
-   * —este y el glifo— y no una lista de opciones, porque el usuario puede
-   * querer uno, el otro o los dos. Es el patrón `designFlags.ts`: un diseño se
-   * prueba encendiéndolo, no reemplazando el anterior.
+   * accesibilidad y por pantallas al sol; por eso los tres estilos lo resuelven
+   * de alguna manera y ninguno se apoya solo en el tono.
    */
-  indicadorFilete: boolean;
+  estiloDePrioridad: EstiloDePrioridad;
   /**
    * Prioridad: un `!` o `!!` al final de la línea.
    *
@@ -141,6 +156,13 @@ export function sanearNotas(saved: unknown): string[] {
  */
 export const WORKBENCH_POR_OMISION = "foco";
 
+/** Un estilo conocido, o el de por omisión. Se lee de un `data.json` editable. */
+export function sanearEstilo(valor: unknown): EstiloDePrioridad {
+  return (ESTILOS_DE_PRIORIDAD as readonly unknown[]).includes(valor)
+    ? (valor as EstiloDePrioridad)
+    : "barra";
+}
+
 export const DEFAULT_SETTINGS: TareasSettings = {
   formatVersion: FORMAT_VERSION,
   notasDeTareas: [...NOTAS_POR_OMISION],
@@ -148,7 +170,7 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   notaDeLog: NOTA_DE_LOG_POR_OMISION,
   workbenchFavorito: WORKBENCH_POR_OMISION,
   decoracionesEnLaNota: true,
-  indicadorFilete: true,
+  estiloDePrioridad: "barra",
   indicadorGlifo: false,
   congelarStore: false,
   registrarEventos: false,
@@ -181,7 +203,7 @@ export function cargarSettings(saved: unknown): TareasSettings {
         : DEFAULT_SETTINGS.notaDeLog,
     workbenchFavorito: sanearWorkbench(raw.workbenchFavorito),
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,
-    indicadorFilete: raw.indicadorFilete ?? DEFAULT_SETTINGS.indicadorFilete,
+    estiloDePrioridad: sanearEstilo(raw.estiloDePrioridad),
     indicadorGlifo: raw.indicadorGlifo ?? DEFAULT_SETTINGS.indicadorGlifo,
     congelarStore: raw.congelarStore ?? DEFAULT_SETTINGS.congelarStore,
     registrarEventos: raw.registrarEventos ?? DEFAULT_SETTINGS.registrarEventos,

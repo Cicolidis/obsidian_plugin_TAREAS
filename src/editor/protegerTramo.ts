@@ -229,9 +229,18 @@ function corregir(doc: Text, fromA: number, toA: number, texto: string): Arreglo
 
   return {
     cambio: { from: L1.from, to: L2.to, insert: nuevo },
+    // Dónde queda el cursor, que son dos casos distintos:
+    //
+    // - **Partió**: al final de la segunda línea, después del bullet nuevo, que
+    //   es donde uno espera seguir escribiendo.
+    // - **Unió**: en la costura, o sea donde terminaba el texto de arriba. La
+    //   primera versión lo mandaba al final de la línea unida y quedaba «en una
+    //   posición extraña» —reportado en la segunda vuelta de verificación—:
+    //   después de un Backspace uno espera el cursor donde estaba el borrado,
+    //   no al final de un texto que no escribió ahí.
     cursor: L1.from + (partes.length > 1
       ? partes[0]!.length + 1 + partes[1]!.length
-      : Math.min(partes[0]!.length, sinTokens(L1.text.slice(0, izq) + texto).split("\n")[0]!.replace(FIN, "").length)),
+      : Math.min(partes[0]!.length, visible.length)),
   };
 }
 

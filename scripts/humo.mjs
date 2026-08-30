@@ -52,7 +52,7 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   StateField              las decoraciones entran al mapa de alturas (§5.5)
 //   atomicRanges            sin esto el cursor recorre el token carácter a carácter
 //   tareas-p                las clases de prioridad (§14)
-//   tareas-ind-             los dos indicadores de forma, que viven en `body`
+//   tareas-estilo-          el estilo de prioridad, que viaja como clase de `body`
 //   0_inbox/tareas_         la lista de notas, que viaja como JSON importado
 //   [ ]                     lo que el filtro escribe
 //   onLayoutReady           el arranque del store (spec §20 paso 3)
@@ -67,7 +67,7 @@ for (const marca of [
   "StateField",
   "atomicRanges",
   "tareas-p",
-  "tareas-ind-",
+  "tareas-estilo-",
   "0_inbox/tareas_",
   "[ ] ",
   "onLayoutReady",
@@ -87,7 +87,17 @@ for (const marca of [
 // no pinta. Es un modo de falla que parece «la prioridad no anda».
 try {
   const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
-  for (const clase of ["tareas-p1", "tareas-p2", "tareas-hija-p1", "tareas-ind-glifo"]) {
+  for (const clase of [
+    "tareas-p1",
+    "tareas-p2",
+    "tareas-hija-p1",
+    "tareas-ind-glifo",
+    // Los tres estilos: si uno se cae del CSS, el ajuste sigue estando y no
+    // dibuja nada, que parece «la prioridad no anda».
+    "tareas-estilo-barra",
+    "tareas-estilo-checkbox",
+    "tareas-estilo-fondo",
+  ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
   }
 } catch {

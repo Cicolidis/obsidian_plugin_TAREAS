@@ -16,6 +16,8 @@ import { esNotaDeTareas, notasDeTrabajo, NOTAS_POR_OMISION } from "./notas.js";
 import {
   cargarSettings,
   DEFAULT_SETTINGS,
+  ESTILOS_DE_PRIORIDAD,
+  sanearEstilo,
   sanearNotas,
   sanearWorkbench,
   type TareasSettings,
@@ -37,11 +39,9 @@ import { puertoObsidian } from "./vault/puertoObsidian.js";
  * módulos de `editor/` reciben esa decisión como función y se prueban enteros
  * contra un `EditorState` pelado, sin abrir la aplicación.
  */
-/** Las clases que encienden cada indicador de prioridad. Un solo lugar. */
-const CLASES_DE_INDICADOR = {
-  filete: "tareas-ind-filete",
-  glifo: "tareas-ind-glifo",
-} as const;
+/** La clase que enciende cada estilo de prioridad, y la del glifo. */
+const CLASE_DE_ESTILO = (estilo: string): string => `tareas-estilo-${estilo}`;
+const CLASE_DE_GLIFO = "tareas-ind-glifo";
 
 export default class TareasPlugin extends Plugin {
   settings: TareasSettings = { ...DEFAULT_SETTINGS };
@@ -107,7 +107,8 @@ export default class TareasPlugin extends Plugin {
   override onunload(): void {
     this.store?.detener();
     // Las clases viven en `body` y no en el editor, así que no se van solas.
-    for (const c of Object.values(CLASES_DE_INDICADOR)) document.body.removeClass(c);
+    for (const e of ESTILOS_DE_PRIORIDAD) document.body.removeClass(CLASE_DE_ESTILO(e));
+    document.body.removeClass(CLASE_DE_GLIFO);
   }
 
   /**
@@ -119,8 +120,10 @@ export default class TareasPlugin extends Plugin {
    * `StateField` de cada editor abierto.
    */
   private sincronizarIndicadores(): void {
-    document.body.toggleClass(CLASES_DE_INDICADOR.filete, this.settings.indicadorFilete);
-    document.body.toggleClass(CLASES_DE_INDICADOR.glifo, this.settings.indicadorGlifo);
+    for (const e of ESTILOS_DE_PRIORIDAD) {
+      document.body.toggleClass(CLASE_DE_ESTILO(e), e === this.settings.estiloDePrioridad);
+    }
+    document.body.toggleClass(CLASE_DE_GLIFO, this.settings.indicadorGlifo);
   }
 
   /**
@@ -255,24 +258,31 @@ class TareasSettingTab extends PluginSettingTab {
         }),
       );
 
-    // Los dos indicadores de forma de la §14 van por separado a propósito: uno,
-    // el otro o los dos. Es el patrón `designFlags.ts` —se prueba encendiendo—
-    // y de paso deja ver cuál de los dos, si alguno, mueve la cuenta de avisos
-    // del ciclo de medición: el glifo suma ancho al renglón y el filete no.
-    for (const [clave, textos] of [
-      ["indicadorFilete", STRINGS.ajustes.indicadorFilete],
-      ["indicadorGlifo", STRINGS.ajustes.indicadorGlifo],
-    ] as const) {
-      new Setting(containerEl)
-        .setName(textos.nombre)
-        .setDesc(textos.descripcion)
-        .addToggle((t) =>
-          t.setValue(this.plugin.settings[clave]).onChange(async (v) => {
-            this.plugin.settings[clave] = v;
-            await this.plugin.guardar();
-          }),
-        );
-    }
+    // Los tres estilos conviven y se comparan **en Obsidian**, que es el único
+    // lugar donde se puede juzgar cómo se ve algo. Es el patrón `designFlags.ts`:
+    // un diseño nuevo se prueba encendiéndolo, no tirando el anterior.
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.estiloDePrioridad.nombre)
+      .setDesc(STRINGS.ajustes.estiloDePrioridad.descripcion)
+      .addDropdown((d) => {
+        for (const e of ESTILOS_DE_PRIORIDAD) {
+          d.addOption(e, STRINGS.ajustes.estiloDePrioridad.opciones[e]);
+        }
+        d.setValue(this.plugin.settings.estiloDePrioridad).onChange(async (v) => {
+          this.plugin.settings.estiloDePrioridad = sanearEstilo(v);
+          await this.plugin.guardar();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.indicadorGlifo.nombre)
+      .setDesc(STRINGS.ajustes.indicadorGlifo.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.indicadorGlifo).onChange(async (v) => {
+          this.plugin.settings.indicadorGlifo = v;
+          await this.plugin.guardar();
+        }),
+      );
 
     // Andamiaje de verificación (patrón `designFlags.ts` de Anotaciones): se
     // enciende para probar, no reemplaza nada, y apagado no cambia nada.
