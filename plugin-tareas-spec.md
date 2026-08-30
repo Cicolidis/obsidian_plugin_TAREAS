@@ -442,10 +442,14 @@ tipo: reglas que preguntaban lo que estaba a mano en vez de lo que importa.
   solo funcionara en la tarea vacía era arbitrario. El borrado que cruza líneas
   sigue sin convertir: ahí unir es unir.
 
-Y una consecuencia que se ve al usarlo: **una tarea convertida en bullet muestra
-su token**. Es la decisión de que se oculta solo lo que el plugin gestiona
-(`decorar.ts`), y acá funciona como señal: esos metadatos quedaron huérfanos, y
-verlos es lo que permite borrarlos.
+Y una que se decidió probándola: **al convertir una tarea en bullet, el token se
+borra con el checkbox.** La primera versión lo dejaba a la vista —el plugin
+oculta solo lo que gestiona, así que un bullet sin checkbox muestra sus
+metadatos— con el argumento de que verlos es lo que permite borrarlos. Usándolo
+resultó que la señal no sirve para nada: con un token huérfano lo único que se
+puede hacer es borrarlo a mano. Es la misma política que al unir dos tareas con
+token, y se pierde menos de lo que parece: esto pasa **en el editor**, así que
+Ctrl-Z lo devuelve entero, que es justo lo que no pasa con `vault.process`.
 
 **11. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`

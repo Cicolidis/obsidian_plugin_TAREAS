@@ -8,6 +8,7 @@ import {
   type Text,
   type TransactionSpec,
 } from "@codemirror/state";
+import { inicioDelTramo } from "../hiddenTail.js";
 import {
   CHECKBOX_PENDIENTE,
   columnaDelCheckbox,
@@ -23,7 +24,7 @@ import {
  * | Gesto | Antes | Después |
  * |---|---|---|
  * | Enter al final de `- 1A` | nace `- ` | nace `- [ ] ` |
- * | Backspace al comienzo del texto de una tarea | borra `]`, de a un carácter | queda `- texto` |
+ * | Backspace al comienzo del texto de una tarea | borra `]`, de a un carácter | queda `- texto`, sin el token |
  *
  * ## Por qué un `transactionFilter` y no un keymap
  *
@@ -304,8 +305,24 @@ function quitarCheckbox(doc: Text, fromA: number, toA: number): Arreglo | null {
   }
 
   const desde = linea.from + columnaDelCheckbox(b);
-  return {
-    changes: [{ from: desde, to: desde + b.checkbox.length, insert: "" }],
-    cursor: desde,
-  };
+  const changes: ChangeSpec[] = [{ from: desde, to: desde + b.checkbox.length, insert: "" }];
+
+  // **El token se va con el checkbox.**
+  //
+  // Sin esto, la línea queda como bullet y con sus metadatos a la vista: el
+  // plugin oculta solo lo que gestiona (`decorar.ts`), y un bullet sin checkbox
+  // no está en el índice. Verlos era la señal de que quedaron huérfanos, pero
+  // probándolo resultó que la señal no sirve para nada: lo único que se puede
+  // hacer con un token huérfano es borrarlo a mano.
+  //
+  // Es la misma política que al unir dos tareas con token (D-B): el que deja de
+  // corresponder a una tarea se limpia. Y acá se pierde menos de lo que parece
+  // — esto pasa **en el editor**, no por `vault.process`, así que Ctrl-Z lo
+  // devuelve entero, que es justo lo que no pasa con las escrituras del plugin.
+  const inicio = inicioDelTramo(linea.text);
+  if (inicio < linea.text.length) {
+    changes.push({ from: linea.from + inicio, to: linea.to, insert: "" });
+  }
+
+  return { changes, cursor: desde };
 }

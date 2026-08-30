@@ -219,6 +219,27 @@ describe("regla B: también con texto escrito", () => {
     expect(borrarEnElComienzo("- [ ] llamar a la escuela")).toBe("- llamar a la escuela");
   });
 
+  /**
+   * El token se va con el checkbox.
+   *
+   * Pedido después de probar las dos formas: dejarlo a la vista señalaba que
+   * quedó huérfano, pero con un token huérfano lo único que se puede hacer es
+   * borrarlo a mano. Es la misma política que al unir dos tareas con token.
+   *
+   * Y se pierde menos de lo que parece: esto pasa en el editor, no por
+   * `vault.process`, así que Ctrl-Z lo devuelve entero.
+   */
+  it("el token se va junto con el checkbox", () => {
+    expect(borrarEnElComienzo("- [ ] llamar %%t:id=a3f2;wb=foco%%")).toBe("- llamar");
+    expect(borrarEnElComienzo("\t- [x] hecha %%t:p=2%%")).toBe("\t- hecha");
+  });
+
+  // Un token que no parsea no es tramo oculto y no se toca: §5.3, nunca reparar
+  // a ciegas. Se ve, y por eso se puede arreglar.
+  it("un token roto se queda donde está", () => {
+    expect(borrarEnElComienzo("- [ ] llamar %%t:id=ABCD%%")).toBe("- llamar %%t:id=ABCD%%");
+  });
+
   it("con sangría, con `[x]` y con lista numerada también", () => {
     expect(borrarEnElComienzo("\t\t- [ ] hija")).toBe("\t\t- hija");
     expect(borrarEnElComienzo("- [x] hecha")).toBe("- hecha");
