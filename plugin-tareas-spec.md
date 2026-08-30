@@ -427,7 +427,27 @@ resuelve con `bias 0`, y con el rango atómico llegando hasta el salto, el final
 de la línea queda a un carácter del borde de abajo. Es el precio de que la flecha
 cruce de un teclazo, y se paga corrigiendo el clic, no achicando el rango.
 
-**10. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
+**10. Tres correcciones de la tercera vuelta**, 25/08/2026, y las tres del mismo
+tipo: reglas que preguntaban lo que estaba a mano en vez de lo que importa.
+
+- **Para saber si bajar la prioridad sirve de algo hay que mirar qué queda
+  después, no de dónde viene lo de ahora.** Una hija con `p=1` propio adentro de
+  un bloque `p=2` tiene prioridad propia, y bajarla igual la deja heredando rojo.
+- **La unión limpia no puede pedir que la línea de abajo sea un ítem de lista.**
+  Hay dos casos reales donde no lo es —texto suelto, y una tarea a la que ya le
+  borraron el checkbox antes de unir, que es lo que pasa con `stickCursor`— y en
+  los dos falta el espacio igual. La de **arriba** sí tiene que serlo: es la que
+  sobrevive.
+- **Borrar el checkbox convierte la tarea en bullet aunque tenga texto.** Que
+  solo funcionara en la tarea vacía era arbitrario. El borrado que cruza líneas
+  sigue sin convertir: ahí unir es unir.
+
+Y una consecuencia que se ve al usarlo: **una tarea convertida en bullet muestra
+su token**. Es la decisión de que se oculta solo lo que el plugin gestiona
+(`decorar.ts`), y acá funciona como señal: esos metadatos quedaron huérfanos, y
+verlos es lo que permite borrarlos.
+
+**11. La predicción de arriba solo discrimina con bastantes tokens.** Medido el
 25/08/2026: las siete notas reales tienen **0 tokens**, y `tareas_PRUEBA.md`
 tiene **13 en 435 líneas**. Trece líneas que se acortan unos 40 caracteres es un
 efecto del orden del ruido sobre el mapa de alturas; comparar contra la base con
