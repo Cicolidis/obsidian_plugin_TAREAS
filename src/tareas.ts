@@ -15,7 +15,7 @@ import {
   type Nodo,
 } from "./documento.js";
 import { estadoDe, type Heading } from "./linea.js";
-import { parseTaskToken, type TaskMeta } from "./token.js";
+import { parseTaskToken, type Prioridad, type TaskMeta } from "./token.js";
 
 export interface Task {
   /** El `id` del token. `null` hasta que la tarea entra a un workbench (§5.4). */
@@ -228,6 +228,46 @@ export function subarbolDe(tareas: readonly Task[], clave: Clave): Task[] {
   };
   visitar(clave);
   return salida;
+}
+
+/**
+ * El nivel de prioridad que **se ve** en esta tarea, y si es suyo o lo hereda.
+ *
+ * La §14 dice que el color pinta la línea de la tarea y que los hijos llevan
+ * una marca del mismo color: o sea que una hija sin `p=` propio igual **se ve**
+ * con la prioridad de su madre. Eso abre una grieta que encontró el uso: los
+ * comandos actuaban sobre la prioridad propia —que es 0— así que subirle la
+ * prioridad a una hija que heredaba «muy alta» la dejaba en «alta», y parecía
+ * que había bajado.
+ *
+ * Gana la propia sobre la heredada, y la ancestra más cercana sobre las de más
+ * arriba: es la misma regla que dibuja `decorar.ts`, y tiene que ser la misma o
+ * el comando y el color dirían cosas distintas.
+ *
+ * Una tarea con el token ilegible cuenta como prioridad 0 y **no corta la
+ * herencia**: no se le pudo leer nada, no que se le haya leído un cero.
+ */
+export function prioridadEfectiva(
+  tareas: readonly Task[],
+  clave: Clave,
+): { nivel: Prioridad; heredada: boolean } {
+  const indice = porClave(tareas);
+  const propia = indice.get(clave);
+  if (!propia) return { nivel: 0, heredada: false };
+  if (propia.prioridad !== 0) return { nivel: propia.prioridad, heredada: false };
+
+  const vistas = new Set<Clave>([clave]);
+  for (let c = propia.padre; c !== null; ) {
+    // Un ciclo no puede pasar —`padre` sale de un árbol— pero un índice
+    // corrupto no tiene por qué colgar la aplicación.
+    if (vistas.has(c)) break;
+    vistas.add(c);
+    const t = indice.get(c);
+    if (!t) break;
+    if (t.prioridad !== 0) return { nivel: t.prioridad, heredada: true };
+    c = t.padre;
+  }
+  return { nivel: 0, heredada: false };
 }
 
 /**

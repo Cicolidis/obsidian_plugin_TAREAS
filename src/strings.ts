@@ -126,6 +126,14 @@ export const STRINGS = {
      * que no pasa nada. Decirlo evita que parezca que el comando no anda.
      */
     prioridadEnElTope: (nombre: string) => `La prioridad ya está en ${nombre}.`,
+    /**
+     * El límite del modelo, dicho. La prioridad normal no escribe campo (§5.2)
+     * y sin campo la hija vuelve a heredar, así que no hay forma de bajarla sin
+     * bajar la de la madre. Decirlo es mejor que un comando que no hace nada.
+     */
+    prioridadHeredada:
+      "Esta tarea hereda la prioridad de su tarea madre, así que no se puede bajar sola. " +
+      "Bajale la prioridad a la madre, o subile la de esta para que tenga la suya.",
     ilegibles: (n: number) =>
       `${n === 1 ? "1 línea tiene" : `${n} líneas tienen`} el token ilegible y no se ` +
       "tocaron. Hay que arreglarlas a mano.",

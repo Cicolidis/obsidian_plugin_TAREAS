@@ -340,6 +340,46 @@ describe("cambios adentro del tramo", () => {
   });
 });
 
+// ------------------------------------------------ el guardia de `userEvent`
+
+describe("un cambio externo no se corrige nunca", () => {
+  /**
+   * Obsidian empuja los cambios de disco como un diff mínimo con
+   * `userEvent: "set"` —leído en `setViewData` del asar 1.13.7—. Eso es un
+   * documento ya consistente que viene de afuera: del propio plugin o de Sync.
+   *
+   * Sin este guardia, la escritura del plugin volvía al editor como una
+   * inserción adentro del token y el filtro la sacaba afuera: la prioridad no
+   * se escribía nunca. La detección de defectos ya lo deja pasar, pero eso es
+   * acertar; esto es no tener el camino.
+   */
+  const externa = (doc: string, cambio: ChangeSpec) =>
+    solo(doc).update({ changes: cambio, userEvent: "set" }).state.doc.toString();
+
+  it("el diff que escribe la prioridad pasa intacto", () => {
+    const antes = `- [ ] llamar ${TOKEN}`;
+    const cierre = antes.lastIndexOf("%%");
+    expect(externa(antes, { from: cierre, to: cierre, insert: ";p=1" })).toBe(
+      "- [ ] llamar %%t:id=a3f2;wb=foco;p=1%%",
+    );
+  });
+
+  it("y también uno que parecería defectuoso", () => {
+    // Una unión que dejaría dos tokens en la línea: con un gesto se corregiría,
+    // pero si viene de afuera es el estado que otro dispositivo ya decidió.
+    const doc = `- [ ] arriba ${TOKEN}\n- [ ] abajo ${OTRO}`;
+    const salida = externa(doc, { from: doc.indexOf("\n"), to: doc.indexOf("\n") + 1, insert: "" });
+    expect(salida).toBe(`- [ ] arriba ${TOKEN}- [ ] abajo ${OTRO}`);
+  });
+
+  it("pero el mismo cambio tecleado sí se corrige", () => {
+    const doc = `- [ ] arriba ${TOKEN}\n- [ ] abajo ${OTRO}`;
+    const st = solo(doc);
+    const salida = texto(st, { from: doc.indexOf("\n"), to: doc.indexOf("\n") + 1, insert: "" });
+    expect(salida.match(/%%t:/g)).toHaveLength(1);
+  });
+});
+
 // --------------------------------------------------------- el guardia §5.3
 
 describe("una línea que no se entiende no se toca", () => {

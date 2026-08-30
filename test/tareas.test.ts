@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseDocumento } from "../src/documento.js";
-import { claveDe, idsACompletar, idsADestildar, indexar, subarbolDe } from "../src/tareas.js";
+import {
+  claveDe,
+  idsACompletar,
+  idsADestildar,
+  indexar,
+  prioridadEfectiva,
+  subarbolDe,
+} from "../src/tareas.js";
 import { fixture } from "./fixtures.js";
 
 const indexarTexto = (raw: string, archivo = "n.md") => indexar(parseDocumento(raw), archivo);
@@ -150,5 +157,60 @@ describe("árboles (§9)", () => {
     const madre = tareas.find((t) => t.texto === "raíz")!;
     const clave = claveDe("n.md", madre.linea);
     expect(idsADestildar(tareas, clave)).toEqual([clave]);
+  });
+});
+
+describe("prioridadEfectiva — el nivel que se ve", () => {
+  const efectiva = (raw: string, linea: number) =>
+    prioridadEfectiva(indexarTexto(raw), claveDe("n.md", linea));
+
+  const ARBOL = [
+    "- [ ] madre %%t:p=2%%",
+    "\t- [ ] hija",
+    "\t\t- [ ] nieta",
+    "\t- [ ] hija con la suya %%t:p=1%%",
+    "\t\t- [ ] nieta de esa",
+    "- [ ] ajena",
+  ].join("\n");
+
+  it("la propia gana, y no se marca como heredada", () => {
+    expect(efectiva(ARBOL, 0)).toEqual({ nivel: 2, heredada: false });
+    expect(efectiva(ARBOL, 3)).toEqual({ nivel: 1, heredada: false });
+  });
+
+  it("la hija hereda de la madre", () => {
+    expect(efectiva(ARBOL, 1)).toEqual({ nivel: 2, heredada: true });
+  });
+
+  it("la herencia baja más de un nivel", () => {
+    expect(efectiva(ARBOL, 2)).toEqual({ nivel: 2, heredada: true });
+  });
+
+  // La misma regla que dibuja `decorar.ts`: si el comando y el color no usaran
+  // la misma, dirían cosas distintas sobre la misma línea.
+  it("gana la ancestra más cercana", () => {
+    expect(efectiva(ARBOL, 4)).toEqual({ nivel: 1, heredada: true });
+  });
+
+  it("sin nadie arriba con prioridad, es normal", () => {
+    expect(efectiva(ARBOL, 5)).toEqual({ nivel: 0, heredada: false });
+  });
+
+  it("una clave que no existe no rompe", () => {
+    expect(prioridadEfectiva(indexarTexto(ARBOL), claveDe("n.md", 99))).toEqual({
+      nivel: 0,
+      heredada: false,
+    });
+  });
+
+  // No se le pudo leer nada, no que se le haya leído un cero.
+  it("una madre con el token ilegible no corta la herencia", () => {
+    const raw = [
+      "- [ ] abuela %%t:p=1%%",
+      "\t- [ ] madre rota %%t:p=2;id=A3F2%%",
+      "\t\t- [ ] hija",
+    ].join("\n");
+    expect(efectiva(raw, 1)).toEqual({ nivel: 1, heredada: true });
+    expect(efectiva(raw, 2)).toEqual({ nivel: 1, heredada: true });
   });
 });

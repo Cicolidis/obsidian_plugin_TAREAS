@@ -36,7 +36,7 @@ import type { Prioridad } from "./token.js";
 import type { CambioDeLinea } from "./documento.js";
 import type { StoreDeTareas } from "./store.js";
 import { STRINGS } from "./strings.js";
-import type { Clave } from "./tareas.js";
+import { prioridadEfectiva, type Clave } from "./tareas.js";
 import { escribir, type ResultadoDeEscritura } from "./vault/escribir.js";
 
 /** Hoy, en `AAAA-MM-DD` y en hora local. */
@@ -152,10 +152,24 @@ function moverPrioridad(
   const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
   if (!ctx) return;
 
-  const actual = dep.store.buscar(ctx.archivo, ctx.clave)?.prioridad ?? 0;
-  const nueva = mover(actual);
-  if (nueva === actual) {
-    new Notice(STRINGS.avisos.prioridadEnElTope(STRINGS.prioridades[actual]));
+  // Se parte del nivel que **se ve**, no del propio: una hija sin `p=` se dibuja
+  // con la prioridad de su madre, y actuar sobre el 0 hacía que subirle la
+  // prioridad a una hija que heredaba «muy alta» la dejara en «alta».
+  const tareas = dep.store.tareasDe(ctx.archivo);
+  const { nivel, heredada } = prioridadEfectiva(tareas, ctx.clave);
+  const nueva = mover(nivel);
+
+  if (nueva === nivel) {
+    new Notice(STRINGS.avisos.prioridadEnElTope(STRINGS.prioridades[nivel]));
+    return;
+  }
+  // El agujero del modelo, dicho en vez de tapado: escribir «normal» no escribe
+  // ningún campo (§5.2), y sin campo la hija vuelve a heredar. O sea que no hay
+  // forma de declararla normal adentro de un bloque urgente sin un `p=0`
+  // explícito, que cambiaría el formato del token. Callarlo sería un comando
+  // que no hace nada.
+  if (nueva === 0 && heredada) {
+    new Notice(STRINGS.avisos.prioridadHeredada, 8000);
     return;
   }
 
@@ -163,7 +177,7 @@ function moverPrioridad(
     dep.app,
     dep.store,
     ctx.archivo,
-    planDePrioridad(dep.store.documento(ctx.archivo)!, dep.store.tareasDe(ctx.archivo), ctx.clave, nueva),
+    planDePrioridad(dep.store.documento(ctx.archivo)!, tareas, ctx.clave, nueva),
     () => STRINGS.avisos.prioridad(STRINGS.prioridades[nueva]),
   );
 }

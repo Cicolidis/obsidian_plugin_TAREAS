@@ -97,6 +97,22 @@ import { parseBullet } from "../linea.js";
 export function protegerTramo(activo: (state: EditorState) => boolean): Extension {
   return EditorState.transactionFilter.of((tr) => {
     if (!tr.docChanged) return tr;
+    // Obsidian empuja los cambios externos —lo que este plugin acaba de escribir
+    // en el disco, y lo que llega por Sync— como un **diff mínimo** con
+    // `userEvent: "set"`. Leído en `MarkdownView.setViewData` → el modo de
+    // edición, rama `clear = false`, del asar 1.13.7 instalado:
+    //
+    //     n.dispatch({ changes: {…}, userEvent: "set" })
+    //
+    // Eso nunca es el gesto de nadie: es un documento ya consistente que viene
+    // de afuera. Corregirlo siempre está mal, y ahí estaba el bug de la
+    // prioridad: el diff de `…;wb=foco%%` → `…;wb=foco;p=1%%` es una inserción
+    // adentro del token, y el filtro la confundía con alguien tecleando.
+    //
+    // Va **antes** que la detección de defectos y no en vez de ella: aquella
+    // sigue haciendo falta para los gestos de verdad. Esto le saca al filtro un
+    // camino entero por el que nunca tendría que haber pasado.
+    if (tr.isUserEvent("set")) return tr;
     if (!activo(tr.startState)) return tr;
     return corregirCambios(tr);
   });

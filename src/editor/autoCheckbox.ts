@@ -91,6 +91,12 @@ export function checkboxAutomatico(activo: (state: EditorState) => boolean): Ext
       // Antes de mirar nada: esto corre en cada tecla de cada nota abierta.
       if (!activo(tr.startState)) return tr;
       if (!tr.docChanged) return defenderCursor(tr);
+      // Ver el mismo guardia en `protegerTramo.ts`: un cambio externo llega con
+      // `userEvent: "set"` y nunca hay que corregirlo. Acá no se conoce ningún
+      // caso en que un diff de Obsidian tenga la forma de un Enter, pero el
+      // costo de descartarlo es una comparación y el de acertar por casualidad
+      // es un checkbox que aparece en una línea que nadie tocó.
+      if (tr.isUserEvent("set")) return tr;
       return corregirCambios(tr);
     }),
   ];
