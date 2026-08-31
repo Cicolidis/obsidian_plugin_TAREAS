@@ -8,7 +8,8 @@
  * 1. La §8: quien escribe necesita **rangos**, no un archivo nuevo.
  * 2. **Confirmar antes.** El reinicio de un grupo son 23 líneas de un tirón en
  *    `tareas_MES`, medido, sobre un archivo en Sync, y `vault.process()` no
- *    pasa por el editor: Ctrl-Z no lo deshace. Para decir «vas a reiniciar 23
+ *    pasa por el editor: con la nota cerrada no hay nada que lo deshaga, y con
+ *    la nota abierta sí (§5.5 punto 15). Para decir «vas a reiniciar 23
  *    tareas» hay que tener el plan antes de aplicarlo.
  * 3. Cada `CambioDeLinea` lleva `antes`, así que **nada se escribe sin decir
  *    qué esperaba encontrar**. Es el invariante 10, y lo verifica `ubicar.ts`.

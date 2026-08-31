@@ -36,7 +36,7 @@
  * de un tirón sobre un archivo en Sync. Si una no se puede ubicar, **no se
  * escribe ninguna**: media operación aplicada deja el árbol en un estado que el
  * usuario no pidió y que ningún botón deshace —`vault.process()` no pasa por el
- * editor, así que Ctrl-Z tampoco—.
+ * editor, así que con la nota cerrada Ctrl-Z tampoco—.
  *
  * Todo acá es lógica pura y se prueba offline. Quien lo llama, adentro de
  * `vault.process()`, es `vault/escribir.ts`.

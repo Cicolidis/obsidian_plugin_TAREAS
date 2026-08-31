@@ -32,6 +32,11 @@ también para las escrituras del propio plugin, cuánto tarda, y la distancia en
 `modify` y `changed`— está `scripts/espia-eventos.js`, que se pega igual en la
 consola.
 
+Para saber **quién movió el cursor** —cuál transacción, con qué `userEvent`, y
+si traía una selección explícita— está `scripts/espia-cursor.js`, que se pega
+igual en la consola. Sirve para lo que los tests con filtros encadenados no
+pueden ver: Outliner interceptando la tecla, y lo que Obsidian despacha detrás.
+
 Para leer el CSS o el JS internos de Obsidian en vez de deducirlos, están los scripts de Anotaciones (`extraer-css-de-obsidian.mjs`).
 
 Hay además un **MCP conectado al Obsidian de esta máquina**. Sirve como tercer
@@ -114,6 +119,23 @@ en disco en las horas entre tomar el volcado de headings de Obsidian y correr el
 test. Todo instrumento que guarde una foto tiene que **detectar que quedó vieja y
 saltearse diciéndolo**, no fallar como si el código estuviera mal. Una alarma
 falsa que se repite es una alarma que se ignora.
+
+### Una hipótesis que no falla su test se revierte
+
+En la sesión 5 el cursor quedaba mal después de unir dos tareas y la explicación
+parecía obvia: un `transactionFilter` que devuelve un `TransactionSpec` reemplaza
+la transacción entera, así que `protegerTramo` estaría pisando la selección que
+puso `unirLimpio`. Se escribió el arreglo y **después** el test que tenía que
+exponerlo. Pasó con el arreglo y **también sin él**: con las cinco formas de
+unión, con token y sin token, el cursor cae siempre en la costura, y
+`protegerTramo` no deja ningún camino con `cursor: null`.
+
+El arreglo se revirtió. Un cambio sin un test que lo justifique es un cambio de
+comportamiento apoyado en un razonamiento, que es exactamente de donde salieron
+los tres bugs de ese módulo. Los tests quedaron, como **caracterización**: fijan
+dónde cae el cursor hoy. Y para lo que no se puede reproducir offline —Outliner
+interceptando la tecla— la respuesta es un instrumento, no una corrección a
+ciegas.
 
 ### Un test que expone el bug antes de arreglarlo
 

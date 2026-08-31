@@ -88,3 +88,26 @@ describe("las clases de cada estilo", () => {
     expect(new Set(CLASES_DE_ESTILO).size).toBe(CLASES_DE_ESTILO.length);
   });
 });
+
+describe("las clases de body", () => {
+  /**
+   * `barra-completa` es la barra con otra altura, no otro dibujo: enciende la
+   * misma clase base y una de más. Si algún día tuviera clase propia, la hoja
+   * de estilos tendría que repetir la paleta y la posición — y eso es lo que
+   * después diverge.
+   */
+  it("`barra-completa` se apoya en la barra", () => {
+    expect(clasesDelEstilo("barra-completa")).toEqual([
+      "tareas-estilo-barra",
+      "tareas-estilo-barra-completa",
+    ]);
+  });
+
+  it("todo estilo tiene al menos una clase, y todas están en CLASES_DE_ESTILO", () => {
+    for (const e of ESTILOS_DE_PRIORIDAD) {
+      const clases = clasesDelEstilo(e);
+      expect(clases.length).toBeGreaterThan(0);
+      for (const c of clases) expect(CLASES_DE_ESTILO).toContain(c);
+    }
+  });
+});

@@ -8,8 +8,43 @@
 import { NOTA_DE_LOG_POR_OMISION, NOTAS_POR_OMISION } from "./notas.js";
 
 /** Los tres estilos de la §14. Un solo lugar: los consumen los ajustes y el CSS. */
-export const ESTILOS_DE_PRIORIDAD = ["barra-checkbox", "barra", "checkbox", "fondo"] as const;
+export const ESTILOS_DE_PRIORIDAD = [
+  "barra-checkbox",
+  "barra",
+  "barra-completa",
+  "checkbox",
+  "fondo",
+] as const;
 export type EstiloDePrioridad = (typeof ESTILOS_DE_PRIORIDAD)[number];
+
+/**
+ * Dónde y cómo se dibuja la fila de botones.
+ *
+ * Cinco, y conviven: un diseño nuevo se prueba **encendiéndolo**, no tirando el
+ * anterior, y cómo se ve algo solo se puede juzgar mirándolo en Obsidian
+ * (patrón `designFlags.ts`).
+ *
+ * | | Dónde | Qué se ve |
+ * |---|---|---|
+ * | `derecha` | sobre el final de la línea | degradado hasta el fondo de la nota; el primero |
+ * | `derecha-plana` | ídem | sin fondo ni caja: cuatro íconos tenues |
+ * | `pastilla` | ídem | los cuatro adentro de una pastilla con borde: se lee como **un** control |
+ * | `margen` | **afuera** del texto, a la derecha | nunca tapa una palabra, y no depende del largo de la tarea |
+ * | `izquierda` | antes del checkbox, después del filete | columna fija: todas las filas alineadas, indentación aparte |
+ *
+ * `margen` e `izquierda` son las dos que **no pueden tapar texto**, que era la
+ * objeción de fondo al primero. Las dos cuestan margen de nota: si la ventana
+ * es angosta o «longitud de línea legible» está apagado, pueden quedar
+ * recortadas. Eso se mira, no se deduce.
+ */
+export const ESTILOS_DE_FILA = [
+  "derecha",
+  "derecha-plana",
+  "pastilla",
+  "margen",
+  "izquierda",
+] as const;
+export type EstiloDeFila = (typeof ESTILOS_DE_FILA)[number];
 
 /**
  * Cómo se revela la fila de botones (§13.0, §15 punto 1).
@@ -96,6 +131,8 @@ export interface TareasSettings {
   filaDeBotones: boolean;
   /** Cuándo se ve la fila. Ver `MODOS_DE_REVELACION`. */
   modoDeRevelacion: ModoDeRevelacion;
+  /** Dónde y cómo se dibuja. Ver `ESTILOS_DE_FILA`. */
+  estiloDeFila: EstiloDeFila;
   /**
    * Las decoraciones sobre la nota: token invisible y color de prioridad (§4a).
    *
@@ -217,6 +254,13 @@ export function sanearEstilo(valor: unknown): EstiloDePrioridad {
     : "barra-checkbox";
 }
 
+/** Un estilo de fila conocido, o el primero. Se lee de un `data.json` editable. */
+export function sanearEstiloDeFila(valor: unknown): EstiloDeFila {
+  return (ESTILOS_DE_FILA as readonly unknown[]).includes(valor)
+    ? (valor as EstiloDeFila)
+    : "derecha";
+}
+
 /** Un modo conocido y **ofrecido**, o `hover`. Ver `MODOS_DE_REVELACION`. */
 export function sanearRevelacion(valor: unknown): ModoDeRevelacion {
   return (MODOS_OFRECIDOS as readonly unknown[]).includes(valor)
@@ -233,6 +277,7 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   workbenchSecundario: "",
   filaDeBotones: true,
   modoDeRevelacion: "hover",
+  estiloDeFila: "derecha",
   decoracionesEnLaNota: true,
   estiloDePrioridad: "barra-checkbox",
   indicadorGlifo: false,
@@ -284,6 +329,7 @@ export function cargarSettings(saved: unknown): TareasSettings {
     workbenchSecundario: sanearWorkbenchOpcional(raw.workbenchSecundario),
     filaDeBotones: raw.filaDeBotones ?? DEFAULT_SETTINGS.filaDeBotones,
     modoDeRevelacion: sanearRevelacion(raw.modoDeRevelacion),
+    estiloDeFila: sanearEstiloDeFila(raw.estiloDeFila),
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,
     estiloDePrioridad: sanearEstilo(raw.estiloDePrioridad),
     indicadorGlifo: raw.indicadorGlifo ?? DEFAULT_SETTINGS.indicadorGlifo,

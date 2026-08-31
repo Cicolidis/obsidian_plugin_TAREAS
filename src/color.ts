@@ -67,9 +67,13 @@ export function bajar(p: Prioridad): Prioridad {
  * que existe: cada regla sigue mirando una sola clase.
  */
 export function clasesDelEstilo(estilo: EstiloDePrioridad): readonly string[] {
-  return estilo === "barra-checkbox"
-    ? ["tareas-estilo-barra", "tareas-estilo-checkbox"]
-    : [`tareas-estilo-${estilo}`];
+  if (estilo === "barra-checkbox") return ["tareas-estilo-barra", "tareas-estilo-checkbox"];
+  // `barra-completa` es la barra con otra altura, no otro dibujo: enciende la
+  // misma clase base y una de más. Así la hoja de estilos no repite la paleta
+  // ni la posición, que es lo que después diverge.
+  if (estilo === "barra-completa")
+    return ["tareas-estilo-barra", "tareas-estilo-barra-completa"];
+  return [`tareas-estilo-${estilo}`];
 }
 
 /** Todas las clases que este módulo puede poner, para poder sacarlas al salir. */

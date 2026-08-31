@@ -65,7 +65,7 @@ export type ResultadoDeEscritura =
  *
  * **O se aplican todos los cambios del lote o ninguno**: media operación deja el
  * árbol en un estado que el usuario no pidió, y `vault.process()` no pasa por el
- * editor, así que Ctrl-Z no lo deshace.
+ * editor, así que con la nota cerrada no hay nada que lo deshaga.
  */
 export async function escribir(
   app: App,

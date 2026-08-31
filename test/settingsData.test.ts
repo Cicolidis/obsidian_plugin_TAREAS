@@ -5,8 +5,10 @@ import {
   DEFAULT_SETTINGS,
   ESTILOS_DE_PRIORIDAD,
   FORMAT_VERSION,
+  ESTILOS_DE_FILA,
   MODOS_DE_REVELACION,
   sanearEstilo,
+  sanearEstiloDeFila,
   sanearNotas,
   sanearRevelacion,
   sanearWorkbenchOpcional,
@@ -129,5 +131,25 @@ describe("sanearRevelacion", () => {
     for (const basura of [null, undefined, 7, {}, "HOVER"]) {
       expect(sanearRevelacion(basura)).toBe("hover");
     }
+  });
+});
+
+describe("sanearEstiloDeFila", () => {
+  it("los cinco estilos pasan", () => {
+    for (const e of ESTILOS_DE_FILA) expect(sanearEstiloDeFila(e)).toBe(e);
+  });
+
+  it("cualquier otra cosa cae al primero", () => {
+    for (const basura of [null, undefined, 7, {}, "DERECHA", "abajo"]) {
+      expect(sanearEstiloDeFila(basura)).toBe("derecha");
+    }
+  });
+
+  // Los dos que no pueden tapar una palabra. Están acá para que sacarlos sea
+  // una decisión y no un descuido: son la respuesta a la objeción de fondo al
+  // primer diseño.
+  it("están los dos que viven afuera del texto", () => {
+    expect(ESTILOS_DE_FILA).toContain("margen");
+    expect(ESTILOS_DE_FILA).toContain("izquierda");
   });
 });

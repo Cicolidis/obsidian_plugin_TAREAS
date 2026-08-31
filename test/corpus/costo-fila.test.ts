@@ -17,9 +17,10 @@ import { notasReales, VAULT } from "./vault.js";
  * `ViewPlugin`: aquel necesita una vista de verdad y esto no. Es la razón por la
  * que las dos piezas están separadas.
  *
- * El viewport se simula con una ventana de líneas. No es el de Obsidian —que
- * depende del alto de la ventana y del zoom— pero está del lado generoso: con
- * la ventana angostada, que es la condición del bucle de la §5.5, entran menos.
+ * El viewport se simula con una ventana de líneas, y el número **está medido**,
+ * no elegido: la verificación de la sesión 5 informó desde la consola de
+ * Obsidian ventanas de **46 a 103 líneas** scrolleando la nota de prueba. Se usa
+ * el techo de eso, que es el caso caro.
  *
  * ## Por qué hay una pasada de calentamiento, y por qué eso no es adorno
  *
@@ -32,7 +33,7 @@ import { notasReales, VAULT } from "./vault.js";
  * pasaba igual. Es el §«mirar la salida» del método: un instrumento que informa
  * un número que no es el que dice medir es peor que no medir.
  */
-const LINEAS_VISIBLES = 40;
+const LINEAS_VISIBLES = 103;
 
 /** El techo del que hay que enterarse acá y no por un editor que se traba. */
 const TECHO_MS = 16;

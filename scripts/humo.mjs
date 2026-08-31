@@ -118,6 +118,15 @@ try {
     "tareas-boton",
     "tareas-revelar-hover",
     "tareas-revelar-siempre",
+    // Los cinco estilos de fila: si uno se cae del CSS, el ajuste sigue en el
+    // desplegable y la fila se queda sin posición, o sea pegada al comienzo de
+    // la línea encima del checkbox. Parece «la fila se rompió».
+    "tareas-fila-derecha",
+    "tareas-fila-derecha-plana",
+    "tareas-fila-pastilla",
+    "tareas-fila-margen",
+    "tareas-fila-izquierda",
+    "tareas-estilo-barra-completa",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
   }

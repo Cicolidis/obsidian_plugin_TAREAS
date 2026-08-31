@@ -185,3 +185,23 @@ export function claseDeRevelacion(modo: string): string {
 export const CLASES_DE_REVELACION: readonly string[] = ["hover", "siempre", "swipe"].map(
   claseDeRevelacion,
 );
+
+/**
+ * La clase de `body` de cada estilo de fila.
+ *
+ * Mismo mecanismo que el modo de revelación y que el estilo de prioridad: el
+ * widget dibuja siempre lo mismo y la hoja de estilos decide dónde queda.
+ * Cambiar de estilo no reconstruye ninguna decoración.
+ */
+export function claseDeFila(estilo: string): string {
+  return `tareas-fila-${estilo}`;
+}
+
+/** Todas las que este módulo puede poner, para poder sacarlas al salir. */
+export const CLASES_DE_FILA: readonly string[] = [
+  "derecha",
+  "derecha-plana",
+  "pastilla",
+  "margen",
+  "izquierda",
+].map(claseDeFila);

@@ -226,7 +226,10 @@ export function recorrer(nodos: readonly Nodo[]): Nodo[] {
  * También es lo que permite confirmar antes de una escritura grande —el reinicio
  * de un grupo cíclico son 23 líneas de un tirón, medido— porque para decir «vas a
  * reiniciar 23 tareas» hay que tener el plan antes de aplicarlo. Y hace falta:
- * `vault.process()` no pasa por el editor, así que Ctrl-Z no lo deshace.
+ * `vault.process()` no pasa por el editor. Con la nota **cerrada** eso significa
+ * que no hay nada que lo deshaga; con la nota abierta, la escritura vuelve como
+ * cambio externo y sí entra al historial del editor (spec §5.5 punto 15). O sea
+ * que a veces se deshace y a veces no, que es peor que nunca.
  */
 export interface CambioDeLinea {
   linea: number;

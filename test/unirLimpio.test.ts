@@ -174,3 +174,59 @@ describe("los tres filtros juntos", () => {
     expect(texto(st, { from: fin, to: fin, insert: "\n- " })).toBe(`${doc}\n- [ ] `);
   });
 });
+
+// --------------------------------------------------- dónde queda el cursor
+
+/**
+ * Dónde queda el cursor después de unir, con los tres filtros encadenados.
+ *
+ * Estos tests **no** salieron de un bug arreglado: salieron de uno **no
+ * reproducido**. La verificación de la sesión 5 reportó que el cursor queda
+ * «a veces al final de la línea unida y otras en medio de la línea que subió».
+ * La hipótesis era que `protegerTramo`, al devolver un `TransactionSpec`
+ * nuevo, pisaba la selección que había puesto `unirLimpio`. **Es falsa**, y
+ * esto es lo que la refutó: con las cinco formas de unión, con token y sin
+ * token, el cursor cae en la costura — y también con el supuesto arreglo
+ * quitado. `protegerTramo` no deja ningún camino con `cursor: null`.
+ *
+ * Así que quedan como **caracterización**: fijan dónde cae el cursor hoy con
+ * los tres filtros puestos, para que el día que alguien lo mueva se vea. Lo que
+ * pasa en Obsidian de verdad —con Outliner interceptando el Backspace y su
+ * propia transacción detrás— no está reproducido acá y se mide con el espía.
+ *
+ * La costura es el final del texto de arriba, antes del espacio agregado.
+ */
+describe("el cursor después de unir", () => {
+  const cursorTras = (st: EditorState, cambio: ChangeSpec) =>
+    st.update({ changes: cambio }).state.selection.main.head;
+
+  for (const [nombre, union] of Object.entries(UNIONES)) {
+    it(`sin token queda en la costura — ${nombre}`, () => {
+      const st = todos("- [ ] comprar\n- [ ] pan");
+      expect(cursorTras(st, union(st))).toBe("- [ ] comprar".length);
+    });
+
+    // Con token actúan **los dos** filtros, que era donde se sospechaba el
+    // problema. Cae en el mismo lugar.
+    it(`con token queda en la costura — ${nombre}`, () => {
+      const st = todos(`- [ ] comprar ${TOKEN}\n- [ ] pan`);
+      expect(cursorTras(st, union(st))).toBe("- [ ] comprar".length);
+    });
+
+    it(`con token en las dos queda en la costura — ${nombre}`, () => {
+      const st = todos(`- [ ] comprar ${TOKEN}\n- [ ] pan ${OTRO}`);
+      expect(cursorTras(st, union(st))).toBe("- [ ] comprar".length);
+    });
+  }
+
+  // Un cambio que los filtros **no** corrigen vuelve intacto, selección
+  // incluida: los filtros solo arman un spec nuevo cuando corrigen algo.
+  it("una edición común conserva su propia selección", () => {
+    const st = todos(`- [ ] comprar ${TOKEN}`);
+    const r = st.update({
+      changes: { from: 6, to: 6, insert: "X" },
+      selection: { anchor: 3 },
+    }).state;
+    expect(r.selection.main.head).toBe(3);
+  });
+});

@@ -535,6 +535,55 @@ el número de línea**. Si lo llevara, teclear en cualquier línea de más arrib
 reharía el DOM de todas las filas de abajo —se perdería el hover en el medio del
 gesto y se pagaría en cada tecla—. Las dos cosas son la misma decisión.
 
+### Lo que la primera verificación del paso 4b midió
+
+**31/08/2026.** Cuatro cosas, y una de ellas refuta algo que esta spec afirmaba.
+
+**15. `Ctrl-Z` sí deshace una escritura del plugin, si la nota está abierta.**
+La §8 y la §11 dicen lo contrario —«`vault.process()` no pasa por el editor, así
+que Ctrl-Z no lo deshace»— y se usó para justificar que el reinicio de un grupo
+cíclico pida confirmación. **Medido en el uso: lo deshace.** Lo que la
+afirmación no contemplaba es que la escritura vuelve al editor como un cambio
+externo (§5.5 punto 5) y **esa transacción entra al historial de deshacer del
+editor**; deshacerla revierte el buffer, que después se guarda solo.
+
+El límite, que es donde la afirmación original sigue valiendo: **solo con la
+nota abierta**, y solo mientras esa vista viva. Una escritura sobre una nota
+cerrada —que es lo que va a hacer la vista de workbenches del paso 5, y lo que
+hace el archivado del paso 6 sobre el LOG— no tiene ningún historial detrás.
+O sea que la confirmación de la §11 se justifica igual, pero por otra razón:
+**no porque nunca se pueda deshacer, sino porque a veces sí y a veces no**, y un
+mecanismo de rescate que depende de si la nota estaba abierta no es un mecanismo
+de rescate.
+
+**16. Un clic que cae en la fila y no en un botón manda el cursor al comienzo de
+la línea.** Reportado como falla errática y explicado leyendo
+`@codemirror/view` 6.38.6: `skipAtomsForSelection` solo corre desde
+`applyDOMChange` con `userEvent` `select.pointer`, o sea **cuando el navegador
+movió el caret y CodeMirror lo lee de vuelta**. El widget es una isla
+`contentEditable="false"` anclada en `line.from`; sin un `preventDefault` que lo
+ataje, el navegador pone el caret al lado de la isla y `posFromDOM` lo resuelve
+exactamente en `line.from` — donde Live Preview desarma el `- [ ] `. El
+`preventDefault` estaba en cada botón y no en la fila, así que el relleno y los
+huecos quedaban descubiertos. De ahí el «a veces».
+
+**17. El viewport real es de 46 a 103 líneas**, medido desde la consola
+scrolleando la nota de prueba. El test de costo usaba una ventana de 40 elegida
+a ojo; ahora usa 103, que es el caso caro. Con eso, construir la fila cuesta
+**0,097 ms** de mediana y 0,338 de p90 sobre `tareas_COLE` saturada, contra los
+0,65 ms de decorar el documento entero.
+
+**Y el instrumento en vivo no puede resolver eso:** `performance.now()` adentro
+de Obsidian viene redondeado a **0,1 ms**, así que todos los números de la
+consola son múltiplos de 0,1 y el costo de la fila cae bajo la resolución del
+reloj. La consola sirve para ver que no se dispara; para el número está el test.
+
+**18. La línea de base del ciclo de medición sigue sin reproducirse.** Tercera
+vez. Con la nota de prueba cargada de tokens, la ventana angostada, scrolleando
+en las dos direcciones y en las tres condiciones —fila + decoraciones, solo
+decoraciones, nada— **no aparece ni un `Measure loop restarted` ni un `Viewport
+failed to stabilize`**. Sigue sin poder evaluarse, y sigue sin ser verde.
+
 ---
 
 ## 6. Modelo de datos
@@ -661,8 +710,10 @@ Dos cosas medidas que dimensionan el riesgo:
   está medido. Con `save()` no hay fusión: la secuencia es lineal y cuesta 8 ms.
 
 **O se aplican todos los cambios de una acción o ninguno.** Media operación deja
-el árbol en un estado que el usuario no pidió, y `vault.process()` no pasa por el
-editor: Ctrl-Z no lo deshace.
+el árbol en un estado que el usuario no pidió, y con la nota **cerrada** no hay
+nada que lo deshaga. (Con la nota abierta sí: la escritura vuelve al editor y
+entra a su historial. Ver §5.5 punto 15 — a veces sí y a veces no, que es peor
+que nunca.)
 
 ---
 
@@ -768,9 +819,17 @@ la semanal trivial no llena el LOG y la mensual del alquiler deja rastro, sin
 decidirlo de antemano.
 
 **La confirmación es obligatoria.** Es la escritura más grande del plugin —23
-líneas de un tirón en `tareas_MES`, medido— sobre un archivo en Sync, y
-`vault.process()` no pasa por el editor, así que Ctrl-Z no la deshace. Tiene que
+líneas de un tirón en `tareas_MES`, medido— sobre un archivo en Sync. Tiene que
 decir cuántas tareas va a reiniciar y en qué nota.
+
+La razón **cambió** con lo que midió la primera verificación del paso 4b (§5.5
+punto 15). La versión anterior decía «`vault.process()` no pasa por el editor,
+así que Ctrl-Z no la deshace», y eso es falso cuando la nota está abierta: la
+escritura vuelve al editor como cambio externo y esa transacción entra al
+historial de deshacer. Con la nota **cerrada** —que es el caso del reinicio de un
+grupo que toca varias notas— no hay historial ninguno. O sea: **a veces se
+deshace y a veces no**, y un rescate que depende de si la nota estaba abierta no
+es un rescate. Eso justifica la confirmación mejor que la afirmación anterior.
 
 ### tareas_CÍCLICAS: sigue fuera de la v1, pero ya no es caro
 

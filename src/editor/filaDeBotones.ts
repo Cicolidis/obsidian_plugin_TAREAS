@@ -148,6 +148,32 @@ export class FilaWidget extends WidgetType {
     const ancla = document.createElement("span");
     ancla.className = "tareas-fila-ancla";
 
+    /**
+     * El `mousedown` se ataja en el **ancla**, no solo en cada botón.
+     *
+     * Reportado en la verificación de la sesión 5 como una falla errática: a
+     * veces, al asignar un workbench, el cursor saltaba al comienzo de la línea
+     * —antes del checkbox— y Live Preview desarmaba el `- [ ] `.
+     *
+     * Leído en `@codemirror/view` 6.38.6, no supuesto:
+     * `skipAtomsForSelection` solo corre desde `applyDOMChange` cuando el
+     * `userEvent` es `select.pointer`, o sea **cuando el navegador movió el
+     * caret y CodeMirror lo lee de vuelta**. El widget es una isla
+     * `contentEditable="false"` anclada en `line.from`; un clic que cae adentro
+     * de la fila **pero no en un botón** —el relleno de la izquierda, el hueco
+     * entre dos— no encontraba ningún `preventDefault`, el navegador ponía el
+     * caret al lado de la isla, y `posFromDOM` lo resuelve exactamente en
+     * `line.from`. De ahí el «a veces»: dependía de dónde cayera el clic.
+     *
+     * Con el guardia en el ancla no queda ningún píxel del widget sin cubrir.
+     * Los botones conservan el suyo igual: son dos capas y la de adentro es la
+     * que corre primero.
+     */
+    ancla.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
     const fila = document.createElement("span");
     fila.className = "tareas-fila";
     if (this.fila.ilegible) fila.classList.add("is-ilegible");

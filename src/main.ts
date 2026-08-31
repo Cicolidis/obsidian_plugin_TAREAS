@@ -11,7 +11,13 @@ import {
 import type { EditorView } from "@codemirror/view";
 import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
-import { CLASES_DE_REVELACION, claseDeRevelacion, type Favoritos } from "./botones.js";
+import {
+  CLASES_DE_FILA,
+  CLASES_DE_REVELACION,
+  claseDeFila,
+  claseDeRevelacion,
+  type Favoritos,
+} from "./botones.js";
 import { comandos } from "./comandos.js";
 import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
 import { filaDeBotones } from "./editor/filaDeBotones.js";
@@ -25,9 +31,11 @@ import { esNotaDeTareas, notasDeTrabajo, NOTAS_POR_OMISION } from "./notas.js";
 import {
   cargarSettings,
   DEFAULT_SETTINGS,
+  ESTILOS_DE_FILA,
   ESTILOS_DE_PRIORIDAD,
   MODOS_OFRECIDOS,
   sanearEstilo,
+  sanearEstiloDeFila,
   sanearNotas,
   sanearRevelacion,
   sanearWorkbench,
@@ -157,6 +165,7 @@ export default class TareasPlugin extends Plugin {
     // Las clases viven en `body` y no en el editor, así que no se van solas.
     for (const c of CLASES_DE_ESTILO) document.body.removeClass(c);
     for (const c of CLASES_DE_REVELACION) document.body.removeClass(c);
+    for (const c of CLASES_DE_FILA) document.body.removeClass(c);
     document.body.removeClass(CLASE_DE_GLIFO);
   }
 
@@ -177,6 +186,9 @@ export default class TareasPlugin extends Plugin {
     // lo mismo y la hoja de estilos decide si se ve (§15 punto 1).
     const modo = claseDeRevelacion(this.settings.modoDeRevelacion);
     for (const c of CLASES_DE_REVELACION) document.body.toggleClass(c, c === modo);
+
+    const donde = claseDeFila(this.settings.estiloDeFila);
+    for (const c of CLASES_DE_FILA) document.body.toggleClass(c, c === donde);
   }
 
   /**
@@ -386,6 +398,21 @@ class TareasSettingTab extends PluginSettingTab {
           await this.plugin.guardar();
         }),
       );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.estiloDeFila.nombre)
+      .setDesc(STRINGS.ajustes.estiloDeFila.descripcion)
+      .addDropdown((d) => {
+        // Los cinco conviven y se comparan **en Obsidian**, que es el único
+        // lugar donde se puede juzgar cómo se ve algo (patrón `designFlags.ts`).
+        for (const e of ESTILOS_DE_FILA) {
+          d.addOption(e, STRINGS.ajustes.estiloDeFila.opciones[e]);
+        }
+        d.setValue(this.plugin.settings.estiloDeFila).onChange(async (v) => {
+          this.plugin.settings.estiloDeFila = sanearEstiloDeFila(v);
+          await this.plugin.guardar();
+        });
+      });
 
     new Setting(containerEl)
       .setName(STRINGS.ajustes.modoDeRevelacion.nombre)

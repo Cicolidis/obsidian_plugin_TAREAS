@@ -44,6 +44,7 @@ export const STRINGS = {
       opciones: {
         "barra-checkbox": "Barra corta + checkbox coloreado",
         barra: "Barra corta en el margen (la altura dice el nivel)",
+        "barra-completa": "Barra que cubre toda la tarea (el ancho dice el nivel)",
         checkbox: "El checkbox de la tarea, coloreado",
         fondo: "Línea teñida con filete (el primero)",
       },
@@ -79,6 +80,20 @@ export const STRINGS = {
       descripcion:
         "★ y ◐ mandan al workbench de arriba, → los muestra todos, y ⋯ abre prioridad y " +
         "completar. No suma ancho al renglón ni cambia la altura de la línea.",
+    },
+    estiloDeFila: {
+      nombre: "Fila de botones: dónde va",
+      descripcion:
+        "Los cinco conviven y se comparan mirándolos. «En el margen» y «Antes del " +
+        "checkbox» son los dos que no pueden tapar una palabra, y los dos gastan margen " +
+        "de nota: si la ventana es angosta pueden quedar recortados.",
+      opciones: {
+        derecha: "Sobre el final de la línea, con degradado (el primero)",
+        "derecha-plana": "Sobre el final de la línea, sin fondo",
+        pastilla: "Sobre el final de la línea, en una pastilla",
+        margen: "En el margen derecho, afuera del texto",
+        izquierda: "Antes del checkbox, después del filete",
+      },
     },
     modoDeRevelacion: {
       nombre: "Fila de botones: cuándo se ve",

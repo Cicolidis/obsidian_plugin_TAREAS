@@ -105,6 +105,21 @@
  * zona, incluso en las tareas que nacen en el borde de la nota, que eran las que
  * se pisaban.
  */
+/*
+ * **La barra se ancla al primer renglón, no al centro de la línea.**
+ *
+ * La primera versión hacía `top: 50%; transform: translateY(-50%)`, y eso
+ * centra sobre **todos** los renglones de la línea: una tarea que envuelve en
+ * dos deja la marca a medio camino entre los dos, lejos del checkbox. Reportado
+ * en la verificación de la sesión 5.
+ *
+ * El arreglo: el pseudo-elemento mide exactamente **un renglón** —anclado
+ * arriba— y la barra se pinta **centrada adentro de él** con `background-size`.
+ * Así el nivel se sigue leyendo por la altura, la marca queda siempre al lado
+ * del checkbox, y no hay ningún cálculo que dependa de cuántos renglones ocupa
+ * la tarea. `--line-height-normal` es de Obsidian; el 1.5 es la salida si un
+ * tema la saca.
+ */
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p1::before,
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before,
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
@@ -112,30 +127,56 @@ body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::
 	content: "";
 	position: absolute;
 	left: calc(-1 * var(--tareas-barra-x, 1.9rem));
-	top: 50%;
-	transform: translateY(-50%);
+	top: 0;
+	height: calc(var(--line-height-normal, 1.5) * 1em);
 	width: 3px;
+	background-color: transparent;
+	background-image: linear-gradient(var(--tareas-color), var(--tareas-color));
+	background-repeat: no-repeat;
+	background-position: center;
 	border-radius: 2px;
-	background-color: var(--tareas-color);
 }
 
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p1::before {
-	height: 0.5em;
+	background-size: 3px 0.5em;
 }
 
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
-	height: 1.05em;
+	background-size: 3px 1.05em;
+}
+
+/* La variante que cubre la tarea entera, para comparar mirándola: acá el nivel
+   se lee por el **ancho** y por la textura, porque la altura ya no está libre.
+   Sirve justamente para las tareas que ocupan dos o tres renglones. */
+body.tareas-estilo-barra-completa .markdown-source-view.mod-cm6 .cm-line.tareas-p1::before,
+body.tareas-estilo-barra-completa .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
+	top: 0;
+	bottom: 0;
+	height: auto;
+	background-size: 100% 100%;
+}
+
+body.tareas-estilo-barra-completa .markdown-source-view.mod-cm6 .cm-line.tareas-p2::before {
+	width: 5px;
+	background-image: repeating-linear-gradient(
+		to bottom,
+		var(--tareas-color) 0 4px,
+		transparent 4px 7px
+	);
 }
 
 /* Los hijos: una hairline tenue, para que el bloque se lea como uno sin que la
    marca del subárbol compite con la de la tarea. */
+/* Los hijos: una hairline tenue que sí cubre todos sus renglones — el bloque
+   tiene que leerse como uno solo, y ahí no hay ningún nivel que codificar con
+   la altura. */
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p1::before,
 body.tareas-estilo-barra .markdown-source-view.mod-cm6 .cm-line.tareas-hija-p2::before {
 	top: 0;
 	bottom: 0;
 	height: auto;
-	transform: none;
 	width: 1px;
+	background-size: 100% 100%;
 	border-radius: 0;
 	opacity: 0.35;
 }
@@ -270,23 +311,125 @@ body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
 	display: inline;
 }
 
+/* Que el navegador no intente poner el caret adentro del widget.
+   Es la mitad en CSS del guardia de `mousedown`: la isla es
+   `contentEditable="false"` y está anclada en `line.from`, así que un caret que
+   caiga «al lado» resuelve al comienzo de la línea y Live Preview desarma el
+   checkbox. Reportado en la sesión 5 como una falla errática. */
+.markdown-source-view.mod-cm6 .tareas-fila-ancla,
+.markdown-source-view.mod-cm6 .tareas-fila {
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+/*
+ * Lo común a los cinco estilos. **Dónde** queda lo decide el bloque de más
+ * abajo, según la clase de `body`.
+ *
+ * `top: 0` con la altura de **un** renglón: una tarea que envuelve en dos deja
+ * los botones arriba, al lado del checkbox, y no flotando en el medio. Es la
+ * misma corrección que la del filete.
+ */
 .markdown-source-view.mod-cm6 .tareas-fila {
 	position: absolute;
-	right: 0;
 	top: 0;
 	height: calc(var(--line-height-normal, 1.5) * 1em);
 	display: flex;
 	align-items: center;
 	gap: 1px;
-	/* Sobre el texto, no debajo: la tarea puede llegar hasta el borde. El
-	   degradado deja que se lea de dónde a dónde va la fila sin una caja dura. */
 	z-index: 3;
+}
+
+/* --- 1. `derecha`: sobre el final de la línea, con degradado -------------- */
+/*
+ * El primero. Se apoya sobre el texto —la tarea puede llegar hasta el borde— y
+ * el degradado deja leer de dónde a dónde va la fila sin dibujar una caja.
+ */
+body.tareas-fila-derecha .markdown-source-view.mod-cm6 .tareas-fila {
+	right: 0;
 	padding-inline-start: 16px;
 	background: linear-gradient(
 		to right,
 		transparent 0,
 		var(--background-primary) 16px
 	);
+}
+
+/* --- 2. `derecha-plana`: los mismos íconos, sin caja --------------------- */
+/*
+ * Sin fondo y sin degradado: cuatro íconos y nada más. Tapa el texto que haya
+ * debajo, y esa es justamente la pregunta que hay que mirar — si con la fila
+ * apareciendo solo en hover eso molesta o no se nota.
+ */
+body.tareas-fila-derecha-plana .markdown-source-view.mod-cm6 .tareas-fila {
+	right: 0;
+	background: none;
+}
+
+body.tareas-fila-derecha-plana .markdown-source-view.mod-cm6 .tareas-boton {
+	width: 18px;
+	height: 18px;
+}
+
+body.tareas-fila-derecha-plana .markdown-source-view.mod-cm6 .tareas-boton .svg-icon {
+	width: 13px;
+	height: 13px;
+}
+
+/* --- 3. `pastilla`: los cuatro adentro de un control --------------------- */
+/*
+ * La diferencia no es de adorno: con borde y fondo propio los cuatro botones se
+ * leen como **un** control con cuatro partes, en vez de cuatro íconos sueltos
+ * flotando sobre el texto. Cuesta unos píxeles de alto, así que la pastilla se
+ * dibuja **más chica que el renglón** para no rozar la línea de arriba.
+ */
+body.tareas-fila-pastilla .markdown-source-view.mod-cm6 .tareas-fila {
+	right: 0;
+	gap: 0;
+	padding: 0 2px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+	box-shadow: var(--shadow-s);
+	height: calc(var(--line-height-normal, 1.5) * 1em - 2px);
+	top: 1px;
+}
+
+body.tareas-fila-pastilla .markdown-source-view.mod-cm6 .tareas-boton {
+	border-radius: var(--radius-s);
+}
+
+/* --- 4. `margen`: afuera del texto -------------------------------------- */
+/*
+ * **No puede tapar una palabra**, que era la objeción de fondo al primero: la
+ * fila vive fuera de la caja de la línea. El precio es margen de nota — con la
+ * ventana angosta, o con «longitud de línea legible» apagada, puede quedar
+ * recortada—. Eso se mira; no se deduce.
+ */
+body.tareas-fila-margen .markdown-source-view.mod-cm6 .tareas-fila {
+	left: calc(100% + 0.4rem);
+	right: auto;
+	background: none;
+}
+
+/* --- 5. `izquierda`: antes del checkbox, después del filete -------------- */
+/*
+ * Los botones quedan en una **columna fija** a la izquierda de todo, así que
+ * están siempre en el mismo lugar sin importar el largo de la tarea ni su
+ * indentación: `.cm-line` ocupa el ancho entero y la sangría es texto adentro.
+ *
+ * El filete se corre para no quedar debajo: la fila mide unos 5,2rem con cuatro
+ * botones, así que `--tareas-barra-x` pasa a 6rem mientras este estilo está
+ * encendido. Es lo que pide que los dos indicadores no se superpongan.
+ */
+body.tareas-fila-izquierda .markdown-source-view.mod-cm6 {
+	--tareas-barra-x: 6rem;
+}
+
+body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
+	right: calc(100% + 0.35rem);
+	left: auto;
+	background: none;
 }
 
 .markdown-source-view.mod-cm6 .tareas-boton {
