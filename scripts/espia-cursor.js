@@ -125,13 +125,23 @@
       // Solo lo que importa: transacciones que mueven el cursor o cambian el doc.
       if (!salto && cambio === 0) return r;
 
+      // **`%s` y no una plantilla suelta.** La consola de Chrome —que es la de
+      // Obsidian— trata el primer argumento como cadena de formato aunque sea
+      // el único, y ahí `%%` es el escape de un `%` literal: el token
+      // `%%t:id=…%%` salía impreso como `%t:id=…%`. O sea que el instrumento
+      // mentía sobre lo único que este plugin escribe.
+      //
+      // Node **no** lo reproduce —con un solo argumento devuelve la cadena tal
+      // cual— así que probarlo en la terminal no sirve. Apareció leyendo la
+      // salida que volvió de la segunda vuelta de verificación.
       console.log(
+        "%s",
         `#${++n} ${donde(antes, posAntes)} → ${donde(despues, posDespues)}` +
           `${explicita ? "  ← selección explícita" : ""}` +
           `  · doc ${cambio >= 0 ? "+" : ""}${cambio}` +
           `  · ${userEvent(args[0])}`,
       );
-      console.log(`     «${contexto(despues, posDespues)}»`);
+      console.log("%s", `     «${contexto(despues, posDespues)}»`);
     } catch (err) {
       console.warn("[espia-cursor] no se pudo loguear:", err);
     }

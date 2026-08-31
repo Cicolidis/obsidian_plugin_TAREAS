@@ -475,6 +475,54 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	cursor: help;
 }
 
+/* --- 6. `columna`: el margen izquierdo, en pastilla ---------------------- */
+/*
+ * La propuesta de la segunda vuelta. De izquierda a derecha:
+ *
+ *   número de línea · **botones** · filete · plegado · checkbox
+ *
+ * El filete se queda en 1.9rem y el plegado donde lo pone Obsidian (1.3rem
+ * adentro de la línea, `--list-bullet-end-padding`), así que la fila arranca
+ * más afuera que los dos: `right: calc(100% + 2.4rem)`.
+ *
+ * ## Los botones activos se ven siempre, y **nada se mueve**
+ *
+ * Era la pregunta abierta de la propuesta: cómo mostrar solo los workbenches
+ * donde la tarea ya está y hacer aparecer el resto al pasar el mouse, sin que
+ * los primeros se corran cuando aparecen los otros.
+ *
+ * La respuesta es no sacar nada del flujo: **los cuatro botones están siempre**,
+ * y lo único que cambia es la opacidad y el fondo de la pastilla. Con
+ * `display: none` o con un ancho variable, la fila está anclada por la derecha y
+ * cada botón que aparece empujaría a los de al lado — el ★ se movería justo
+ * cuando el mouse va hacia él, que es el peor momento posible.
+ */
+body.tareas-fila-columna .markdown-source-view.mod-cm6 .tareas-fila {
+	right: calc(100% + 2.4rem);
+	left: auto;
+	gap: 0;
+	padding: 0 2px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-m);
+	height: calc(var(--line-height-normal, 1.5) * 1em - 2px);
+	top: 1px;
+	background: none;
+	transition: background-color 90ms ease, border-color 90ms ease;
+}
+
+/* La pastilla aparece al pasar el mouse; en reposo no hay caja, solo los
+   botones que están encendidos. */
+body.tareas-fila-columna .markdown-source-view.mod-cm6 .cm-line:hover .tareas-fila,
+body.tareas-fila-columna .markdown-source-view.mod-cm6 .cm-line:focus-within .tareas-fila {
+	border-color: var(--background-modifier-border);
+	background-color: var(--background-secondary);
+	box-shadow: var(--shadow-s);
+}
+
+body.tareas-fila-columna .markdown-source-view.mod-cm6 .tareas-boton {
+	border-radius: var(--radius-s);
+}
+
 /* --- los modos de revelación --------------------------------------------- */
 
 body.tareas-revelar-hover .markdown-source-view.mod-cm6 .tareas-fila {
@@ -497,6 +545,41 @@ body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .tareas-fila {
 
 body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .cm-line:hover .tareas-fila {
 	opacity: 1;
+}
+
+/* --- `columna` con revelación por hover: los activos no se esconden ------- */
+/*
+ * En reposo la fila entera está visible pero **los botones apagados son
+ * transparentes**, así que se ven solo los workbenches donde la tarea ya está —
+ * que es el indicador persistente de la §13.0 llevado al margen—. Al pasar el
+ * mouse aparecen los cuatro.
+ *
+ * Se opacan los **botones**, no la fila: así ninguno cambia de lugar. Y se
+ * apaga `pointer-events` solo en los invisibles, para que un clic al costado no
+ * caiga en un botón que no se ve.
+ */
+body.tareas-revelar-hover.tareas-fila-columna .markdown-source-view.mod-cm6 .tareas-fila {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+body.tareas-revelar-hover.tareas-fila-columna
+	.markdown-source-view.mod-cm6
+	.tareas-boton:not(.is-activo) {
+	opacity: 0;
+	pointer-events: none;
+}
+
+body.tareas-revelar-hover.tareas-fila-columna
+	.markdown-source-view.mod-cm6
+	.cm-line:hover
+	.tareas-boton:not(.is-activo),
+body.tareas-revelar-hover.tareas-fila-columna
+	.markdown-source-view.mod-cm6
+	.cm-line:focus-within
+	.tareas-boton:not(.is-activo) {
+	opacity: 1;
+	pointer-events: auto;
 }
 
 /* --- ajustes ------------------------------------------------------------- */

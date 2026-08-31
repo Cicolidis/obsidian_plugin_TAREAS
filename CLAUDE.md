@@ -180,6 +180,15 @@ Sin entorno DOM instalado, mirar lo que construye un `toDOM` cuesta un
 barato que agregar una dependencia, y alcanza para leer estructura, clases y
 atributos, que es donde estaba el bug.
 
+Y hay que leer la salida **de los instrumentos**, no solo la del código. En la
+sesión 5 el espía del cursor imprimía el token como `%t:id=…%`: la consola de
+Chrome —que es la de Obsidian— trata el primer argumento de `console.log` como
+cadena de formato aunque sea el único, y ahí `%%` es el escape de un `%`
+literal. El instrumento mentía sobre lo único que este plugin escribe. **Node no
+lo reproduce**, así que probarlo en la terminal no sirve de nada: con un solo
+argumento devuelve la cadena tal cual. Todo `console.log` de un espía va como
+`console.log("%s", texto)`.
+
 ### Lo que solo puede verificar el usuario
 
 El comportamiento del editor —cursor, selección, teclado, cómo se ve algo— no se puede comprobar desde acá. Al terminar un cambio que lo toque, entregar una **lista concreta de qué observar**, no un «probalo a ver».

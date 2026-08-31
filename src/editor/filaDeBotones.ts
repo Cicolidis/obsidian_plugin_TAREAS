@@ -1,4 +1,4 @@
-import type { EditorState, Extension, Range } from "@codemirror/state";
+import type { EditorSelection, EditorState, Extension, Range } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
@@ -169,7 +169,27 @@ export class FilaWidget extends WidgetType {
      * Los botones conservan el suyo igual: son dos capas y la de adentro es la
      * que corre primero.
      */
+    /**
+     * Dónde estaba el cursor cuando empezó el clic.
+     *
+     * Se guarda para poder **devolverlo**. La primera vuelta de verificación
+     * dejó un caso que este `preventDefault` no cubre —una tarea puntual donde
+     * el cursor sigue saltando al comienzo de la línea— y no se pudo
+     * reproducir: la escritura no lo mueve (probado offline con el diff que
+     * despacha Obsidian, en las cuatro posiciones de la línea y con subárbol),
+     * así que lo mueve el navegador en algún camino del clic.
+     *
+     * En vez de seguir buscando qué camino es, se hace cumplir la regla
+     * directamente: **un clic en un botón no mueve el cursor.** Entre el
+     * `mousedown` y el `click` no hay ninguna razón legítima para que la
+     * selección cambie, así que si cambió, se restaura. No pregunta de qué forma
+     * vino el cambio —eso es lo que la §8 del método prohíbe—: afirma el
+     * invariante que la fila tiene que cumplir.
+     */
+    let seleccionAlEmpezar: EditorSelection | null = null;
+
     ancla.addEventListener("mousedown", (e) => {
+      seleccionAlEmpezar = view.state.selection;
       e.preventDefault();
       e.stopPropagation();
     });
@@ -207,6 +227,8 @@ export class FilaWidget extends WidgetType {
       boton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        devolverElCursor(view, seleccionAlEmpezar);
+        seleccionAlEmpezar = null;
         const donde = resolver(view, ancla);
         if (donde === null) return;
         this.opciones.alClic({
@@ -225,6 +247,24 @@ export class FilaWidget extends WidgetType {
 
     return ancla;
   }
+}
+
+/**
+ * Devuelve el cursor a donde estaba antes del clic, si algo lo movió.
+ *
+ * Se despacha **antes** de actuar, no después: la acción escribe, y esa
+ * escritura vuelve al editor mapeando la selección que haya en ese momento. Si
+ * se corrigiera después, se estaría corrigiendo una posición ya mapeada desde la
+ * equivocada.
+ *
+ * `userEvent: "select"` y no `select.pointer`: esto no es un gesto del usuario
+ * sobre el texto, es deshacer uno que el navegador hizo solo. Con
+ * `select.pointer`, CodeMirror además le pasaría los rangos atómicos por encima
+ * (`skipAtomsForSelection`), que es justo lo que no queremos acá.
+ */
+function devolverElCursor(view: EditorView, antes: EditorSelection | null): void {
+  if (antes === null || view.state.selection.eq(antes)) return;
+  view.dispatch({ selection: antes, userEvent: "select" });
 }
 
 /**

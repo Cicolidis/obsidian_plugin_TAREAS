@@ -204,4 +204,5 @@ export const CLASES_DE_FILA: readonly string[] = [
   "pastilla",
   "margen",
   "izquierda",
+  "columna",
 ].map(claseDeFila);

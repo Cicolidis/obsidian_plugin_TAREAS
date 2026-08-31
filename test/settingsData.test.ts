@@ -139,10 +139,23 @@ describe("sanearEstiloDeFila", () => {
     for (const e of ESTILOS_DE_FILA) expect(sanearEstiloDeFila(e)).toBe(e);
   });
 
-  it("cualquier otra cosa cae al primero", () => {
+  // Contra `DEFAULT_SETTINGS` y no contra un nombre escrito acá: el estilo por
+  // omisión se elige mirándolo y va a cambiar; lo que no puede cambiar es que
+  // un `data.json` editado a mano caiga en el mismo lugar que un vault nuevo.
+  it("cualquier otra cosa cae al de por omisión", () => {
     for (const basura of [null, undefined, 7, {}, "DERECHA", "abajo"]) {
-      expect(sanearEstiloDeFila(basura)).toBe("derecha");
+      expect(sanearEstiloDeFila(basura)).toBe(DEFAULT_SETTINGS.estiloDeFila);
     }
+    expect(ESTILOS_DE_FILA).toContain(DEFAULT_SETTINGS.estiloDeFila);
+  });
+
+  /**
+   * La propuesta de la segunda vuelta: los botones de los workbenches donde la
+   * tarea **ya está** se ven siempre, y el resto aparece al pasar el mouse. Que
+   * el estilo exista está acá para que sacarlo sea una decisión.
+   */
+  it("está la columna del margen izquierdo", () => {
+    expect(ESTILOS_DE_FILA).toContain("columna");
   });
 
   // Los dos que no pueden tapar una palabra. Están acá para que sacarlos sea

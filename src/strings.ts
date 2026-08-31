@@ -84,15 +84,17 @@ export const STRINGS = {
     estiloDeFila: {
       nombre: "Fila de botones: dónde va",
       descripcion:
-        "Los cinco conviven y se comparan mirándolos. «En el margen» y «Antes del " +
-        "checkbox» son los dos que no pueden tapar una palabra, y los dos gastan margen " +
-        "de nota: si la ventana es angosta pueden quedar recortados.",
+        "Los seis conviven y se comparan mirándolos. Los tres de la izquierda y el del " +
+        "margen no pueden tapar una palabra, y todos ellos gastan margen de nota: si la " +
+        "ventana es angosta pueden quedar recortados. En «columna», los botones de los " +
+        "workbenches donde la tarea ya está se ven siempre.",
       opciones: {
         derecha: "Sobre el final de la línea, con degradado (el primero)",
         "derecha-plana": "Sobre el final de la línea, sin fondo",
         pastilla: "Sobre el final de la línea, en una pastilla",
         margen: "En el margen derecho, afuera del texto",
         izquierda: "Antes del checkbox, después del filete",
+        columna: "Columna en el margen izquierdo, en pastilla",
       },
     },
     modoDeRevelacion: {

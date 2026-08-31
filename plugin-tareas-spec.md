@@ -584,6 +584,52 @@ en las dos direcciones y en las tres condiciones —fila + decoraciones, solo
 decoraciones, nada— **no aparece ni un `Measure loop restarted` ni un `Viewport
 failed to stabilize`**. Sigue sin poder evaluarse, y sigue sin ser verde.
 
+### Lo que la segunda verificación del paso 4b midió
+
+**31/08/2026.** Tres respuestas y una pregunta que sigue abierta.
+
+**19. El cursor mal ubicado al unir es de Outliner, no del plugin.** Con Outliner
+**desactivado**, repitiendo la unión con Backspace muchas veces, no falla nunca.
+Con él instalado falla una de cada tantas. Los tres filtros de este plugin
+dejan el cursor en la costura con las cinco formas de unión —probado offline— así
+que quien lo mueve después es el otro. No se corrige desde acá: corregirlo sería
+pelearle una selección a un plugin que la puso a propósito, y eso es una guerra
+de filtros que se pierde en la próxima versión de cualquiera de los dos.
+
+**20. Que la flecha llegue a las posiciones de adentro del `- [ ] ` es de
+Obsidian.** Medido con `scripts/espia-cursor.js`: la flecha izquierda recorre
+`168:7 → 168:6 → … → 168:0`, una transacción por tecla, **todas con selección
+explícita y `userEvent: "select"`**. Son posiciones reales del documento y
+siempre estuvieron; el widget de la fila no agrega ninguna, porque es de
+longitud cero. Lo que sí es del plugin, y anda, es el salto de `168:0` a
+`167:35`: el rango atómico se lleva el token entero de un teclazo.
+
+Si alguna vez molesta, la salida es hacer atómico el `- [ ] ` en las líneas de
+tarea. **No se hizo**: cambiaría también qué borra un Backspace ahí, que es
+justo el gesto que la §5.5 punto 10 dejó funcionando (borrar el checkbox
+convierte la tarea en bullet). Es una decisión de diseño, no una corrección.
+
+**21. Un instrumento que imprime tokens tiene que usar `console.log("%s", …)`.**
+El espía del cursor mostraba `%t:id=l748;wb=foco%`. La consola de Chrome trata
+el primer argumento como cadena de formato aunque sea el único, y `%%` es su
+escape para un `%` literal: **el instrumento mentía sobre lo único que este
+plugin escribe.** Node no lo reproduce, así que la terminal no sirve para
+probarlo.
+
+**22. Queda una tarea donde el cursor sigue saltando al comienzo de la línea**,
+y solo con las acciones de workbench. No se reprodujo: se montó offline el
+camino entero —plan, diff recortado como el que despacha Obsidian, transacción
+con `userEvent: "set"`— con el subárbol y con una sola línea, y con el cursor en
+las cuatro posiciones de la línea; **no se mueve en ningún caso**. O sea que no
+es el mapeo de la escritura: lo mueve el navegador en algún camino del clic que
+el `preventDefault` del ancla no ataja.
+
+En vez de seguir buscando cuál, se hace cumplir la regla directamente: la fila
+guarda la selección en el `mousedown` y la **devuelve** en el `click` si cambió.
+Entre esos dos eventos no hay ninguna razón legítima para que la selección se
+mueva. No pregunta de qué forma vino el cambio —eso es lo que la §8 del método
+prohíbe—: afirma el invariante que la fila tiene que cumplir.
+
 ---
 
 ## 6. Modelo de datos
@@ -952,6 +998,20 @@ regla decidió el ◐: **el segundo workbench favorito arranca vacío, y vacío
 significa que el botón no se dibuja.** Inventarle un nombre por omisión sería
 peor — se escribiría en el token de la primera tarea que el usuario toque sin
 haberlo elegido.
+
+**Seis lugares donde puede vivir la fila**, y conviven (patrón `designFlags.ts`):
+sobre el final de la línea con degradado, sin fondo, en pastilla; en el margen
+derecho; antes del checkbox; y una **columna en el margen izquierdo** con el
+orden que pidió el usuario en la segunda vuelta — número de línea · botones ·
+filete · plegado · checkbox.
+
+Esa última contesta una pregunta que la §13.0 no tenía resuelta: **cómo mostrar
+siempre los workbenches donde la tarea ya está y hacer aparecer el resto al pasar
+el mouse, sin que los primeros se corran.** La respuesta es no sacar nada del
+flujo: los cuatro botones están siempre, y lo único que cambia es la opacidad y
+el fondo de la pastilla. Con `display: none` o con un ancho variable, la fila
+está anclada por la derecha y cada botón que aparece empujaría a los de al lado
+— el ★ se movería justo cuando el mouse va hacia él.
 
 **De los tres modos de revelación se ofrecen dos.** `hover` y `siempre` son CSS
 puro, con la clase en `body` como el estilo de prioridad; `swipe` está declarado

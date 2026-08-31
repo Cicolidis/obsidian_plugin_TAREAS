@@ -126,6 +126,7 @@ try {
     "tareas-fila-pastilla",
     "tareas-fila-margen",
     "tareas-fila-izquierda",
+    "tareas-fila-columna",
     "tareas-estilo-barra-completa",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
