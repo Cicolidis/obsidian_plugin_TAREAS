@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import { NOTAS_POR_OMISION } from "../src/notas.js";
 import {
   cargarSettings,
+  DEFAULT_SETTINGS,
   ESTILOS_DE_PRIORIDAD,
   FORMAT_VERSION,
+  MODOS_DE_REVELACION,
   sanearEstilo,
   sanearNotas,
+  sanearRevelacion,
+  sanearWorkbenchOpcional,
 } from "../src/settingsData.js";
 
 /**
@@ -70,5 +74,60 @@ describe("el estilo de prioridad", () => {
 
   it("una configuración vieja, sin el campo, arranca en el de por omisión", () => {
     expect(cargarSettings({ indicadorFilete: true }).estiloDePrioridad).toBe("barra-checkbox");
+  });
+});
+
+describe("sanearWorkbenchOpcional", () => {
+  /**
+   * Son dos funciones y no un parámetro porque son dos preguntas distintas: el
+   * workbench del comando **tiene** que existir; el segundo botón de la fila
+   * puede legítimamente no estar, y ahí la fila dibuja tres botones.
+   */
+  it("el vacío es una respuesta válida y no cae al de por omisión", () => {
+    expect(sanearWorkbenchOpcional("")).toBe("");
+    expect(sanearWorkbenchOpcional("   ")).toBe("");
+    expect(sanearWorkbenchOpcional(null)).toBe("");
+    expect(sanearWorkbenchOpcional(7)).toBe("");
+  });
+
+  // Los tres caracteres que romperían el `%%t:…%%` y dejarían la línea
+  // ilegible para siempre (§5.3). Vale más negarse que corromper tareas.
+  it("un nombre que rompería el token se rechaza", () => {
+    for (const malo of ["a;b", "a,b", "100%", "wb=x;y"]) {
+      expect(sanearWorkbenchOpcional(malo)).toBe("");
+    }
+  });
+
+  it("un nombre común pasa, normalizado", () => {
+    expect(sanearWorkbenchOpcional("  mudanza  ")).toBe("mudanza");
+    expect(sanearWorkbenchOpcional("semana en el cole")).toBe("semana en el cole");
+  });
+
+  it("por omisión no hay segundo botón", () => {
+    expect(DEFAULT_SETTINGS.workbenchSecundario).toBe("");
+    expect(cargarSettings({}).workbenchSecundario).toBe("");
+  });
+});
+
+describe("sanearRevelacion", () => {
+  it("los modos ofrecidos pasan", () => {
+    expect(sanearRevelacion("hover")).toBe("hover");
+    expect(sanearRevelacion("siempre")).toBe("siempre");
+  });
+
+  /**
+   * `swipe` está en el tipo —la §15 punto 1 pide que el modo sea un parámetro—
+   * y **no** se puede elegir, porque hoy no hace nada. Un modo que no funciona
+   * es lo mismo que un ítem gris en el ⋯.
+   */
+  it("`swipe` está declarado pero cae a `hover`", () => {
+    expect(MODOS_DE_REVELACION).toContain("swipe");
+    expect(sanearRevelacion("swipe")).toBe("hover");
+  });
+
+  it("cualquier basura cae a `hover`", () => {
+    for (const basura of [null, undefined, 7, {}, "HOVER"]) {
+      expect(sanearRevelacion(basura)).toBe("hover");
+    }
   });
 });

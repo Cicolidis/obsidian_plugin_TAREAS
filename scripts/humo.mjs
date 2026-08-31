@@ -59,6 +59,11 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   [ ]                     lo que el filtro escribe
 //   onLayoutReady           el arranque del store (spec §20 paso 3)
 //   vault.process           el único camino de escritura (§8)
+//   ViewPlugin              la fila de botones (§13.0, paso 4b)
+//   posAtDOM                cómo la fila sabe en qué línea está: sin esto, escribe a ciegas
+//   tareas-fila             el ancla y la fila; si se cae, los botones no se ven
+//   tareas-revelar-         el modo de revelación, que viaja como clase de `body`
+//   setIcon                 sin esto los botones son cuatro cuadrados vacíos
 //   los cuatro ids          un comando que se cae del bundle no da error: no aparece
 //
 // El id del plugin no se busca acá: vive en el manifiesto y se valida abajo.
@@ -76,6 +81,11 @@ for (const marca of [
   "[ ] ",
   "onLayoutReady",
   ".process(",
+  "ViewPlugin",
+  "posAtDOM",
+  "tareas-fila",
+  "tareas-revelar-",
+  "setIcon",
   "completar-tarea-del-cursor",
   "asignar-workbench-favorito",
   "subir-prioridad-del-cursor",
@@ -101,6 +111,13 @@ try {
     "tareas-estilo-barra",
     "tareas-estilo-checkbox",
     "tareas-estilo-fondo",
+    // La fila: sin esto los botones se dibujan **en el flujo del renglón**, o
+    // sea empujando el corte de línea, que es exactamente lo que el diseño
+    // evita. No es «se ve feo»: es la regresión de la §5.5.
+    "tareas-fila-ancla",
+    "tareas-boton",
+    "tareas-revelar-hover",
+    "tareas-revelar-siempre",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
   }

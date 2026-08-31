@@ -61,11 +61,34 @@ export const STRINGS = {
         "Sin esto queda «- [ ] comprar- [ ] pan». Apagado, se une como antes.",
     },
     workbenchFavorito: {
-      nombre: "Workbench favorito",
+      nombre: "Workbench favorito (★)",
       descripcion:
         "El workbench del comando de asignación. Conviene que no se llame por unidad de " +
         "tiempo: «foco» o «mudanza», no «hoy». Un workbench llamado «hoy» obliga a " +
         "mantenerlo al día; uno llamado «foco» no caduca.",
+    },
+    workbenchSecundario: {
+      nombre: "Segundo workbench favorito (◐)",
+      descripcion:
+        "El segundo botón fijo de la fila. Vacío, el ◐ no se dibuja: un botón que no " +
+        "puede hacer nada es peor que un botón que no está.",
+      marcador: "vacío = sin segundo botón",
+    },
+    filaDeBotones: {
+      nombre: "Fila de botones sobre la tarea",
+      descripcion:
+        "★ y ◐ mandan al workbench de arriba, → los muestra todos, y ⋯ abre prioridad y " +
+        "completar. No suma ancho al renglón ni cambia la altura de la línea.",
+    },
+    modoDeRevelacion: {
+      nombre: "Fila de botones: cuándo se ve",
+      descripcion:
+        "Con el mouse encima, o siempre. Es una clase en el cuerpo del documento y lo " +
+        "resuelve la hoja de estilos: no hay ningún gesto cableado en el código.",
+      opciones: {
+        hover: "Con el mouse sobre la línea",
+        siempre: "Siempre",
+      },
     },
     verificacion: {
       titulo: "Verificación",
@@ -84,6 +107,39 @@ export const STRINGS = {
           "Imprime cada relectura de una nota con su demora, y cada escritura con lo que " +
           "escribió.",
       },
+    },
+  },
+  /**
+   * La fila de botones de la §13.0. Los textos son los `aria-label` y los
+   * tooltips: la fila se dibuja con íconos, así que **es lo único que la
+   * describe** para quien navega con teclado o con lector de pantalla.
+   */
+  fila: {
+    mandarA: (wb: string) => `Mandar a «${wb}»`,
+    sacarDe: (wb: string) => `Sacar de «${wb}»`,
+    todosLosWorkbenches: "Todos los workbenches…",
+    masAcciones: "Prioridad, completar…",
+    /** El tooltip de la fila entera cuando la línea tiene el token roto. */
+    ilegible: "Esta tarea tiene el token ilegible: no se puede escribir sobre ella.",
+  },
+  menu: {
+    prioridad: "Prioridad",
+    /** Los tres niveles como ítems de menú. `prioridades` los dice en prosa. */
+    niveles: ["Normal", "Alta", "Muy alta"] as const,
+    completarYDescartar: "Completar y descartar",
+    workbenchNuevo: "Workbench nuevo…",
+    nuevoWorkbench: {
+      titulo: "Workbench nuevo",
+      descripcion:
+        "Un workbench es un filtro: no guarda nada, y la tarea sigue viviendo donde está. " +
+        "Conviene que no se llame por unidad de tiempo — «foco» o «mudanza», no «hoy» —, " +
+        "porque un workbench que caduca hay que mantenerlo al día.",
+      marcador: "foco",
+      aceptar: "Mandar la tarea ahí",
+      cancelar: "Cancelar",
+      invalido:
+        "Un nombre de workbench no puede llevar «;», «,» ni «%»: son los tres " +
+        "caracteres que rompen el token y dejan la línea ilegible para siempre.",
     },
   },
   comandos: {
@@ -141,6 +197,13 @@ export const STRINGS = {
     prioridadHeredada:
       "Esta tarea hereda la prioridad de su tarea madre, así que no se puede bajar sola. " +
       "Bajale la prioridad a la madre, o subile la de esta para que tenga la suya.",
+    /**
+     * El de una sola línea, para el clic de la fila. `ilegibles` cuenta las de
+     * un subárbol y su plural no sirve acá: «1 línea tiene … no se tocaron».
+     */
+    tokenIlegible:
+      "Esta tarea tiene el token de metadatos ilegible, así que no se toca (§5.3). " +
+      "Se ve entero en la nota a propósito: es la única forma de arreglarlo a mano.",
     ilegibles: (n: number) =>
       `${n === 1 ? "1 línea tiene" : `${n} líneas tienen`} el token ilegible y no se ` +
       "tocaron. Hay que arreglarlas a mano.",

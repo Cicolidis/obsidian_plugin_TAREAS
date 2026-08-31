@@ -217,6 +217,22 @@ export class StoreDeTareas {
     return ids;
   }
 
+  /**
+   * Todos los nombres de workbench escritos, en **todas** las notas, ordenados.
+   *
+   * Hermano de `idsEnUso`, y global por la misma razón de forma: un workbench
+   * es un filtro sobre el store entero (§10), no algo de una nota. Lo consume
+   * el popover del → para ofrecer los que ya existen — que es lo único que
+   * hace que la lista crezca, porque los workbenches «se crean escribiendo un
+   * nombre» y no hay panel de administración.
+   */
+  workbenchesEnUso(): string[] {
+    const nombres = new Set<string>();
+    for (const e of this.notas.values())
+      for (const t of e.tareas) for (const wb of t.workbenches) nombres.add(wb);
+    return [...nombres].sort();
+  }
+
   /** Las notas que el store tiene parseadas ahora mismo. */
   cargadas(): string[] {
     return [...this.notas.keys()];

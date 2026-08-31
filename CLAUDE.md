@@ -80,6 +80,21 @@ El criterio no es «¿borra?» sino «¿reescribe el documento entero?». Se esc
 - **Las decoraciones tienen que ir en un `StateField`, no en un `ViewPlugin`.** El mapa de alturas hace `filter(d => typeof d != "function")` y descarta las que aporta un `ViewPlugin`. El síntoma no se ve en pantalla: se ve en el ciclo de medición, meses después.
 - **Un cambio externo llega al editor como un diff con `userEvent: "set"`.** Obsidian no reemplaza el documento cuando el archivo cambia en disco: recorta prefijo y sufijo comunes y despacha el resto. Eso incluye **lo que el propio plugin acaba de escribir**. Un filtro que no lo descarte va a confundir su propia escritura con una edición del usuario.
 - **`atomicRanges` también decide dónde cae un clic**, con `bias 0`: `pos - from < to - pos`. Un rango que llega hasta el salto de línea manda al renglón de abajo cualquier clic en el vacío de la derecha. Es el precio de que la flecha cruce de un teclazo, y se paga en el clic, no en el rango.
+- **La regla del `StateField` tiene un límite exacto, y hay que leerlo.** El mapa
+  de alturas descarta las decoraciones que llegan como función, sí — pero
+  `point(from,to,deco)` solo hace algo `if (from < to || deco.heightRelevant)`, y
+  `heightRelevant` es `this.block || widget.estimatedHeight >= 5 ||
+  widget.lineBreaks > 0`. **Un widget inline de ancho cero sin altura declarada no
+  entra al mapa venga de donde venga**, así que para *eso* un `ViewPlugin` sobre
+  el viewport es lo correcto. Y deja una trampa: el día que alguien le declare
+  altura, vuelve a importar y desde un `ViewPlugin` se descarta. Escribir el test
+  que falla ese día.
+- **La posición de un widget no se guarda: se le pide a CodeMirror**
+  (`view.posAtDOM`). Para un widget de longitud cero y sin hijos, todos los
+  caminos de `localPosFromDOM` devuelven 0, así que el resultado es exactamente su
+  `posAtStart`. Y eso no es solo prolijidad con el invariante 10: es lo que
+  permite que `eq()` **no** lleve el número de línea, que si lo llevara reharía el
+  DOM de todas las filas de abajo en cada tecla.
 - **Obsidian se actualiza solo y el `.asar` del instalador no es el que corre.** El que vale está en `~/Library/Application Support/obsidian/obsidian-N.asar`. Leer el de `/Applications` es medir otra versión y creerle.
 
 ### Medir antes de diseñar, y antes de optimizar
@@ -124,6 +139,24 @@ LOG se insertaban **arriba de todo**, por encima de los headings que ya estaban,
 no lo agarró ninguno de los 60 tests del corpus: apareció imprimiendo la
 estructura del archivo resultante y mirándola. Cuando algo genera texto para que
 lo lea una persona, generarlo una vez y leerlo.
+
+Eso vale también para el **DOM** y para los **instrumentos**. En la sesión 5 la
+misma práctica encontró dos cosas que ningún test iba a agarrar:
+
+- Sobre una tarea con el token roto, los cuatro botones de la fila prometían
+  «Mandar a foco» y clickearlos no hacía nada. Un control que miente es peor que
+  uno apagado, y ninguna aserción lo miraba.
+- La primera versión del test de costo informaba 0,711 ms para la primera nota y
+  0,02 para las siguientes. No era una nota cara: era el JIT, y con dos ventanas
+  «la mediana» eran dos muestras. **El test pasaba** —el techo era 16 ms— y el
+  número que informaba no era el que decía medir. Todo instrumento que promedie
+  necesita una pasada de calentamiento que se descarte y suficientes muestras
+  para que la mediana signifique algo.
+
+Sin entorno DOM instalado, mirar lo que construye un `toDOM` cuesta un
+`document` mínimo instrumentado en el scratchpad y un `esbuild --bundle`. Es más
+barato que agregar una dependencia, y alcanza para leer estructura, clases y
+atributos, que es donde estaba el bug.
 
 ### Lo que solo puede verificar el usuario
 

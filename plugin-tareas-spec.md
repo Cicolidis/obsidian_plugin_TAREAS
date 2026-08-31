@@ -460,6 +460,81 @@ cargar la nota de prueba de tokens.** Y la comparación se hace A/B con el
 interruptor «decoraciones en la nota», sobre la misma nota y el mismo recorrido
 de scroll: sin poder apagarlas, la línea de base no se compara contra nada.
 
+### Lo que el paso 4b agregó a esta sección
+
+**30/08/2026, al construir la fila de botones.**
+
+**12. La regla del `StateField` tiene un límite exacto, y está en el código.**
+La §5.5 manda las decoraciones a un `StateField` porque el mapa de alturas
+descarta las que llegan como función. Para la fila de botones eso habría
+significado un widget por tarea —290 en `tareas_COLE`, de las que se ven
+cuarenta—. Antes de pagarlo, se leyó el constructor del mapa **dentro del
+`obsidian-1.13.7.asar` instalado**, no en `node_modules`:
+
+```js
+e.prototype.point=function(e,t,n){
+  if(e<t||n.heightRelevant){ … } else t>e&&this.span(e,t); … }
+
+Object.defineProperty(t.prototype,"heightRelevant",{get:function(){
+  return this.block||!!this.widget&&(this.widget.estimatedHeight>=5||this.widget.lineBreaks>0)}})
+```
+
+y la tercera pieza, la del diff (`heightRelevantDecoChanges`):
+
+```js
+comparePoint=function(e,t,n,i){(e<t||n&&n.heightRelevant||i&&i.heightRelevant)&&ln(e,t,this.changes,5)}
+```
+
+> **Un widget inline de ancho cero, sin `estimatedHeight` y sin `lineBreaks`, no
+> entra nunca al mapa de alturas.** `from === to` y `heightRelevant` es `false`,
+> así que `point` cae en el `else` y `t > e` es falso: no hace nada.
+
+De ahí la división, que no es una excepción a la regla sino su otra mitad:
+
+| Qué | Dónde | Por qué |
+|---|---|---|
+| El `Decoration.replace` del token | **`StateField`** | Tiene `from < to`: alimenta `line.collapsed` y la estimación descuenta el token |
+| La fila de botones | **`ViewPlugin`** sobre `visibleRanges` | El mapa no la ve venga de donde venga, así que recorrer el documento entero sería DOM de más y nada de menos |
+
+**Y la trampa que eso deja armada:** el día que alguien le ponga
+`estimatedHeight` a ese widget o lo haga `block`, vuelve a ser relevante para el
+mapa — y desde un `ViewPlugin` el mapa lo descarta, que es el bug de esta misma
+sección entrando por la puerta de al lado. `test/filaDeBotones.test.ts` falla ese
+día, y no meses después en el ciclo de medición.
+
+**13. Construir la fila cuesta 0,036 ms.** Medido el 30/08/2026 con
+`npm run test:corpus`, sobre ventanas de 40 líneas y en el peor caso realista
+—`tareas_COLE` con un token en cada tarea, 287 tokens—: mediana **0,036 ms**,
+p90 0,097 ms. Contra los **0,65 ms** de decorar el documento entero, que es lo
+que corre en la misma tecla.
+
+**Y la primera versión de esa medición estaba mal, y el test pasaba igual.**
+Medía una pasada sola: informaba 0,711 ms para la primera nota y 0,02-0,12 para
+las seis siguientes. No era una nota cara, era el JIT. Se descubrió **mirando la
+salida**, no por un test en rojo — el techo de 16 ms lo pasaba de todas formas—.
+Un instrumento que informa un número que no es el que dice medir es peor que no
+medir; ahora hay una pasada de calentamiento que se descarta.
+
+**14. La posición de un widget no se guarda: se le pide a CodeMirror.** El
+invariante 10 sobre un botón sería fácil de romper —el widget se construye con
+un número de línea que envejece— y la salida es `view.posAtDOM(ancla)`. Leído en
+`@codemirror/view` 6.38.6:
+
+```js
+posFromDOM(node, offset) { return nearest(node).localPosFromDOM(node, offset) + view.posAtStart }
+```
+
+`WidgetView` no sobreescribe `localPosFromDOM`, así que usa la genérica de
+`ContentView`, y para un widget de **longitud cero y sin hijos** todos sus
+caminos devuelven `0`. O sea que el resultado es exactamente `posAtStart`, que
+con el ancla en `line.from` es el comienzo de la línea. De ahí sale el texto de
+ahora, y de ahí en adelante manda `elegirTarea`, que ya existía.
+
+Eso tiene una consecuencia de diseño que no es obvia: **`eq()` no puede llevar
+el número de línea**. Si lo llevara, teclear en cualquier línea de más arriba
+reharía el DOM de todas las filas de abajo —se perdería el hover en el medio del
+gesto y se pagaría en cada tecla—. Las dos cosas son la misma decisión.
+
 ---
 
 ## 6. Modelo de datos
@@ -792,6 +867,50 @@ Indicador persistente: el ★ queda relleno si la tarea está en ese workbench. 
 
 **El componente de fila recibe el modo de revelación como parámetro** (`hover` | `siempre` | `swipe`). Nunca `mouseenter` cableado adentro. Ver §15.
 
+### Lo que el paso 4b construyó, y lo que dejó afuera
+
+**30/08/2026.** La fila existe. `src/botones.ts` decide **qué** botones van y en
+qué estado —capa 1, sin DOM, calculado del texto de la línea y no del store, que
+puede estar atrasado— y `src/editor/filaDeBotones.ts` la dibuja.
+
+**Los cuatro botones terminan en las tres funciones que ya usaban los comandos de
+paleta.** Ningún camino de escritura nuevo: `posAtDOM` → `elegirEnLinea` → plan
+puro → `escribir` → `absorber`.
+
+**El ⋯ lleva solo lo que tiene capa 1 y 2 detrás.** De las seis cosas que esta
+sección lista, entran dos —prioridad y «completar y descartar»— y las otras
+cuatro **no aparecen**, ni grises:
+
+| Del menú | Por qué no |
+|---|---|
+| Fecha | `setTaskToken` sabe escribir `due`, pero no hay con qué elegir una |
+| Recurrencia | Ídem con `rec`, y el botón por grupo es de la §11 |
+| Completar y archivar | `archivado.ts` tiene la lógica pura y **ninguna** escritura: toca dos archivos a la vez. Paso 6 |
+| Eliminar | Es el descarte físico de la §12, con confirmación. Paso 6 |
+
+Un ítem gris ocupa el mismo lugar que uno que anda y no hace nada. La misma
+regla decidió el ◐: **el segundo workbench favorito arranca vacío, y vacío
+significa que el botón no se dibuja.** Inventarle un nombre por omisión sería
+peor — se escribiría en el token de la primera tarea que el usuario toque sin
+haberlo elegido.
+
+**De los tres modos de revelación se ofrecen dos.** `hover` y `siempre` son CSS
+puro, con la clase en `body` como el estilo de prioridad; `swipe` está declarado
+en el tipo —la §15 punto 1 pide que el modo sea un parámetro— y no está en el
+desplegable, por lo mismo que los cuatro ítems de arriba.
+
+**Los éxitos de ★ ◐ → son silenciosos.** El botón que se rellena *es* el aviso, y
+llega solo: la escritura vuelve al editor como cambio externo y el widget se
+reconstruye. Un cartel por clic sería ruido sobre la acción más frecuente del
+plugin. Los fracasos avisan siempre.
+
+**Y sobre una línea con el token ilegible la fila se dibuja igual, apagada.**
+Esconderla dejaría una tarea sin botones y sin explicación. Los cuatro tooltips
+dicen que el token es ilegible y no lo que harían: los cuatro son inertes, y un
+control que promete lo que no puede hacer es peor que uno apagado. **Eso salió
+de mirar la salida** —los tests pasaban y el tooltip decía «Mandar a foco»—, no
+de un test.
+
 ### 13.1 Pestaña Workbenches
 
 La principal. Selector de workbench arriba; uno o varios en columnas. Colapso según §9. Recurrentes agrupadas aparte. Editar, completar, descartar y sacar del workbench, todo desde acá.
@@ -993,7 +1112,7 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 2 | **Capa 1 completa con tests**: parser de las cuatro clases de línea, token, árboles, reinicio de cíclicas, archivado | Lógica pura primero, interfaz después. Y da los invariantes 2, 3, 5, 6, 7, 8, 9 sin tocar Obsidian |
 | 3 | **Store + capa de escritura**, con el invariante 9 como prueba diferencial contra las siete notas reales | Antes de dibujar nada, garantizar que leer y escribir no corrompe |
 | 4a | **Decoración pasiva sobre la nota**: ocultar el token, defender el rango atómico, colores de prioridad | El frente principal (§13.0). Es un port re-arquitecturado con las trampas ya documentadas |
-| 4b | **La fila de botones** de la §13.0: ★ ◐ → ⋯ | Código sin precedente: Anotaciones no tiene botones sobre la línea, tiene una barra global y gutters |
+| 4b | ~~**La fila de botones** de la §13.0: ★ ◐ → ⋯~~ | Hecho. Código sin precedente: Anotaciones no tiene botones sobre la línea, tiene una barra global y gutters |
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |
 | 6 | **Completar / descartar / archivar al LOG** | Resuelve el hallazgo del 7,5% |
 | 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |

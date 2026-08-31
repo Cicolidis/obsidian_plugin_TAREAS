@@ -235,6 +235,127 @@ body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
 	content: "!!";
 }
 
+/* --- la fila de botones sobre la tarea (§13.0) ---------------------------- */
+/*
+ * ```
+ * [✓]  texto de la tarea …                    [★] [◐] [→] [⋯]
+ * ```
+ *
+ * Vale la restricción 1 del encabezado con más fuerza que en ningún otro lado:
+ * **nada de acá cambia la altura ni el ancho del renglón.**
+ *
+ * - El ancla es un `<span>` `display: inline` **vacío**. Un inline vacío con la
+ *   fuente y el `line-height` de la línea no puede agrandar el renglón, y su
+ *   único hijo está fuera de flujo. Es el punto donde esto se juega: el glifo de
+ *   prioridad, que sí suma ancho, empuja el corte de línea unas tres letras
+ *   (medido), y dónde corta el renglón es lo que alimenta el bucle de medición
+ *   de la §5.5.
+ * - La fila va `position: absolute` contra la `.cm-line`, que Obsidian ya deja
+ *   `position: relative` — verificado leyendo su `app.css`.
+ * - `top: 0` y no centrada: una tarea que ocupa dos renglones tiene que dejar
+ *   los botones arriba, al lado del checkbox, y no flotando en el medio.
+ *
+ * **El modo de revelación es una clase de `body`**, como el estilo de prioridad
+ * (§15 punto 1): no hay un `mouseenter` en ninguna parte del código, lo decide
+ * la hoja de estilos, y cambiar el ajuste no obliga a reconstruir nada.
+ */
+
+.markdown-source-view.mod-cm6 {
+	--tareas-fila-boton: 20px;
+	--tareas-fila-icono: 15px;
+}
+
+/* El ancla: no ocupa nada y no es el bloque contenedor de la fila. */
+.markdown-source-view.mod-cm6 .tareas-fila-ancla {
+	display: inline;
+}
+
+.markdown-source-view.mod-cm6 .tareas-fila {
+	position: absolute;
+	right: 0;
+	top: 0;
+	height: calc(var(--line-height-normal, 1.5) * 1em);
+	display: flex;
+	align-items: center;
+	gap: 1px;
+	/* Sobre el texto, no debajo: la tarea puede llegar hasta el borde. El
+	   degradado deja que se lea de dónde a dónde va la fila sin una caja dura. */
+	z-index: 3;
+	padding-inline-start: 16px;
+	background: linear-gradient(
+		to right,
+		transparent 0,
+		var(--background-primary) 16px
+	);
+}
+
+.markdown-source-view.mod-cm6 .tareas-boton {
+	/* Adentro del editor conviene partir de cero: Obsidian estiliza `button` en
+	   general y acá no queremos nada de eso. */
+	all: unset;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--tareas-fila-boton);
+	height: var(--tareas-fila-boton);
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+	transition: color 80ms ease, background-color 80ms ease;
+}
+
+.markdown-source-view.mod-cm6 .tareas-boton .svg-icon {
+	width: var(--tareas-fila-icono);
+	height: var(--tareas-fila-icono);
+}
+
+.markdown-source-view.mod-cm6 .tareas-boton:hover {
+	color: var(--text-normal);
+	background-color: var(--background-modifier-hover);
+}
+
+/* El indicador persistente de la §13.0: relleno = la tarea está ahí. Sin esto
+   se hace doble clic sin darse cuenta, porque la tarea no se va de la nota al
+   asignarla. */
+.markdown-source-view.mod-cm6 .tareas-boton.is-activo {
+	color: var(--text-accent);
+}
+
+.markdown-source-view.mod-cm6 .tareas-boton.is-activo .svg-icon {
+	fill: currentColor;
+}
+
+/* Token roto: la fila se dibuja igual, apagada. Esconderla dejaría una tarea
+   sin botones y sin explicación, que es peor que el token roto (§5.3). */
+.markdown-source-view.mod-cm6 .tareas-fila.is-ilegible .tareas-boton {
+	opacity: 0.4;
+	cursor: help;
+}
+
+/* --- los modos de revelación --------------------------------------------- */
+
+body.tareas-revelar-hover .markdown-source-view.mod-cm6 .tareas-fila {
+	opacity: 0;
+	/* Invisible **y** intocable: sin esto la fila se sigue comiendo los clics
+	   que van al final del texto. */
+	pointer-events: none;
+}
+
+body.tareas-revelar-hover .markdown-source-view.mod-cm6 .cm-line:hover .tareas-fila,
+body.tareas-revelar-hover .markdown-source-view.mod-cm6 .cm-line:focus-within .tareas-fila {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .tareas-fila {
+	opacity: 0.5;
+	pointer-events: auto;
+}
+
+body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .cm-line:hover .tareas-fila {
+	opacity: 1;
+}
+
 /* --- ajustes ------------------------------------------------------------- */
 
 /* La lista de notas necesita el ancho entero: una ruta de vault no entra en

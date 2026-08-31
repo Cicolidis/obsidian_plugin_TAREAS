@@ -1,15 +1,21 @@
 import {
   App,
+  MarkdownView,
   Plugin,
   PluginSettingTab,
   Setting,
   editorInfoField,
   editorLivePreviewField,
+  setIcon,
 } from "obsidian";
+import type { EditorView } from "@codemirror/view";
 import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
+import { CLASES_DE_REVELACION, claseDeRevelacion, type Favoritos } from "./botones.js";
 import { comandos } from "./comandos.js";
 import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
+import { filaDeBotones } from "./editor/filaDeBotones.js";
+import { manejarClicEnFila } from "./editor/menuDeTarea.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
 import { clicAlFinal } from "./editor/clicAlFinal.js";
 import { decoraciones } from "./editor/decoraciones.js";
@@ -20,9 +26,12 @@ import {
   cargarSettings,
   DEFAULT_SETTINGS,
   ESTILOS_DE_PRIORIDAD,
+  MODOS_OFRECIDOS,
   sanearEstilo,
   sanearNotas,
+  sanearRevelacion,
   sanearWorkbench,
+  sanearWorkbenchOpcional,
   type TareasSettings,
 } from "./settingsData.js";
 import { StoreDeTareas } from "./store.js";
@@ -30,12 +39,12 @@ import { STRINGS } from "./strings.js";
 import { puertoObsidian } from "./vault/puertoObsidian.js";
 
 /**
- * Plugin de tareas — pasos 1, 3 y 4a de la §20 de la spec.
+ * Plugin de tareas — pasos 1, 3, 4a y 4b de la §20 de la spec.
  *
  * Están el camino completo de lectura y escritura —el índice en memoria que se
- * mantiene solo y los comandos que escriben por él— y la decoración pasiva
- * sobre la nota: el token invisible en Live Preview y el color de la prioridad.
- * Todavía no hay botones, menús ni vistas.
+ * mantiene solo y los comandos que escriben por él—, la decoración pasiva sobre
+ * la nota —el token invisible en Live Preview y el color de la prioridad— y la
+ * fila de botones de la §13.0. Todavía no hay vistas.
  *
  * Este archivo es el único de la capa 3 que importa `obsidian`, y por eso es el
  * único que traduce «un editor de CodeMirror» a «un archivo del vault». Los
@@ -51,6 +60,21 @@ export default class TareasPlugin extends Plugin {
 
   override async onload(): Promise<void> {
     this.settings = cargarSettings(await this.loadData());
+
+    // El store se arma **antes** que las extensiones: la fila de botones lo
+    // captura por closure y necesita que exista. Armarlo no lee ningún archivo
+    // —eso pasa en `arrancar()`, dentro de `onLayoutReady`—, así que adelantarlo
+    // no cambia nada del arranque.
+    this.store = new StoreDeTareas(
+      puertoObsidian(this.app, () => this.notasDelStore(), (ref) => this.registerEvent(ref)),
+    );
+    this.store.congelado = this.settings.congelarStore;
+    this.store.alActualizar((e) => {
+      if (!this.settings.registrarEventos) return;
+      console.log(
+        `[tareas] ${e.path} · ${e.tareas} tareas · ${e.ms.toFixed(2)} ms · ${e.origen}`,
+      );
+    });
 
     // Las extensiones se registran una vez y leen la configuración por closure:
     // así tocar un interruptor o agregar una nota tiene efecto en el momento,
@@ -81,20 +105,33 @@ export default class TareasPlugin extends Plugin {
           console.log(`[tareas] decorar · ${lineas} líneas · ${ms.toFixed(2)} ms`);
         },
       ),
+      // La fila va en un `ViewPlugin` y no en un `StateField`, y eso **no**
+      // contradice la §5.5: un widget inline de ancho cero sin `estimatedHeight`
+      // ni `lineBreaks` no entra al mapa de alturas venga de donde venga.
+      // Verificado adentro del asar instalado; el porqué está en
+      // `editor/filaDeBotones.ts` y hay un test que falla si el widget declara
+      // altura alguna vez.
+      filaDeBotones(
+        (state) => this.filaActiva(state),
+        {
+          favoritos: () => this.favoritos(),
+          alClic: manejarClicEnFila({
+            app: this.app,
+            store: this.store,
+            notas: () => this.notasDelStore(),
+            favoritos: () => this.favoritos(),
+            archivoDe: (state) => state.field(editorInfoField, false)?.file?.path ?? null,
+          }),
+          dibujarIcono: (el, icono) => setIcon(el, icono),
+        },
+        (ms, lineas) => {
+          if (!this.settings.registrarEventos) return;
+          console.log(`[tareas] fila · ${lineas} líneas visibles · ${ms.toFixed(2)} ms`);
+        },
+      ),
     ]);
 
     this.sincronizarIndicadores();
-
-    this.store = new StoreDeTareas(
-      puertoObsidian(this.app, () => this.notasDelStore(), (ref) => this.registerEvent(ref)),
-    );
-    this.store.congelado = this.settings.congelarStore;
-    this.store.alActualizar((e) => {
-      if (!this.settings.registrarEventos) return;
-      console.log(
-        `[tareas] ${e.path} · ${e.tareas} tareas · ${e.ms.toFixed(2)} ms · ${e.origen}`,
-      );
-    });
 
     // `onLayoutReady` y no `onload`: al arrancar, Obsidian dispara eventos de
     // creación por cada archivo del vault mientras indexa, y leer notas en el
@@ -119,6 +156,7 @@ export default class TareasPlugin extends Plugin {
     this.store?.detener();
     // Las clases viven en `body` y no en el editor, así que no se van solas.
     for (const c of CLASES_DE_ESTILO) document.body.removeClass(c);
+    for (const c of CLASES_DE_REVELACION) document.body.removeClass(c);
     document.body.removeClass(CLASE_DE_GLIFO);
   }
 
@@ -134,6 +172,11 @@ export default class TareasPlugin extends Plugin {
     const encendidas = new Set(clasesDelEstilo(this.settings.estiloDePrioridad));
     for (const c of CLASES_DE_ESTILO) document.body.toggleClass(c, encendidas.has(c));
     document.body.toggleClass(CLASE_DE_GLIFO, this.settings.indicadorGlifo);
+
+    // El modo de revelación de la fila, por lo mismo: el widget dibuja siempre
+    // lo mismo y la hoja de estilos decide si se ve (§15 punto 1).
+    const modo = claseDeRevelacion(this.settings.modoDeRevelacion);
+    for (const c of CLASES_DE_REVELACION) document.body.toggleClass(c, c === modo);
   }
 
   /**
@@ -169,6 +212,27 @@ export default class TareasPlugin extends Plugin {
     return this.settings.checkboxAutomatico && this.enNotaDeTareas(state);
   }
 
+  /** Los dos botones fijos de la fila (§13.0: «asignables en settings»). */
+  private favoritos(): Favoritos {
+    return {
+      primario: this.settings.workbenchFavorito,
+      secundario: this.settings.workbenchSecundario,
+    };
+  }
+
+  /**
+   * ¿Va la fila de botones acá?
+   *
+   * Mismo alcance que las decoraciones —Live Preview y nota de la lista— con su
+   * propio interruptor. Son dos ajustes y no uno porque hacen cosas distintas:
+   * apagar el color no tiene por qué apagar los botones, y al revés tampoco.
+   */
+  private filaActiva(state: EditorState): boolean {
+    if (!this.settings.filaDeBotones) return false;
+    if (!state.field(editorLivePreviewField, false)) return false;
+    return this.enNotaDeTareas(state);
+  }
+
   /**
    * ¿Se decora acá?
    *
@@ -185,11 +249,36 @@ export default class TareasPlugin extends Plugin {
   async guardar(): Promise<void> {
     await this.saveData(this.settings);
     this.sincronizarIndicadores();
+    this.redibujar();
     // Los ajustes tienen efecto sin recargar: es lo que hace que agregar una
     // nota o encender el congelado se pueda probar en el momento.
     if (this.store) {
       this.store.congelado = this.settings.congelarStore;
       await this.store.resincronizar();
+    }
+  }
+
+  /**
+   * Despacha una transacción vacía en cada editor markdown abierto.
+   *
+   * Las extensiones leen la configuración por closure, así que un ajuste tiene
+   * efecto en la próxima transacción — y cambiar un ajuste **no produce
+   * ninguna**. Sin esto, renombrar un workbench favorito dejaría el ★ mirando
+   * el nombre viejo hasta la próxima tecla, que es el peor tipo de bug: se
+   * arregla solo y por eso no se reporta nunca.
+   *
+   * Una transacción sin cambios no toca el documento ni ensucia el buffer: no
+   * dispara `modify` ni `changed`, y no llega a `vault.process`. Nada que ver
+   * con una escritura (§8, regla 2).
+   */
+  private redibujar(): void {
+    for (const hoja of this.app.workspace.getLeavesOfType("markdown")) {
+      if (!(hoja.view instanceof MarkdownView)) continue;
+      // `editor.cm` no está en las tipificaciones públicas: es la vista de
+      // CodeMirror que Obsidian expone de hecho, y es la que ya usa el espía de
+      // transacciones de `scripts/espia.js`.
+      const cm = (hoja.view.editor as unknown as { cm?: EditorView }).cm;
+      cm?.dispatch({});
     }
   }
 }
@@ -272,6 +361,47 @@ class TareasSettingTab extends PluginSettingTab {
           await this.plugin.guardar();
         }),
       );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.workbenchSecundario.nombre)
+      .setDesc(STRINGS.ajustes.workbenchSecundario.descripcion)
+      .addText((t) =>
+        t
+          .setPlaceholder(STRINGS.ajustes.workbenchSecundario.marcador)
+          .setValue(this.plugin.settings.workbenchSecundario)
+          // Vacío es una respuesta válida y no cae al de por omisión: significa
+          // «este botón no existe», y la fila dibuja tres en vez de cuatro.
+          .onChange(async (v) => {
+            this.plugin.settings.workbenchSecundario = sanearWorkbenchOpcional(v);
+            await this.plugin.guardar();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.filaDeBotones.nombre)
+      .setDesc(STRINGS.ajustes.filaDeBotones.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.filaDeBotones).onChange(async (v) => {
+          this.plugin.settings.filaDeBotones = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.modoDeRevelacion.nombre)
+      .setDesc(STRINGS.ajustes.modoDeRevelacion.descripcion)
+      .addDropdown((d) => {
+        // Solo los modos **ofrecidos**: `swipe` existe en el tipo y no acá,
+        // porque hoy no hace nada (§15). Un modo que no funciona es lo mismo
+        // que un ítem gris en el ⋯.
+        for (const m of MODOS_OFRECIDOS) {
+          d.addOption(m, STRINGS.ajustes.modoDeRevelacion.opciones[m]);
+        }
+        d.setValue(this.plugin.settings.modoDeRevelacion).onChange(async (v) => {
+          this.plugin.settings.modoDeRevelacion = sanearRevelacion(v);
+          await this.plugin.guardar();
+        });
+      });
 
     new Setting(containerEl)
       .setName(STRINGS.ajustes.decoraciones.nombre)

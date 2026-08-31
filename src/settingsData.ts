@@ -12,6 +12,25 @@ export const ESTILOS_DE_PRIORIDAD = ["barra-checkbox", "barra", "checkbox", "fon
 export type EstiloDePrioridad = (typeof ESTILOS_DE_PRIORIDAD)[number];
 
 /**
+ * Cómo se revela la fila de botones (§13.0, §15 punto 1).
+ *
+ * **Es un parámetro, no un `mouseenter`.** La §15 es explícita: «si nace con
+ * `mouseenter` adentro, después se reescribe entero». El modo viaja como clase
+ * en `body` —igual que el estilo de prioridad— y la hoja de estilos decide; en
+ * `hover` no hay un solo gesto cableado en el código.
+ *
+ * `swipe` está declarado y **no se ofrece**: es la alternativa móvil de la §15
+ * y hoy no hace nada. Un modo que no funciona es lo mismo que un ítem gris en
+ * el ⋯, y vale la misma regla: si no se puede usar, no va. `sanearRevelacion`
+ * lo hace caer a `hover`, así que un `data.json` que lo tenga no rompe nada.
+ */
+export const MODOS_DE_REVELACION = ["hover", "siempre", "swipe"] as const;
+export type ModoDeRevelacion = (typeof MODOS_DE_REVELACION)[number];
+
+/** Los que hoy se pueden elegir. El desplegable de ajustes lee de acá. */
+export const MODOS_OFRECIDOS = ["hover", "siempre"] as const satisfies readonly ModoDeRevelacion[];
+
+/**
  * Versión del **formato de lo que el plugin escribe en las notas**.
  *
  * No es la versión del plugin. Existe desde el primer día para que un cambio
@@ -57,6 +76,26 @@ export interface TareasSettings {
    * interfaz todavía. Cuando estén el ★ y el ◐ van a leer de acá.
    */
   workbenchFavorito: string;
+  /**
+   * El segundo botón fijo de la fila, el ◐ de la §13.0.
+   *
+   * **Vacío por omisión, y vacío significa que el ◐ no se dibuja.** Es la misma
+   * regla con la que el ⋯ deja afuera lo que todavía no tiene capa 1 y 2
+   * detrás: un botón que no puede hacer nada es peor que un botón que no está.
+   * Inventarle un nombre por omisión sería peor todavía — se escribiría en el
+   * token de la primera tarea que el usuario toque sin haberlo elegido.
+   */
+  workbenchSecundario: string;
+  /**
+   * La fila de botones sobre la línea (§13.0, paso 4b).
+   *
+   * Encendida, con interruptor, por lo mismo que las decoraciones: es lo que
+   * permite medir A/B cuánto cuesta y es la salida si algo sale mal, sin
+   * desinstalar nada. Patrón `designFlags.ts`.
+   */
+  filaDeBotones: boolean;
+  /** Cuándo se ve la fila. Ver `MODOS_DE_REVELACION`. */
+  modoDeRevelacion: ModoDeRevelacion;
   /**
    * Las decoraciones sobre la nota: token invisible y color de prioridad (§4a).
    *
@@ -178,12 +217,22 @@ export function sanearEstilo(valor: unknown): EstiloDePrioridad {
     : "barra-checkbox";
 }
 
+/** Un modo conocido y **ofrecido**, o `hover`. Ver `MODOS_DE_REVELACION`. */
+export function sanearRevelacion(valor: unknown): ModoDeRevelacion {
+  return (MODOS_OFRECIDOS as readonly unknown[]).includes(valor)
+    ? (valor as ModoDeRevelacion)
+    : "hover";
+}
+
 export const DEFAULT_SETTINGS: TareasSettings = {
   formatVersion: FORMAT_VERSION,
   notasDeTareas: [...NOTAS_POR_OMISION],
   checkboxAutomatico: true,
   notaDeLog: NOTA_DE_LOG_POR_OMISION,
   workbenchFavorito: WORKBENCH_POR_OMISION,
+  workbenchSecundario: "",
+  filaDeBotones: true,
+  modoDeRevelacion: "hover",
   decoracionesEnLaNota: true,
   estiloDePrioridad: "barra-checkbox",
   indicadorGlifo: false,
@@ -206,6 +255,20 @@ export function sanearWorkbench(valor: unknown): string {
   return limpio === "" || /[;,%]/.test(limpio) ? WORKBENCH_POR_OMISION : limpio;
 }
 
+/**
+ * Lo mismo, pero **el vacío es una respuesta válida**: «este botón no existe».
+ *
+ * Son dos funciones y no un parámetro porque son dos preguntas distintas. El
+ * workbench del comando **tiene** que existir —un comando sin destino no hace
+ * nada y no hay dónde decirlo—; el segundo botón de la fila puede legítimamente
+ * no estar, y ahí la fila dibuja tres botones en vez de cuatro.
+ */
+export function sanearWorkbenchOpcional(valor: unknown): string {
+  if (typeof valor !== "string") return "";
+  const limpio = valor.trim().normalize("NFC");
+  return /[;,%]/.test(limpio) ? "" : limpio;
+}
+
 /** Lo guardado en `data.json`, mezclado con lo de por omisión y saneado. */
 export function cargarSettings(saved: unknown): TareasSettings {
   const raw = (saved ?? {}) as Partial<TareasSettings>;
@@ -218,6 +281,9 @@ export function cargarSettings(saved: unknown): TareasSettings {
         ? raw.notaDeLog.trim().normalize("NFC")
         : DEFAULT_SETTINGS.notaDeLog,
     workbenchFavorito: sanearWorkbench(raw.workbenchFavorito),
+    workbenchSecundario: sanearWorkbenchOpcional(raw.workbenchSecundario),
+    filaDeBotones: raw.filaDeBotones ?? DEFAULT_SETTINGS.filaDeBotones,
+    modoDeRevelacion: sanearRevelacion(raw.modoDeRevelacion),
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,
     estiloDePrioridad: sanearEstilo(raw.estiloDePrioridad),
     indicadorGlifo: raw.indicadorGlifo ?? DEFAULT_SETTINGS.indicadorGlifo,
