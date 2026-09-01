@@ -37,6 +37,14 @@ si traía una selección explícita— está `scripts/espia-cursor.js`, que se p
 igual en la consola. Sirve para lo que los tests con filtros encadenados no
 pueden ver: Outliner interceptando la tecla, y lo que Obsidian despacha detrás.
 
+**Una unidad relativa vale distinto en cada contexto**, y eso produce errores
+que parecen de posición. En la sesión 5 los botones del margen quedaban 2,8px
+más arriba que el checkbox: `--list-spacing` es `0.075em` y
+`--line-height-normal` es un número sin unidad, y la línea los resuelve contra
+`--font-text-size` (16px) mientras el margen los resuelve contra
+`--font-ui-smaller` (que es el 80% de aquel). La corrección no es un número, es
+**fijar el contexto**. Dos correcciones a ojo antes de medirlo no acertaron.
+
 Para lo que se ve en pantalla y no se puede deducir —cuántos márgenes hay, qué
 ancho tiene cada uno, cuánto mide un hueco— está `scripts/espia-margen.js`. Nació
 de una cuenta que daba 7 px donde la pantalla mostraba 45: cuando el número

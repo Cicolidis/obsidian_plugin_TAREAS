@@ -735,6 +735,45 @@ pide un navegador. Lo que sí se puede es prohibir la forma que lo causa.
 `.cm-gutter` — verificado volviendo a meter la regla vieja y viendo fallar el
 despliegue.
 
+### Lo que la sexta verificación del paso 4b midió
+
+**01/09/2026.** Dos cosas, y las dos las contestó `scripts/espia-margen.js`
+después de que dos correcciones a ojo fallaran. **Adivinar un número dos veces
+seguidas es la señal de que falta el instrumento, no la idea.**
+
+**29. Entre los números de línea y la fila hay un tercer margen, y es de otro
+plugin.** Medido: `cm-lineNumbers` 30,7px · **`zot-badge-gutter` 29,1px** ·
+`tareas-margen` 108,2px. Los 29px de hueco que se veían son el margen de badges
+de Anotaciones, que se dibuja también en las notas de tareas. El
+`margin-inline-start` negativo de este plugin **sí** se aplica —figura en la
+tabla— pero le pelea al vecino equivocado.
+
+No se corrige desde acá: es la interfaz de otro plugin, y esconderla es una
+decisión del usuario, no del código. Tampoco se arregla con precedencia: entre
+`default` y `high` no hay ningún nivel donde pararse, así que no hay forma de
+quedar entre dos márgenes de la misma precedencia.
+
+**30. El `em` de un margen no es el `em` de la línea.** El botón quedaba 2,8px
+más arriba que el checkbox, y la causa no era un `padding` que faltara sino una
+unidad que se resuelve distinto de cada lado:
+
+| | valor | en la línea | en el margen |
+|---|---|---|---|
+| `--list-spacing` | `0.075em` | 1,2px | 0,2px |
+| `--line-height-normal` | `1.5` (sin unidad) | 24px | 19,2px |
+
+La línea usa `--font-text-size` (16px) y el margen `--font-ui-smaller`, que es
+`--font-text-size * 0.8`. Los dos errores sumaban justo los 2,8px medidos.
+
+**La corrección no es un número: es fijar el contexto.** Con la letra de la
+línea puesta en la celda del margen, las dos variables valen lo mismo de los dos
+lados. Y se puede hacer sin deformar nada porque CodeMirror le pone la altura a
+esa celda con `style.height` —leído en `GutterElement.update`—, no con su
+contenido.
+
+Es la misma clase de error que el punto 27: **una cosa dibujada en las
+coordenadas de otra.** Ahí eran píxeles de posición; acá, unidades relativas.
+
 ---
 
 ## 6. Modelo de datos

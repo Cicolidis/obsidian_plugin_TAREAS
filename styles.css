@@ -533,22 +533,29 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
 	display: flex;
 	align-items: flex-start;
-	/* Y arriba **del texto**, no del bloque. Leído en el `app.css` del asar
-	   1.13.7: `.mod-cm6 .HyperMD-list-line.cm-line { padding-top:
-	   var(--list-spacing) }`. Una línea de tarea es una línea de lista, así que
-	   lleva ese relleno arriba y el elemento del margen cubre el bloque entero,
-	   relleno incluido. Sin esto los botones quedan justo esa cantidad más
-	   altos que el número, el filete y el checkbox — reportado en la sexta
-	   vuelta, y es un desfasaje chico que solo se ve al lado de otra cosa.
 
-	   Si igual queda corrido, el número se ajusta a ojo desde un fragmento de
-	   CSS del vault, sin recompilar:
+	/* **El `em` del margen no es el `em` de la línea, y de ahí salía todo.**
+	   Medido con `scripts/espia-margen.js`: la línea tiene `padding-top 1.2px`
+	   y `line-height 24px`, y el botón quedaba 2,8px más arriba que el
+	   checkbox.
 
-	       .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
-	         --tareas-margen-nudge: 2px;
-	       }
-	*/
-	padding-top: var(--tareas-margen-nudge, var(--list-spacing, 0px));
+	   La cuenta: `--list-spacing` es `0.075em` y `--line-height-normal` es un
+	   número sin unidad, así que los dos se resuelven contra el tamaño de letra
+	   del **contexto**. La línea usa `--font-text-size` (16px) y el margen usa
+	   `--font-ui-smaller`, que es `--font-text-size * 0.8`. Ahí `0.075em` daba
+	   0,2px en vez de 1,2, y `1.5em` daba 19,2 en vez de 24: dos errores que
+	   sumaban justo los 2,8px medidos.
+
+	   La corrección no es un número: es **fijar el contexto**. Con la letra de
+	   la línea, las dos variables valen lo mismo de los dos lados y el centro
+	   del botón cae exactamente en el centro del texto. Los botones no cambian
+	   de tamaño porque están en píxeles.
+
+	   CodeMirror le pone la altura a esta celda con `style.height` —leído en
+	   `GutterElement.update`— así que tocar la letra no la deforma. */
+	font-size: var(--font-text-size, 16px);
+	line-height: var(--line-height-normal, 1.5);
+	padding-top: var(--tareas-margen-nudge, var(--list-spacing, 0.075em));
 }
 
 /* Adentro del margen la fila no se posiciona: la columna **es** su lugar. */
@@ -559,7 +566,9 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .tareas-fila {
 	position: static;
 	/* Un renglón exacto, y los botones centrados adentro: la misma cuenta que
-	   hace el filete. Con `auto` la fila crecía hasta el alto de la tarea. */
+	   hace el filete. Con `auto` la fila crecía hasta el alto de la tarea, y con
+	   la letra del margen este `1em` daba 19,2px donde la línea tiene 24 — por
+	   eso la celda de arriba fija la letra antes. */
 	height: calc(var(--line-height-normal, 1.5) * 1em);
 	gap: 0;
 	padding: 0 2px;
