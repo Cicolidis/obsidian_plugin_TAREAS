@@ -20,7 +20,8 @@ import {
 } from "./botones.js";
 import { comandos } from "./comandos.js";
 import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
-import { filaDeBotones } from "./editor/filaDeBotones.js";
+import { filaDeBotones, filaEnElMargen } from "./editor/filaDeBotones.js";
+import { cursorExterno } from "./editor/cursorExterno.js";
 import { manejarClicEnFila } from "./editor/menuDeTarea.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
 import { clicAlFinal } from "./editor/clicAlFinal.js";
@@ -119,24 +120,23 @@ export default class TareasPlugin extends Plugin {
       // Verificado adentro del asar instalado; el porqué está en
       // `editor/filaDeBotones.ts` y hay un test que falla si el widget declara
       // altura alguna vez.
+      // Que un cambio externo no le mueva el cursor al usuario. Va con el mismo
+      // alcance que el resto: solo en las notas de la lista.
+      cursorExterno((state) => this.enNotaDeTareas(state)),
       filaDeBotones(
         (state) => this.filaActiva(state),
-        {
-          favoritos: () => this.favoritos(),
-          alClic: manejarClicEnFila({
-            app: this.app,
-            store: this.store,
-            notas: () => this.notasDelStore(),
-            favoritos: () => this.favoritos(),
-            archivoDe: (state) => state.field(editorInfoField, false)?.file?.path ?? null,
-          }),
-          dibujarIcono: (el, icono) => setIcon(el, icono),
-        },
+        this.opcionesDeFila(),
         (ms, lineas) => {
           if (!this.settings.registrarEventos) return;
           console.log(`[tareas] fila · ${lineas} líneas visibles · ${ms.toFixed(2)} ms`);
         },
       ),
+      // La misma fila, en un margen propio a la derecha de los números de línea.
+      // `Prec.lowest` es lo que la pone **después** del margen de Obsidian: «el
+      // orden en que aparecen los márgenes lo decide la precedencia de su
+      // extensión». Los dos no pueden estar encendidos a la vez, y de eso se
+      // encargan `filaActiva` y `filaEnMargenActiva`.
+      Prec.lowest(filaEnElMargen((state) => this.filaEnMargenActiva(state), this.opcionesDeFila())),
     ]);
 
     this.sincronizarIndicadores();
@@ -224,6 +224,27 @@ export default class TareasPlugin extends Plugin {
     return this.settings.checkboxAutomatico && this.enNotaDeTareas(state);
   }
 
+  /**
+   * Lo que las dos formas de la fila necesitan del mundo.
+   *
+   * Se arma una vez y la comparten el widget y el margen: si cada uno tuviera
+   * su propio `alClic`, un arreglo entraría en uno y no en el otro.
+   */
+  private opcionesDeFila() {
+    return {
+      favoritos: () => this.favoritos(),
+      alClic: manejarClicEnFila({
+        app: this.app,
+        store: this.store,
+        notas: () => this.notasDelStore(),
+        favoritos: () => this.favoritos(),
+        archivoDe: (state: EditorState) =>
+          state.field(editorInfoField, false)?.file?.path ?? null,
+      }),
+      dibujarIcono: (el: HTMLElement, icono: string) => setIcon(el, icono),
+    };
+  }
+
   /** Los dos botones fijos de la fila (§13.0: «asignables en settings»). */
   private favoritos(): Favoritos {
     return {
@@ -240,6 +261,18 @@ export default class TareasPlugin extends Plugin {
    * apagar el color no tiene por qué apagar los botones, y al revés tampoco.
    */
   private filaActiva(state: EditorState): boolean {
+    // `columna` la dibuja el margen, no el widget: los dos encendidos a la vez
+    // pondrían dos filas por tarea.
+    if (this.settings.estiloDeFila === "columna") return false;
+    return this.filaEncendida(state);
+  }
+
+  /** ¿Va la fila en su margen propio acá? Es `columna` y nada más. */
+  private filaEnMargenActiva(state: EditorState): boolean {
+    return this.settings.estiloDeFila === "columna" && this.filaEncendida(state);
+  }
+
+  private filaEncendida(state: EditorState): boolean {
     if (!this.settings.filaDeBotones) return false;
     if (!state.field(editorLivePreviewField, false)) return false;
     return this.enNotaDeTareas(state);

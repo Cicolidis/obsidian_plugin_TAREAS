@@ -630,6 +630,64 @@ Entre esos dos eventos no hay ninguna razón legítima para que la selección se
 mueva. No pregunta de qué forma vino el cambio —eso es lo que la §8 del método
 prohíbe—: afirma el invariante que la fila tiene que cumplir.
 
+### Lo que la tercera verificación del paso 4b midió
+
+**31/08/2026.** El espía cerró la falla que dos vueltas no habían podido cerrar,
+y de paso mostró que la reproducción offline anterior medía otra cosa.
+
+**23. Lo que movía el cursor era la escritura, no el clic.** El punto 22 decía lo
+contrario y estaba mal. Con `scripts/espia-cursor.js`:
+
+```
+#103 376:0 → 376:41  ← selección explícita  · doc +0  · select.pointer
+#104 376:41 → 376:0                          · doc +30 · set
+```
+
+El clic deja el cursor en la columna 41; **la transacción `set` que trae de
+vuelta nuestra propia escritura lo manda a la 0, sin poner ninguna selección
+explícita**. O sea que lo mueve el **mapeo**.
+
+**Y por qué la reproducción offline del punto 22 no lo encontró:** usaba un diff
+**mínimo**, carácter a carácter, donde el cambio empieza adentro del token —o
+sea después del cursor— y no lo toca. **El diff de Obsidian arranca en el
+comienzo de la línea**, y `ChangeSet.mapPos` de una posición que cae adentro de
+un rango reemplazado devuelve el comienzo del rango. Esa diferencia era todo. La
+lección es de método: **una reproducción tiene que copiar la forma del sistema,
+no una forma razonable.**
+
+La corrección es `src/editor/cursorExterno.ts`, y la regla es la del invariante
+10 aplicada al cursor: **la línea se identifica por su texto visible, no por su
+número.** Se compara el texto sin el tramo oculto porque es justo el tramo lo que
+la escritura cambia. Si ese texto no aparece, o aparece varias veces y la línea
+se movió, no se toca nada y manda el mapeo de CodeMirror. Sirve igual para lo que
+llega por Sync, que es el otro origen de un cambio externo.
+
+**24. La fila en el margen tiene que ser un `gutter`, no un widget.** La versión
+anterior de `columna` posicionaba la fila con `right: calc(100% + …)` adentro de
+`.cm-line`, y eso solo funciona si la nota deja espacio a los costados. Medido en
+el uso: con «longitud de línea legible» **apagada** los botones quedan recortados
+fuera de la pantalla, y con ella encendida la pastilla se dibuja **encima** de
+los números de línea. Son dos cosas que no saben una de la otra.
+
+Un `gutter` de CodeMirror es una **columna de verdad** y resuelve las tres cosas
+de arriba sin ninguna cuenta: el orden que pedía la propuesta —número de línea ·
+botones · filete · plegado · checkbox— sale de registrar el margen con
+`Prec.lowest`, porque «el orden en que aparecen los márgenes lo decide la
+precedencia de su extensión».
+
+Y resuelve una cuarta de arriba: en el margen los botones viven **afuera de
+`.cm-content`**, así que el navegador no tiene dónde poner un caret y toda la
+familia de fallas del cursor con el clic desaparece de raíz. El clic tampoco
+necesita `posAtDOM`: los `domEventHandlers` de un margen reciben el `BlockInfo`
+de la línea **fresco en el momento del evento**, que es la misma garantía del
+invariante 10 por una puerta más directa.
+
+**25. Lo que quedó dicho y no se corrige.** Con Outliner instalado la unión con
+Backspace sigue dejando el cursor donde él quiera (punto 19), y la flecha sigue
+entrando a las posiciones de adentro del `- [ ] ` (punto 20). Las dos son de
+otro, están medidas, y corregirlas sería pelearle una selección a un plugin que
+la puso a propósito.
+
 ---
 
 ## 6. Modelo de datos

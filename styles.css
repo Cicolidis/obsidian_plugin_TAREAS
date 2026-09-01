@@ -475,52 +475,61 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	cursor: help;
 }
 
-/* --- 6. `columna`: el margen izquierdo, en pastilla ---------------------- */
+/* --- 6. `columna`: un margen propio, a la derecha de los números --------- */
 /*
- * La propuesta de la segunda vuelta. De izquierda a derecha:
+ * La propuesta de la tercera vuelta, y la única que **no** vive adentro de
+ * `.cm-line`: es un `gutter` de CodeMirror, o sea una columna de verdad. De ahí
+ * salen gratis las tres cosas que la versión anterior no podía dar:
  *
- *   número de línea · **botones** · filete · plegado · checkbox
+ * - **el orden**: número de línea · botones · filete · plegado · checkbox, porque
+ *   CodeMirror acomoda los márgenes uno al lado del otro y corre el contenido;
+ * - **nada se recorta**, ni con «longitud de línea legible» apagada: la columna
+ *   no depende del margen que la nota deje a los costados;
+ * - **nada se superpone**: el margen de los números y el nuestro son dos cajas
+ *   distintas, no dos cosas dibujadas encima del mismo lugar.
  *
- * El filete se queda en 1.9rem y el plegado donde lo pone Obsidian (1.3rem
- * adentro de la línea, `--list-bullet-end-padding`), así que la fila arranca
- * más afuera que los dos: `right: calc(100% + 2.4rem)`.
- *
- * ## Los botones activos se ven siempre, y **nada se mueve**
- *
- * Era la pregunta abierta de la propuesta: cómo mostrar solo los workbenches
- * donde la tarea ya está y hacer aparecer el resto al pasar el mouse, sin que
- * los primeros se corran cuando aparecen los otros.
- *
- * La respuesta es no sacar nada del flujo: **los cuatro botones están siempre**,
- * y lo único que cambia es la opacidad y el fondo de la pastilla. Con
- * `display: none` o con un ancho variable, la fila está anclada por la derecha y
- * cada botón que aparece empujaría a los de al lado — el ★ se movería justo
- * cuando el mouse va hacia él, que es el peor momento posible.
+ * Y una cuarta, de arriba: los botones están **afuera de `.cm-content`**, así
+ * que el navegador no tiene dónde poner un caret y toda la familia de fallas del
+ * cursor con el clic desaparece de raíz.
  */
-body.tareas-fila-columna .markdown-source-view.mod-cm6 .tareas-fila {
-	right: calc(100% + 2.4rem);
-	left: auto;
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen {
+	display: flex;
+	flex-direction: column;
+	/* Sin ancho fijo: lo da el contenido, y con `renderEmptyElements: false` una
+	   nota sin tareas no ocupa nada. */
+	padding-inline-end: 4px;
+}
+
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
+	display: flex;
+	align-items: center;
+	/* La altura la pone CodeMirror por línea; esto solo centra adentro. */
+}
+
+/* Adentro del margen la fila no se posiciona: la columna **es** su lugar. */
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .tareas-fila-ancla {
+	display: block;
+}
+
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .tareas-fila {
+	position: static;
+	height: auto;
 	gap: 0;
 	padding: 0 2px;
 	border: 1px solid transparent;
 	border-radius: var(--radius-m);
-	height: calc(var(--line-height-normal, 1.5) * 1em - 2px);
-	top: 1px;
 	background: none;
 	transition: background-color 90ms ease, border-color 90ms ease;
 }
 
-/* La pastilla aparece al pasar el mouse; en reposo no hay caja, solo los
-   botones que están encendidos. */
-body.tareas-fila-columna .markdown-source-view.mod-cm6 .cm-line:hover .tareas-fila,
-body.tareas-fila-columna .markdown-source-view.mod-cm6 .cm-line:focus-within .tareas-fila {
+/* La pastilla aparece al pasar el mouse por la línea. El margen es hermano de
+   `.cm-line`, no su descendiente, así que `:hover` de la línea no lo alcanza:
+   se usa el `.cm-activeLineGutter` que CodeMirror ya mantiene, más el hover
+   sobre el propio elemento del margen. */
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement:hover .tareas-fila {
 	border-color: var(--background-modifier-border);
 	background-color: var(--background-secondary);
 	box-shadow: var(--shadow-s);
-}
-
-body.tareas-fila-columna .markdown-source-view.mod-cm6 .tareas-boton {
-	border-radius: var(--radius-s);
 }
 
 /* --- los modos de revelación --------------------------------------------- */
@@ -549,37 +558,36 @@ body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .cm-line:hover .tareas
 
 /* --- `columna` con revelación por hover: los activos no se esconden ------- */
 /*
- * En reposo la fila entera está visible pero **los botones apagados son
- * transparentes**, así que se ven solo los workbenches donde la tarea ya está —
- * que es el indicador persistente de la §13.0 llevado al margen—. Al pasar el
- * mouse aparecen los cuatro.
+ * En reposo se ven solo los workbenches donde la tarea **ya está** —el indicador
+ * persistente de la §13.0 llevado al margen— y al pasar el mouse aparecen los
+ * cuatro con la pastilla.
  *
- * Se opacan los **botones**, no la fila: así ninguno cambia de lugar. Y se
- * apaga `pointer-events` solo en los invisibles, para que un clic al costado no
- * caiga en un botón que no se ve.
+ * Se opacan los **botones**, no la fila: así ninguno cambia de lugar. Con
+ * `display: none` o con un ancho variable, cada botón que aparece empujaría a
+ * los de al lado — el ★ se movería justo cuando el mouse va hacia él, que es el
+ * peor momento posible. Era la pregunta abierta de la propuesta.
  */
-body.tareas-revelar-hover.tareas-fila-columna .markdown-source-view.mod-cm6 .tareas-fila {
-	opacity: 1;
-	pointer-events: auto;
-}
-
-body.tareas-revelar-hover.tareas-fila-columna
+body.tareas-revelar-hover
 	.markdown-source-view.mod-cm6
+	.cm-gutter.tareas-margen
 	.tareas-boton:not(.is-activo) {
 	opacity: 0;
 	pointer-events: none;
 }
 
-body.tareas-revelar-hover.tareas-fila-columna
+body.tareas-revelar-hover
 	.markdown-source-view.mod-cm6
-	.cm-line:hover
-	.tareas-boton:not(.is-activo),
-body.tareas-revelar-hover.tareas-fila-columna
-	.markdown-source-view.mod-cm6
-	.cm-line:focus-within
+	.cm-gutter.tareas-margen
+	.cm-gutterElement:hover
 	.tareas-boton:not(.is-activo) {
 	opacity: 1;
 	pointer-events: auto;
+}
+
+/* El margen solo existe con el estilo `columna`: con cualquier otro se saca del
+   layout entero, para no dejar una columna vacía corriendo el texto. */
+body:not(.tareas-fila-columna) .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen {
+	display: none;
 }
 
 /* --- ajustes ------------------------------------------------------------- */

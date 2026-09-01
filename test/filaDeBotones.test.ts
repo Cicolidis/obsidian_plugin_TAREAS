@@ -5,6 +5,7 @@ import { filaDe, type Favoritos } from "../src/botones.js";
 import {
   decoracionesDeFila,
   filaDeBotones,
+  filaEnElMargen,
   FilaWidget,
   type OpcionesDeFila,
 } from "../src/editor/filaDeBotones.js";
@@ -196,5 +197,36 @@ describe("eq(): qué obliga a rehacer el DOM y qué no", () => {
   // Sin esto un clic mueve el cursor y empieza una selección.
   it("los eventos del widget no son del editor", () => {
     expect(widget("- [ ] a").ignoreEvent()).toBe(true);
+  });
+});
+
+// ------------------------------------------------------------- el margen
+
+describe("la fila en su margen propio", () => {
+  /**
+   * La forma del estilo `columna`: un `gutter` de CodeMirror, no un widget.
+   *
+   * Que **no aporte decoraciones** es lo que la mantiene afuera de la discusión
+   * de la §5.5: un margen no puede cambiar la altura de una línea ni entrar al
+   * mapa de alturas, porque no es una decoración. Si algún día alguien le
+   * agregara una, habría que volver a pensar de dónde sale.
+   */
+  it("no aporta ninguna decoración", () => {
+    const st = EditorState.create({
+      doc: "- [ ] a",
+      extensions: [filaEnElMargen(() => true, opciones())],
+    });
+    expect(st.facet(EditorView.decorations)).toHaveLength(0);
+  });
+
+  // Los dos no pueden estar encendidos a la vez o se dibujarían dos filas por
+  // tarea. Quién decide es `main.ts`; acá se fija que sean **dos** extensiones
+  // distintas, que es lo que permite decidirlo.
+  it("es una extensión aparte de la del widget", () => {
+    const conWidget = EditorState.create({
+      doc: "- [ ] a",
+      extensions: [filaDeBotones(() => true, opciones())],
+    });
+    expect(conWidget.facet(EditorView.decorations)).toHaveLength(1);
   });
 });

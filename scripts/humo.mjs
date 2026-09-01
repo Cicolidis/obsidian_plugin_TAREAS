@@ -83,6 +83,9 @@ for (const marca of [
   ".process(",
   "ViewPlugin",
   "posAtDOM",
+  // El margen propio de la fila (estilo `columna`) y el guardia del cursor.
+  "GutterMarker",
+  "lineMarkerChange",
   "tareas-fila",
   "tareas-revelar-",
   "setIcon",
@@ -127,6 +130,7 @@ try {
     "tareas-fila-margen",
     "tareas-fila-izquierda",
     "tareas-fila-columna",
+    "tareas-margen",
     "tareas-estilo-barra-completa",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);

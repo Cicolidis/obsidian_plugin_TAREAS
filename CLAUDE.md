@@ -120,6 +120,22 @@ test. Todo instrumento que guarde una foto tiene que **detectar que quedó vieja
 saltearse diciéndolo**, no fallar como si el código estuviera mal. Una alarma
 falsa que se repite es una alarma que se ignora.
 
+### Una reproducción tiene que copiar la forma del sistema
+
+En la sesión 5 el cursor saltaba al comienzo de la línea al asignar un workbench.
+Se montó offline el camino entero —plan, diff, transacción con
+`userEvent: "set"`— y **no se reprodujo**, así que se descartó la escritura como
+causa. Estaba mal: la reproducción usaba un diff **mínimo**, carácter a carácter,
+y el de Obsidian arranca en el comienzo de la línea. `ChangeSet.mapPos` de una
+posición adentro de un rango reemplazado devuelve el comienzo del rango, y ahí
+estaba todo.
+
+Una reproducción que elige la forma «razonable» de un cambio en vez de la que el
+sistema produce de verdad no refuta nada: mide otra cosa. Cuando no se pueda
+saber la forma, el instrumento en vivo lo dice —el espía la mostró en dos
+líneas— y eso vale más que una hora de razonar sobre el diff que uno habría
+escrito.
+
 ### Una hipótesis que no falla su test se revierte
 
 En la sesión 5 el cursor quedaba mal después de unir dos tareas y la explicación
