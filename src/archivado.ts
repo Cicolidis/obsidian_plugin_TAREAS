@@ -22,7 +22,7 @@ import {
   type Documento,
   type Nodo,
 } from "./documento.js";
-import { renderBullet } from "./linea.js";
+import { parseBullet, renderBullet } from "./linea.js";
 import { parseTaskToken, stripTaskToken } from "./token.js";
 
 /** La marca de completado que se escribe al final de la línea archivada. */
@@ -270,6 +270,45 @@ export function archivarEnElLog(
   const log = parseDocumento(texto);
   const plan = planDeArchivado(log, camino, bloque);
   return { texto: renderDocumento(aplicarArchivado(log, plan)), plan };
+}
+
+/**
+ * ¿Este bloque **ya está** en el historial, bajo el mismo camino?
+ *
+ * Reportado el 01/09/2026, al verificar el paso 6a: archivar dos veces la misma
+ * tarea la escribe dos veces, idéntica, y nada avisa. Es una consecuencia de
+ * una decisión correcta —una tarea que ya estaba `[x]` se archiva igual, porque
+ * pudo completarse a mano ayer— pero la consecuencia no estaba mirada.
+ *
+ * No se **impide**: puede haber dos tareas con el mismo texto y las dos merecen
+ * su entrada, y el usuario puede querer archivar de nuevo a propósito. Lo que
+ * se hace es **preguntar**, aunque el bloque sea de una línea y normalmente no
+ * preguntara: el umbral existe para no poner fricción en el caso frecuente, y
+ * este no lo es.
+ *
+ * Se compara por el mismo camino y el mismo texto ya normalizado —sin la marca
+ * de fecha—, que es lo que `parseLog` devuelve. La fecha no entra a propósito:
+ * la misma tarea archivada otro día sigue siendo la misma tarea.
+ */
+export function yaEstaEnElLog(
+  log: Documento,
+  camino: readonly string[],
+  bloque: readonly string[],
+): boolean {
+  const primera = bloque[0];
+  if (primera === undefined) return false;
+  const b = parseBullet(primera);
+  if (b === null) return false;
+
+  const buscado = parseLineaArchivada(b.contenido).texto.trimEnd();
+  if (buscado === "") return false;
+
+  return parseLog(log).some(
+    (e) =>
+      e.nota === (camino[0] ?? null) &&
+      e.proyecto === (camino[1] ?? null) &&
+      e.texto === buscado,
+  );
 }
 
 /**

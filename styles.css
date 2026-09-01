@@ -715,3 +715,26 @@ body:not(.tareas-fila-columna) .markdown-source-view.mod-cm6 .cm-gutter.tareas-m
 .tareas-confirmar .tareas-confirmar-detalle:last-of-type {
   margin-bottom: var(--size-4-3);
 }
+
+/* --------------------------------------------------------------------------
+ * «Eliminar» en el ⋯ tiene que verse distinto **antes** de abrirlo.
+ *
+ * `MenuItem.setWarning(true)` pone la clase, y eso está verificado adentro del
+ * asar de Obsidian 1.13.7:
+ *
+ *     e.prototype.setWarning = function(e){ return this.dom.toggleClass("is-warning", e), this }
+ *
+ * Pero **Obsidian no la colorea**: en todo el bundle no hay una sola regla que
+ * le dé color. La documentación de la API dice «will become red», y agrega la
+ * salida: «o el color que un tema le aplique a la clase `is-warning`». O sea
+ * que sin tema que la estilice, `setWarning` no hace nada visible — que es
+ * exactamente lo que se reportó en la verificación (D1).
+ *
+ * Va con especificidad baja a propósito: un tema que sí la estilice tiene que
+ * poder ganar.
+ * -------------------------------------------------------------------------- */
+
+.menu-item.is-warning .menu-item-title,
+.menu-item.is-warning .menu-item-icon {
+  color: var(--text-error);
+}

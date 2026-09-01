@@ -5,6 +5,7 @@ import { reubicarCursor } from "../src/cursor.js";
 import { cursorExterno } from "../src/editor/cursorExterno.js";
 import { decoraciones } from "../src/editor/decoraciones.js";
 import { protegerTramo } from "../src/editor/protegerTramo.js";
+import { documento } from "./arbitrarios.js";
 
 const TOKEN = "%%t:id=t9rn;wb=mensual;p=2;done=2026-08-24%%";
 
@@ -226,6 +227,81 @@ describe("propiedades", () => {
           });
         },
       ),
+    );
+  });
+});
+
+describe("reubicarCursor — cuando el tilde cambia (reportado el 01/09/2026)", () => {
+  /**
+   * El bug: al completar y archivar con el cursor sobre la tarea, el cursor se
+   * metía adentro del checkbox y Live Preview desarmaba el `- [ ] `.
+   *
+   * La causa es que completar cambia el texto **visible**, que es justo la
+   * clave por la que este módulo identifica la línea. El ★ no lo hace —solo
+   * toca el token— y por eso la sesión 5 no lo vio.
+   */
+  it("completar deja el cursor donde estaba", () => {
+    const antes = ["# h", "- [ ] mandar el formulario", "- [ ] otra"];
+    const despues = ["# h", "- [x] mandar el formulario %%t:done=2026-09-01%%", "- [ ] otra"];
+    expect(reubicarCursor(antes, { linea: 1, columna: 20 }, despues)).toEqual({
+      linea: 1,
+      columna: 20,
+    });
+  });
+
+  it("y también si además la línea se corrió", () => {
+    const antes = ["- [ ] una", "- [ ] otra"];
+    const despues = ["nueva", "otra nueva", "- [ ] una", "- [x] otra %%t:done=2026-09-01%%"];
+    expect(reubicarCursor(antes, { linea: 1, columna: 7 }, despues)).toEqual({
+      linea: 3,
+      columna: 7,
+    });
+  });
+
+  it("destildar también, que es lo que hace el reinicio de un grupo cíclico", () => {
+    const antes = ["- [x] semanal %%t:rec=lunes;done=2026-08-31%%"];
+    const despues = ["- [ ] semanal %%t:rec=lunes%%"];
+    expect(reubicarCursor(antes, { linea: 0, columna: 9 }, despues)).toEqual({
+      linea: 0,
+      columna: 9,
+    });
+  });
+
+  it("la segunda pasada **no** adivina entre dos tareas iguales", () => {
+    // Sigue valiendo la prudencia del invariante 10: lo único que se acepta es
+    // el tilde cambiado, no una coincidencia parecida.
+    const antes = ["a", "b", "- [ ] misma", "- [ ] misma"];
+    const despues = ["- [x] misma", "- [x] misma"];
+    expect(reubicarCursor(antes, { linea: 3, columna: 5 }, despues)).toBeNull();
+  });
+
+  it("y no se estira a una línea sin checkbox", () => {
+    // Un bullet sin checkbox que cambió de texto no tiene nada que normalizar:
+    // sigue siendo «no sé dónde quedó».
+    expect(reubicarCursor(["- una nota"], { linea: 0, columna: 4 }, ["- otra nota"])).toBeNull();
+  });
+
+  it("un cambio de texto de verdad sigue devolviendo null", () => {
+    expect(reubicarCursor(["- [ ] a"], { linea: 0, columna: 3 }, ["- [x] b"])).toBeNull();
+  });
+
+  it("propiedad: normalizar el tilde no cambia el largo de la línea", () => {
+    // Es lo que hace que la columna del cursor siga siendo válida después de la
+    // segunda pasada. Si dejara de valer, el cursor caería en otro lado.
+    fc.assert(
+      fc.property(documento, (raw) => {
+        const antes = raw.split("\n");
+        const despues = antes.map((l) => l.replace(/^(\s*[-*+]\s+)\[.\]/, "$1[x]"));
+        for (let i = 0; i < antes.length; i++) {
+          expect(despues[i]!.length, `línea ${i}`).toBe(antes[i]!.length);
+          const r = reubicarCursor(antes, { linea: i, columna: antes[i]!.length }, despues);
+          // O no se puede saber, o la columna cae adentro de la línea nueva.
+          if (r !== null) {
+            expect(r.columna).toBeLessThanOrEqual(despues[r.linea]!.length);
+          }
+        }
+      }),
+      { numRuns: 200 },
     );
   });
 });

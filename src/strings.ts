@@ -196,6 +196,13 @@ export const STRINGS = {
       /** Y el caso de la que ya estaba completa: en la nota no cambia nada. */
       yaEstabaCompleta: (nota: string) =>
         `La tarea ya está completa: en ${nota} no se cambia nada.`,
+      /**
+       * La repetida. Esta línea es la que **fuerza** el modal aunque el bloque
+       * sea de una sola línea: archivar de nuevo no es el caso frecuente.
+       */
+      yaEnElHistorial:
+        "Ojo: esta tarea ya figura en el historial bajo ese mismo camino. Si seguís, va a " +
+        "quedar escrita dos veces.",
       deshacer:
         "Con la nota abierta, Ctrl-Z deshace lo que se escribe en ella. En el historial no: " +
         "esa nota está cerrada y nada lo deshace.",

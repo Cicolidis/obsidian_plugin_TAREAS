@@ -11,6 +11,7 @@ import {
   nombreDeNota,
   parseLog,
   planDeArchivado,
+  yaEstaEnElLog,
 } from "../src/archivado.js";
 import { parseDocumento, renderDocumento } from "../src/documento.js";
 
@@ -372,5 +373,47 @@ describe("nombreDeNota", () => {
     expect(caminoDeArchivado("0_inbox/tareas_X.md", null)).toEqual([
       nombreDeNota("0_inbox/tareas_X.md"),
     ]);
+  });
+});
+
+describe("yaEstaEnElLog — la repetida (reportado el 01/09/2026)", () => {
+  const conUna = "# tareas_X\n\n- mandar el formulario [✓ 2026-08-30]";
+
+  it("la reconoce aunque la fecha sea otra", () => {
+    // La misma tarea archivada otro día sigue siendo la misma tarea.
+    const bloque = ["- mandar el formulario [✓ 2026-09-01]"];
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_X"], bloque)).toBe(true);
+  });
+
+  it("y sin fecha ninguna", () => {
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_X"], ["- mandar el formulario"])).toBe(true);
+  });
+
+  it("no la reconoce bajo otro camino: el historial se ordena por nota", () => {
+    const bloque = ["- mandar el formulario [✓ 2026-09-01]"];
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_Y"], bloque)).toBe(false);
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_X", "p_Z"], bloque)).toBe(false);
+  });
+
+  it("un texto distinto no es la misma tarea", () => {
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_X"], ["- mandar el otro formulario"])).toBe(false);
+  });
+
+  it("un historial vacío nunca la tiene", () => {
+    expect(yaEstaEnElLog(doc(""), ["tareas_X"], ["- lo que sea"])).toBe(false);
+  });
+
+  it("un bloque vacío o sin bullet no rompe nada", () => {
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_X"], [])).toBe(false);
+    expect(yaEstaEnElLog(doc(conUna), ["tareas_X"], ["texto suelto"])).toBe(false);
+  });
+
+  it("archivar y volver a preguntar: la segunda vez ya está", () => {
+    // El ida y vuelta completo, que es lo que ve el usuario.
+    const bloque = ["- una tarea [✓ 2026-09-01]"];
+    const vacio = "# historial";
+    expect(yaEstaEnElLog(doc(vacio), ["tareas_X"], bloque)).toBe(false);
+    const { texto } = archivarEnElLog(vacio, ["tareas_X"], bloque);
+    expect(yaEstaEnElLog(doc(texto), ["tareas_X"], bloque)).toBe(true);
   });
 });

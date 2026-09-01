@@ -127,7 +127,7 @@ Acordate de apagarlo después.
 |---|---|---|
 | F1 | Encender el congelado. Teclear **cinco líneas nuevas arriba** de la tarea | El índice queda a propósito atrasado |
 | F2 | ⋯ → «Completar y archivar» sobre esa tarea | **Escribe donde va**, no cinco líneas más arriba. El aviso puede decir «se había corrido» |
-| F3 | Ídem con «Eliminar» | Borra el subárbol correcto |
+| F3 | Ídem con «Eliminar», sobre una tarea que **no** hayas tocado desde que congelaste | Borra el subárbol correcto. **Sobre una que sí tocaste** —una que acabás de archivar— tiene que **negarse**: su texto cambió y el índice congelado tiene el viejo. Eso es el mecanismo andando, no una falla; la guía original no lo decía |
 | F4 | Duplicar una tarea con subárbol para que el bloque quede **repetido verbatim**, y correr cualquiera de las dos | Se **niega** con «No se escribió nada: alguna línea ya no está donde estaba, o aparece repetida». Y el historial **tampoco** recibió nada: el paso en seco corre antes |
 | F5 | Apagar el congelado | (acordate) |
 

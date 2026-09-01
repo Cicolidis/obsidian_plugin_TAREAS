@@ -40,6 +40,7 @@ import {
   nodoDeTarea,
   nombreDeNota,
   planDeArchivado,
+  yaEstaEnElLog,
 } from "./archivado.js";
 import { bajar, subir } from "./color.js";
 import type { Prioridad } from "./token.js";
@@ -342,11 +343,12 @@ export async function archivarTarea(
     new Notice(STRINGS.avisos.sinLog(notaDeLog), 10000);
     return;
   }
-  const previo = planDeArchivado(
-    parseDocumento(await app.vault.cachedRead(archivoDelLog)),
-    camino,
-    bloque,
-  );
+  const log = parseDocumento(await app.vault.cachedRead(archivoDelLog));
+  const previo = planDeArchivado(log, camino, bloque);
+  // Archivar de nuevo lo mismo no se impide, pero **siempre** se pregunta,
+  // aunque el bloque sea de una línea: el umbral existe para no poner fricción
+  // en el caso frecuente, y una entrada repetida no lo es.
+  const repetida = yaEstaEnElLog(log, camino, bloque);
 
   // Igual que al completar: saltear una línea rota es lo correcto (§5.3), pero
   // saltearla en silencio deja una madre en `[x]` y una hija en `[ ]`.
@@ -356,7 +358,7 @@ export async function archivarTarea(
   const escribirlo = () =>
     void escribirYAvisar(app, store, ctx, { archivo: notaDeLog, camino, bloque }, cambios);
 
-  if (!archivarPideConfirmacion(bloque)) {
+  if (!repetida && !archivarPideConfirmacion(bloque)) {
     escribirlo();
     return;
   }
@@ -368,6 +370,7 @@ export async function archivarTarea(
     {
       titulo: t.titulo,
       detalle: [
+        ...(repetida ? [t.yaEnElHistorial] : []),
         t.alLog(bloque.length, camino.join(" / ")),
         ...(previo.headingsNuevos.length ? [t.creaSeccion(camino.join(" / "))] : []),
         completadas === 0
