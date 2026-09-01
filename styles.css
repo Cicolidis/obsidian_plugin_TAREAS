@@ -302,8 +302,13 @@ body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
  */
 
 .markdown-source-view.mod-cm6 {
+	/* La caja del botón y el ícono adentro. La diferencia entre los dos es el
+	   aire que rodea al glifo, y es parte del hueco que se ve a la izquierda de
+	   la fila: con 20 y 15 son 2,5px de cada lado. */
 	--tareas-fila-boton: 20px;
 	--tareas-fila-icono: 15px;
+	/* El relleno lateral de la pastilla. Es el otro sumando de ese hueco. */
+	--tareas-fila-relleno: 2px;
 }
 
 /* El ancla: no ocupa nada y no es el bloque contenedor de la fila. */
@@ -386,7 +391,7 @@ body.tareas-fila-derecha-plana .markdown-source-view.mod-cm6 .tareas-boton .svg-
 body.tareas-fila-pastilla .markdown-source-view.mod-cm6 .tareas-fila {
 	right: 0;
 	gap: 0;
-	padding: 0 2px;
+	padding: 0 var(--tareas-fila-relleno, 2px);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background-color: var(--background-secondary);
@@ -571,7 +576,7 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	   eso la celda de arriba fija la letra antes. */
 	height: calc(var(--line-height-normal, 1.5) * 1em);
 	gap: 0;
-	padding: 0 2px;
+	padding: 0 var(--tareas-fila-relleno, 2px);
 	border: 1px solid transparent;
 	border-radius: var(--radius-m);
 	background: none;
