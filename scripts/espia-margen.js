@@ -69,4 +69,101 @@
   } else {
     console.log("%s", "no encontré un número o un botón: ¿la nota tiene tareas a la vista?");
   }
+
+  // ------------------------------------------------------ el eje vertical
+  //
+  // Lo mismo para el otro eje, y por la misma razón: dos correcciones a ojo no
+  // alcanzaron. Lo que importa no son los bordes sino los **centros**, que es
+  // lo que el ojo compara: el centro del botón contra el centro del checkbox y
+  // contra el del número de su misma línea.
+  const celda = [...contenedor.querySelectorAll(".tareas-margen .cm-gutterElement")].find(
+    (e) => e.querySelector(".tareas-boton"),
+  );
+  if (!celda) {
+    console.log("%s", "no hay ninguna fila de botones a la vista para medir el alto.");
+    return;
+  }
+
+  const rCelda = celda.getBoundingClientRect();
+  const centro = (r) => r.top + r.height / 2;
+
+  /** La línea de contenido que está a la misma altura que esta celda. */
+  const linea = [...vista.dom.querySelectorAll(".cm-content .cm-line")]
+    .map((l) => ({ l, r: l.getBoundingClientRect() }))
+    .find(({ r }) => r.top <= rCelda.top + 2 && r.bottom >= rCelda.top + 2);
+
+  const primerBoton = celda.querySelector(".tareas-boton");
+  const filas2 = [
+    {
+      qué: "celda del margen",
+      top: px(rCelda.top),
+      alto: px(rCelda.height),
+      centro: px(centro(rCelda)),
+    },
+    {
+      qué: "botón ★",
+      top: px(primerBoton.getBoundingClientRect().top),
+      alto: px(primerBoton.getBoundingClientRect().height),
+      centro: px(centro(primerBoton.getBoundingClientRect())),
+    },
+  ];
+
+  if (linea) {
+    const c = getComputedStyle(linea.l);
+    filas2.push({
+      qué: "línea de texto",
+      top: px(linea.r.top),
+      alto: px(linea.r.height),
+      centro: px(centro(linea.r)),
+    });
+    console.log(
+      "%s",
+      `la línea: padding-top ${c.paddingTop} · padding-bottom ${c.paddingBottom} · ` +
+        `line-height ${c.lineHeight} · clases «${linea.l.className}»`,
+    );
+
+    const caja = linea.l.querySelector('input[type="checkbox"]');
+    if (caja) {
+      const r = caja.getBoundingClientRect();
+      filas2.push({ qué: "checkbox", top: px(r.top), alto: px(r.height), centro: px(centro(r)) });
+    }
+    const antes = getComputedStyle(linea.l, "::before");
+    if (antes && antes.content !== "none") {
+      console.log(
+        "%s",
+        `el filete (::before): top ${antes.top} · height ${antes.height} · ` +
+          `background-size ${antes.backgroundSize}`,
+      );
+    }
+  }
+
+  const numeroDeEsaLinea = [...contenedor.querySelectorAll(".cm-lineNumbers .cm-gutterElement")]
+    .map((e) => ({ e, r: e.getBoundingClientRect() }))
+    .find(({ r }) => Math.abs(r.top - rCelda.top) < 2);
+  if (numeroDeEsaLinea) {
+    filas2.push({
+      qué: "número de línea",
+      top: px(numeroDeEsaLinea.r.top),
+      alto: px(numeroDeEsaLinea.r.height),
+      centro: px(centro(numeroDeEsaLinea.r)),
+    });
+  }
+
+  console.log("%s", "alturas (lo que importa es la columna «centro»):");
+  console.table(filas2);
+
+  if (linea) {
+    const dBoton = centro(primerBoton.getBoundingClientRect());
+    const caja = linea.l.querySelector('input[type="checkbox"]');
+    if (caja) {
+      const d = dBoton - centro(caja.getBoundingClientRect());
+      console.log(
+        "%s",
+        `desfasaje del botón contra el checkbox: ${px(d)} ` +
+          `(negativo = el botón está más arriba). Ese es el valor que hay que ` +
+          `sumarle a --tareas-margen-nudge.`,
+      );
+    }
+  }
+
 })();
