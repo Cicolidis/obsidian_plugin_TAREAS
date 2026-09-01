@@ -22,6 +22,7 @@ import { comandos } from "./comandos.js";
 import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
 import { filaDeBotones, filaEnElMargen } from "./editor/filaDeBotones.js";
 import { cursorExterno } from "./editor/cursorExterno.js";
+import { lineaHover } from "./editor/lineaHover.js";
 import { manejarClicEnFila } from "./editor/menuDeTarea.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
 import { clicAlFinal } from "./editor/clicAlFinal.js";
@@ -137,6 +138,10 @@ export default class TareasPlugin extends Plugin {
       // extensión». Los dos no pueden estar encendidos a la vez, y de eso se
       // encargan `filaActiva` y `filaEnMargenActiva`.
       Prec.lowest(filaEnElMargen((state) => this.filaEnMargenActiva(state), this.opcionesDeFila())),
+      // Quién tiene el mouse encima. Solo hace falta para el margen: adentro de
+      // la línea el `:hover` del CSS alcanza, y acá no, porque el margen es
+      // hermano de `.cm-line` y no su descendiente.
+      lineaHover((state) => this.filaEnMargenActiva(state)),
     ]);
 
     this.sincronizarIndicadores();

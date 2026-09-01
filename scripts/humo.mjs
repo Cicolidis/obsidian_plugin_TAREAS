@@ -86,6 +86,8 @@ for (const marca of [
   // El margen propio de la fila (estilo `columna`) y el guardia del cursor.
   "GutterMarker",
   "lineMarkerChange",
+  "gutterLineClass",
+  "tareas-hover",
   "tareas-fila",
   "tareas-revelar-",
   "setIcon",
@@ -131,6 +133,7 @@ try {
     "tareas-fila-izquierda",
     "tareas-fila-columna",
     "tareas-margen",
+    "tareas-hover",
     "tareas-estilo-barra-completa",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);

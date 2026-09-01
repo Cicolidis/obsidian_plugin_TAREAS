@@ -688,6 +688,34 @@ entrando a las posiciones de adentro del `- [ ] ` (punto 20). Las dos son de
 otro, están medidas, y corregirlas sería pelearle una selección a un plugin que
 la puso a propósito.
 
+### Lo que la cuarta verificación del paso 4b midió
+
+**31/08/2026.** El cursor quedó cerrado —las cuatro comprobaciones en verde— y
+apareció lo que faltaba del margen.
+
+**26. Un margen no es descendiente de la línea, así que el `:hover` del CSS no
+lo alcanza.** Con la fila adentro de `.cm-line` bastaba
+`.cm-line:hover .tareas-fila`. Un `gutter` es **hermano** de `.cm-content`, y
+`:hover` no cruza de costado: los botones solo aparecían apuntando a la columna
+angosta del margen, no pasando el mouse por la tarea. CodeMirror mantiene
+`.cm-activeLineGutter`, pero esa es la línea **del cursor**, no la del mouse.
+
+La solución es llevar el dato: un oyente de `mousemove` para el editor entero
+publica qué línea tiene el mouse encima y `gutterLineClass` la marca. **No
+contradice la §15 punto 1** —«el modo de revelación es un parámetro, nunca un
+`mouseenter` cableado adentro»— porque el modo sigue viajando como clase de
+`body` y esto es **un** oyente que solo publica un dato, no uno por fila. En
+móvil no hay `mousemove` y nunca se enciende, que es lo que aquella regla quería.
+
+Se despacha solo cuando **cambia la línea**, no en cada píxel.
+
+**27. El filete se sale del contenido y se mete en el margen.** Se dibuja como
+`::before` de `.cm-line` a `-1.9rem` de su borde, o sea fuera de la caja del
+contenido. Con el margen pegado, el ⋯ quedaba abajo del filete. No es un
+problema del filete ni del margen por separado: es que uno se dibuja en
+coordenadas del otro. El hueco de la derecha del margen es lo que los separa, y
+es un valor que hay que **mirar**, no deducir.
+
 ---
 
 ## 6. Modelo de datos

@@ -496,8 +496,13 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	display: flex;
 	flex-direction: column;
 	/* Sin ancho fijo: lo da el contenido, y con `renderEmptyElements: false` una
-	   nota sin tareas no ocupa nada. */
-	padding-inline-end: 4px;
+	   nota sin tareas no ocupa nada.
+
+	   El hueco de la derecha **no es estético**: el filete se dibuja como
+	   `::before` de `.cm-line` a `-1.9rem` de su borde, o sea que se sale del
+	   contenido y se mete en la zona del margen. Con 4px, el ⋯ quedaba abajo del
+	   filete — reportado en la cuarta vuelta. Este hueco es el que los separa. */
+	padding-inline-end: var(--tareas-margen-hueco, 1.4rem);
 }
 
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
@@ -522,10 +527,12 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	transition: background-color 90ms ease, border-color 90ms ease;
 }
 
-/* La pastilla aparece al pasar el mouse por la línea. El margen es hermano de
-   `.cm-line`, no su descendiente, así que `:hover` de la línea no lo alcanza:
-   se usa el `.cm-activeLineGutter` que CodeMirror ya mantiene, más el hover
-   sobre el propio elemento del margen. */
+/* La pastilla aparece al pasar el mouse **por la línea**.
+   El margen es hermano de `.cm-line`, no su descendiente, así que `:hover` no lo
+   alcanza de costado: quién tiene el mouse encima lo publica `lineaHover.ts` y
+   llega acá como `.tareas-hover`. El `:hover` propio se deja también, para
+   cuando el mouse ya está sobre los botones. */
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement.tareas-hover .tareas-fila,
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement:hover .tareas-fila {
 	border-color: var(--background-modifier-border);
 	background-color: var(--background-secondary);
@@ -575,6 +582,11 @@ body.tareas-revelar-hover
 	pointer-events: none;
 }
 
+body.tareas-revelar-hover
+	.markdown-source-view.mod-cm6
+	.cm-gutter.tareas-margen
+	.cm-gutterElement.tareas-hover
+	.tareas-boton:not(.is-activo),
 body.tareas-revelar-hover
 	.markdown-source-view.mod-cm6
 	.cm-gutter.tareas-margen
