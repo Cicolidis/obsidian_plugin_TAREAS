@@ -131,6 +131,49 @@ export interface TareasSettings {
    * desinstalar nada. Patrón `designFlags.ts`.
    */
   filaDeBotones: boolean;
+  /**
+   * El quinto botón de la fila: 🗑 Eliminar (§12, el descarte físico).
+   *
+   * Pedido al verificar el paso 6a: «Obsidian no es un verdadero outliner» y
+   * borrar una tarea anidada a mano es incómodo. Va **último**, después del ⋯,
+   * para quedar lo más lejos posible del ★, que es el que más se aprieta.
+   */
+  botonEliminar: boolean;
+  /**
+   * Tildar el checkbox **es** completar la tarea (§12).
+   *
+   * Escribe `done=` y baja por el subárbol, igual que el ⋯. Encendido por
+   * omisión: sin esto el gesto más natural y más frecuente es el único que no
+   * pasa por el plugin, y la fecha de completado —que es lo que el historial
+   * necesita— solo existe si uno se acordó de usar el menú.
+   *
+   * Con interruptor porque **cambia lo que hace el teclado**, que es lo que más
+   * molesta cuando no se puede apagar. Patrón `designFlags.ts`.
+   */
+  completarAlTildar: boolean;
+  /**
+   * ¿Archivar pregunta antes?
+   *
+   * **Apagado por omisión, y es una decisión del usuario contra una medición
+   * mía.** Yo propuse preguntar con dos líneas o más (138 de 389 tareas, 35,5%)
+   * y al usarlo resultó fricción, que es exactamente lo que la §12 existe para
+   * eliminar: tildar tiene que costar menos que borrar. Gana el uso.
+   *
+   * Con una excepción que no es fricción: si la tarea **ya figura** en el
+   * historial bajo ese camino, se pregunta igual. Ahí el cartel evita una
+   * entrada repetida en vez de agregar un paso.
+   */
+  confirmarAlArchivar: boolean;
+  /**
+   * ¿Eliminar pregunta antes?
+   *
+   * **Apagado por omisión, por decisión explícita del usuario**, y con la
+   * objeción dicha una vez: eliminar es la única acción del plugin que pierde
+   * texto, el subárbol más grande del corpus son 77 líneas, y `vault.process()`
+   * no pasa por el editor — con la nota cerrada no hay nada que lo deshaga.
+   * Queda el ajuste para volver.
+   */
+  confirmarAlEliminar: boolean;
   /** Cuándo se ve la fila. Ver `MODOS_DE_REVELACION`. */
   modoDeRevelacion: ModoDeRevelacion;
   /** Dónde y cómo se dibuja. Ver `ESTILOS_DE_FILA`. */
@@ -278,6 +321,10 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   workbenchFavorito: WORKBENCH_POR_OMISION,
   workbenchSecundario: "",
   filaDeBotones: true,
+  botonEliminar: true,
+  completarAlTildar: true,
+  confirmarAlArchivar: false,
+  confirmarAlEliminar: false,
   modoDeRevelacion: "hover",
   estiloDeFila: "columna",
   decoracionesEnLaNota: true,
@@ -330,6 +377,10 @@ export function cargarSettings(saved: unknown): TareasSettings {
     workbenchFavorito: sanearWorkbench(raw.workbenchFavorito),
     workbenchSecundario: sanearWorkbenchOpcional(raw.workbenchSecundario),
     filaDeBotones: raw.filaDeBotones ?? DEFAULT_SETTINGS.filaDeBotones,
+    botonEliminar: raw.botonEliminar ?? DEFAULT_SETTINGS.botonEliminar,
+    completarAlTildar: raw.completarAlTildar ?? DEFAULT_SETTINGS.completarAlTildar,
+    confirmarAlArchivar: raw.confirmarAlArchivar ?? DEFAULT_SETTINGS.confirmarAlArchivar,
+    confirmarAlEliminar: raw.confirmarAlEliminar ?? DEFAULT_SETTINGS.confirmarAlEliminar,
     modoDeRevelacion: sanearRevelacion(raw.modoDeRevelacion),
     estiloDeFila: sanearEstiloDeFila(raw.estiloDeFila),
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,

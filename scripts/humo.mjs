@@ -102,6 +102,8 @@ for (const marca of [
   "completar-y-archivar-la-tarea-del-cursor",
   "eliminar-la-tarea-del-cursor",
   "tareas-confirmar",
+  // Lo que salió de la verificación del paso 6a: el tilde que completa.
+  "completarAlTildar",
 ]) {
   if (!src.includes(marca)) fallas.push(`falta "${marca}" en el bundle`);
 }
@@ -120,6 +122,9 @@ try {
     "tareas-ind-glifo",
     // Los tres estilos: si uno se cae del CSS, el ajuste sigue estando y no
     // dibuja nada, que parece «la prioridad no anda».
+    // El 🗑 borra sin preguntar por omisión, así que su color al pasar el
+    // mouse es lo único que lo distingue del resto **antes** de apretarlo.
+    "tareas-boton-eliminar",
     "tareas-estilo-barra",
     "tareas-estilo-checkbox",
     "tareas-estilo-fondo",

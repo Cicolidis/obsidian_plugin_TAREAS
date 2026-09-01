@@ -738,3 +738,16 @@ body:not(.tareas-fila-columna) .markdown-source-view.mod-cm6 .cm-gutter.tareas-m
 .menu-item.is-warning .menu-item-icon {
   color: var(--text-error);
 }
+
+/* --------------------------------------------------------------------------
+ * El 🗑 de la fila: el único botón destructivo, y tiene que verse distinto.
+ *
+ * Sin confirmación por omisión —decisión del usuario, verificación del paso
+ * 6a—, así que lo único que separa un borrado de un clic errado es que el ojo
+ * lo distinga **antes** de apretarlo. Va último en la fila, lo más lejos
+ * posible del ★, y toma color al pasarle el mouse por encima.
+ * -------------------------------------------------------------------------- */
+
+.tareas-boton-eliminar:hover {
+  color: var(--text-error);
+}

@@ -65,7 +65,12 @@ describe.skipIf(!VAULT)("costo de construir la fila, por transacción", () => {
         ["saturada ", saturada],
       ] as const) {
         const st = EditorState.create({ doc });
-        const opciones = { favoritos: () => FAV, alClic: () => {}, dibujarIcono: () => {} };
+        const opciones = {
+          favoritos: () => FAV,
+          conEliminar: () => true,
+          alClic: () => {},
+          dibujarIcono: () => {},
+        };
 
         // Se recorre la nota entera de a ventanas, no una ventana sola: el
         // costo depende de cuántas tareas caigan adentro, y una nota tiene

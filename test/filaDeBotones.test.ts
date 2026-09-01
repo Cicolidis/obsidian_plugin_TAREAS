@@ -22,6 +22,7 @@ const FAV: Favoritos = { primario: "foco", secundario: "mudanza" };
 
 const opciones = (favoritos: Favoritos = FAV): OpcionesDeFila => ({
   favoritos: () => favoritos,
+  conEliminar: () => false,
   alClic: () => {},
   dibujarIcono: () => {},
 });

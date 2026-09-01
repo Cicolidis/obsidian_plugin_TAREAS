@@ -18,13 +18,14 @@ import {
   claseDeRevelacion,
   type Favoritos,
 } from "./botones.js";
-import { comandos } from "./comandos.js";
+import { comandos, hoy } from "./comandos.js";
 import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
 import { filaDeBotones, filaEnElMargen } from "./editor/filaDeBotones.js";
 import { cursorExterno } from "./editor/cursorExterno.js";
 import { lineaHover } from "./editor/lineaHover.js";
 import { manejarClicEnFila } from "./editor/menuDeTarea.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
+import { completarAlTildar } from "./editor/completarAlTildar.js";
 import { clicAlFinal } from "./editor/clicAlFinal.js";
 import { decoraciones } from "./editor/decoraciones.js";
 import { protegerTramo } from "./editor/protegerTramo.js";
@@ -124,6 +125,16 @@ export default class TareasPlugin extends Plugin {
       // Que un cambio externo no le mueva el cursor al usuario. Va con el mismo
       // alcance que el resto: solo en las notas de la lista.
       cursorExterno((state) => this.enNotaDeTareas(state)),
+      // **Corre último, y por eso `Prec.high`.** Los filtros se encadenan de
+      // menor a mayor precedencia, así que este ve la línea ya corregida por
+      // los tres de arriba. Si viera una a la que `protegerTramo` todavía no le
+      // devolvió el token, `planDeCompletar` escribiría sobre un token movido.
+      Prec.high(
+        completarAlTildar(
+          (state) => this.settings.completarAlTildar && this.enNotaDeTareas(state),
+          () => hoy(),
+        ),
+      ),
       filaDeBotones(
         (state) => this.filaActiva(state),
         this.opcionesDeFila(),
@@ -159,6 +170,8 @@ export default class TareasPlugin extends Plugin {
       notas: () => this.notasDelStore(),
       workbench: () => this.settings.workbenchFavorito,
       notaDeLog: () => this.settings.notaDeLog,
+      confirmarAlArchivar: () => this.settings.confirmarAlArchivar,
+      confirmarAlEliminar: () => this.settings.confirmarAlEliminar,
     })) {
       this.addCommand(c);
     }
@@ -239,12 +252,15 @@ export default class TareasPlugin extends Plugin {
   private opcionesDeFila() {
     return {
       favoritos: () => this.favoritos(),
+      conEliminar: () => this.settings.botonEliminar,
       alClic: manejarClicEnFila({
         app: this.app,
         store: this.store,
         notas: () => this.notasDelStore(),
         favoritos: () => this.favoritos(),
         notaDeLog: () => this.settings.notaDeLog,
+        confirmarAlArchivar: () => this.settings.confirmarAlArchivar,
+        confirmarAlEliminar: () => this.settings.confirmarAlEliminar,
         archivoDe: (state: EditorState) =>
           state.field(editorInfoField, false)?.file?.path ?? null,
       }),
@@ -440,6 +456,26 @@ class TareasSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName(STRINGS.ajustes.completarAlTildar.nombre)
+      .setDesc(STRINGS.ajustes.completarAlTildar.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.completarAlTildar).onChange(async (v) => {
+          this.plugin.settings.completarAlTildar = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.botonEliminar.nombre)
+      .setDesc(STRINGS.ajustes.botonEliminar.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.botonEliminar).onChange(async (v) => {
+          this.plugin.settings.botonEliminar = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    new Setting(containerEl)
       .setName(STRINGS.ajustes.estiloDeFila.nombre)
       .setDesc(STRINGS.ajustes.estiloDeFila.descripcion)
       .addDropdown((d) => {
@@ -502,6 +538,30 @@ class TareasSettingTab extends PluginSettingTab {
       .addToggle((t) =>
         t.setValue(this.plugin.settings.indicadorGlifo).onChange(async (v) => {
           this.plugin.settings.indicadorGlifo = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    new Setting(containerEl).setName(STRINGS.ajustes.confirmaciones.nombre).setHeading();
+    containerEl.createEl("p", {
+      text: STRINGS.ajustes.confirmaciones.descripcion,
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.confirmaciones.archivar)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.confirmarAlArchivar).onChange(async (v) => {
+          this.plugin.settings.confirmarAlArchivar = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.confirmaciones.eliminar)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.confirmarAlEliminar).onChange(async (v) => {
+          this.plugin.settings.confirmarAlEliminar = v;
           await this.plugin.guardar();
         }),
       );

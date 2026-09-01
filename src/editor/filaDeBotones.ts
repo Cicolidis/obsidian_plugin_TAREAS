@@ -92,6 +92,8 @@ export type AlClicEnFila = (clic: ClicEnFila) => void;
 export interface OpcionesDeFila {
   /** Los dos botones fijos, leídos en el momento de construir. */
   favoritos: () => Favoritos;
+  /** ¿Va el quinto botón, el 🗑? Se lee en el momento: el ajuste cambia solo. */
+  conEliminar: () => boolean;
   alClic: AlClicEnFila;
   /**
    * Cómo se dibuja un ícono. Se inyecta porque `setIcon` viene de `obsidian`,
@@ -343,6 +345,7 @@ export function decoracionesDeFila(
   opciones: OpcionesDeFila,
 ): DecorationSet {
   const favoritos = opciones.favoritos();
+  const conEliminar = opciones.conEliminar();
   const salida: Range<Decoration>[] = [];
 
   for (const { from, to } of rangos) {
@@ -350,7 +353,7 @@ export function decoracionesDeFila(
     const ultima = state.doc.lineAt(to).number;
     for (; n <= ultima; n++) {
       const linea = state.doc.line(n);
-      const fila = filaDe(linea.text, favoritos);
+      const fila = filaDe(linea.text, favoritos, conEliminar);
       if (fila === null) continue;
       salida.push(
         Decoration.widget({ widget: new FilaWidget(fila, opciones), side: -1 }).range(linea.from),
@@ -504,7 +507,7 @@ export function filaEnElMargen(
     lineMarker(view, linea) {
       if (!activo(view.state)) return null;
       const l = view.state.doc.lineAt(linea.from);
-      const fila = filaDe(l.text, opciones.favoritos());
+      const fila = filaDe(l.text, opciones.favoritos(), opciones.conEliminar());
       if (fila === null) return null;
 
       // La misma caché que `decoracionesDeFila` no tiene porque allá cada widget
@@ -542,7 +545,7 @@ export function filaEnElMargen(
         // La línea llega **fresca** del `BlockInfo` del evento: es la posición
         // de ahora, no la que tenía el marcador cuando se construyó.
         const l = view.state.doc.lineAt(linea.from);
-        const fila = filaDe(l.text, opciones.favoritos());
+        const fila = filaDe(l.text, opciones.favoritos(), opciones.conEliminar());
         const boton = fila?.botones.find((b) => b.accion === accion);
         if (!fila || !boton) return false;
 

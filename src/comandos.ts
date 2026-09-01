@@ -323,6 +323,7 @@ export async function archivarTarea(
   ctx: Contexto,
   hoyStr: string,
   notaDeLog: string,
+  pedirConfirmacion: boolean,
 ): Promise<void> {
   const doc = store.documento(ctx.archivo)!;
   const tareas = store.tareasDe(ctx.archivo);
@@ -358,7 +359,10 @@ export async function archivarTarea(
   const escribirlo = () =>
     void escribirYAvisar(app, store, ctx, { archivo: notaDeLog, camino, bloque }, cambios);
 
-  if (!repetida && !archivarPideConfirmacion(bloque)) {
+  // El umbral por tamaño solo manda si el ajuste está encendido. Apagado —que
+  // es lo de por omisión— archivar no pregunta nunca… salvo la repetida, que
+  // pregunta igual: ahí el cartel evita una entrada de más, no agrega un paso.
+  if (!repetida && !(pedirConfirmacion && archivarPideConfirmacion(bloque))) {
     escribirlo();
     return;
   }
@@ -433,12 +437,25 @@ async function escribirYAvisar(
  * (§12 — la tarea queda `[x]` en su lugar y el bloque queda en el historial), y
  * acá esa razón no aplica.
  */
-export function eliminarTarea(app: App, store: StoreDeTareas, ctx: Contexto): void {
+export function eliminarTarea(
+  app: App,
+  store: StoreDeTareas,
+  ctx: Contexto,
+  pedirConfirmacion: boolean,
+): void {
   const doc = store.documento(ctx.archivo)!;
   const plan = planDeEliminar(doc, store.tareasDe(ctx.archivo), ctx.clave);
   const cuantas = plan.length === 1 ? plan[0]!.antes.length : 0;
   if (cuantas === 0) {
     new Notice(STRINGS.avisos.sinTarea);
+    return;
+  }
+
+  const borrar = () =>
+    void aplicar(app, store, ctx.archivo, plan, () => STRINGS.avisos.eliminado(cuantas));
+
+  if (!pedirConfirmacion) {
+    borrar();
     return;
   }
 
@@ -451,7 +468,7 @@ export function eliminarTarea(app: App, store: StoreDeTareas, ctx: Contexto): vo
       aceptar: t.aceptar,
       peligrosa: true,
     },
-    () => void aplicar(app, store, ctx.archivo, plan, () => STRINGS.avisos.eliminado(cuantas)),
+    borrar,
   );
 }
 
@@ -481,6 +498,8 @@ export interface DependenciasDeComandos {
   workbench: () => string;
   /** A dónde archiva. Se lee en el momento: el ajuste cambia sin recargar. */
   notaDeLog: () => string;
+  confirmarAlArchivar: () => boolean;
+  confirmarAlEliminar: () => boolean;
   ahora?: () => string;
 }
 
@@ -510,7 +529,16 @@ export function comandos(dep: DependenciasDeComandos) {
       name: STRINGS.comandos.archivar,
       editorCallback: (editor: Editor, vista: MarkdownFileInfo) => {
         const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
-        if (ctx) void archivarTarea(dep.app, dep.store, ctx, fecha(), dep.notaDeLog());
+        if (ctx) {
+          void archivarTarea(
+            dep.app,
+            dep.store,
+            ctx,
+            fecha(),
+            dep.notaDeLog(),
+            dep.confirmarAlArchivar(),
+          );
+        }
       },
     },
     {
@@ -518,7 +546,7 @@ export function comandos(dep: DependenciasDeComandos) {
       name: STRINGS.comandos.eliminar,
       editorCallback: (editor: Editor, vista: MarkdownFileInfo) => {
         const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
-        if (ctx) eliminarTarea(dep.app, dep.store, ctx);
+        if (ctx) eliminarTarea(dep.app, dep.store, ctx, dep.confirmarAlEliminar());
       },
     },
     {

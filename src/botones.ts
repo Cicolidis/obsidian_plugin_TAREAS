@@ -28,8 +28,15 @@ import { esTarea, parseBullet } from "./linea.js";
 import { STRINGS } from "./strings.js";
 import { parseTaskToken } from "./token.js";
 
-/** Qué hace cada botón. El orden de la §13.0: `[★] [◐] [→] [⋯]`. */
-export type Accion = "wb-primario" | "wb-secundario" | "popover" | "menu";
+/**
+ * Qué hace cada botón. El orden de la §13.0: `[★] [◐] [→] [⋯]`, más el 🗑.
+ *
+ * `eliminar` es opcional y va **último**, después del ⋯: es el único
+ * destructivo, y lo pidió el uso —«Obsidian no es un verdadero outliner»,
+ * borrar una tarea anidada a mano es incómodo—. Va al final para que quede lo
+ * más lejos posible del ★, que es el que más se aprieta.
+ */
+export type Accion = "wb-primario" | "wb-secundario" | "popover" | "menu" | "eliminar";
 
 export interface Boton {
   accion: Accion;
@@ -76,6 +83,8 @@ const ICONOS: Record<Accion, string> = {
   "wb-secundario": "circle",
   popover: "arrow-right",
   menu: "more-horizontal",
+  // El mismo que el ítem del ⋯: son la misma acción por dos puertas.
+  eliminar: "trash-2",
 };
 
 /**
@@ -86,7 +95,11 @@ const ICONOS: Record<Accion, string> = {
  * el que `decorar.ts` decide dónde esconder el token — se gestiona lo que se
  * gestiona, y nada más.
  */
-export function filaDe(texto: string, favoritos: Favoritos): Fila | null {
+export function filaDe(
+  texto: string,
+  favoritos: Favoritos,
+  conEliminar = false,
+): Fila | null {
   const b = parseBullet(texto);
   if (!b || !esTarea(b)) return null;
 
@@ -135,6 +148,16 @@ export function filaDe(texto: string, favoritos: Favoritos): Fila | null {
       activo: false,
     },
   );
+
+  if (conEliminar) {
+    botones.push({
+      accion: "eliminar",
+      icono: ICONOS.eliminar,
+      etiqueta: etiqueta(STRINGS.fila.eliminar),
+      workbench: null,
+      activo: false,
+    });
+  }
 
   return { botones, ilegible };
 }

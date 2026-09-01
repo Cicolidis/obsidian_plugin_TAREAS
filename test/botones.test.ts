@@ -205,3 +205,39 @@ describe("propiedades", () => {
     );
   });
 });
+
+describe("el 🗑 de la fila (pedido al verificar el paso 6a)", () => {
+  const FAVS = { primario: "foco", secundario: "" };
+
+  it("no está si no se pide", () => {
+    expect(filaDe("- [ ] x", FAVS)!.botones.map((b) => b.accion)).toEqual([
+      "wb-primario",
+      "popover",
+      "menu",
+    ]);
+  });
+
+  it("va **último**, después del ⋯", () => {
+    // Lo más lejos posible del ★, que es el que más se aprieta, porque es el
+    // único que borra y por omisión no pregunta.
+    expect(filaDe("- [ ] x", FAVS, true)!.botones.map((b) => b.accion)).toEqual([
+      "wb-primario",
+      "popover",
+      "menu",
+      "eliminar",
+    ]);
+  });
+
+  it("sobre una línea ilegible se apaga como los demás", () => {
+    const fila = filaDe("- [ ] x %%t:zz=1%%", FAVS, true)!;
+    const eliminar = fila.botones.find((b) => b.accion === "eliminar")!;
+    expect(fila.ilegible).toBe(true);
+    expect(eliminar.etiqueta).toBe(fila.botones[0]!.etiqueta);
+  });
+
+  it("no apunta a ningún workbench ni se rellena nunca", () => {
+    const eliminar = filaDe("- [ ] x", FAVS, true)!.botones.at(-1)!;
+    expect(eliminar.workbench).toBeNull();
+    expect(eliminar.activo).toBe(false);
+  });
+});

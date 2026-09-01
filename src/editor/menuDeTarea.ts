@@ -56,6 +56,10 @@ export interface DependenciasDeMenu {
   favoritos: () => Favoritos;
   /** A dónde archiva (§12). Se lee en el momento, como el resto. */
   notaDeLog: () => string;
+  /** ¿Archivar pregunta antes? Ver `TareasSettings.confirmarAlArchivar`. */
+  confirmarAlArchivar: () => boolean;
+  /** ¿Eliminar pregunta antes? Ver `TareasSettings.confirmarAlEliminar`. */
+  confirmarAlEliminar: () => boolean;
   /**
    * De un editor a un archivo del vault.
    *
@@ -103,6 +107,11 @@ export function manejarClicEnFila(dep: DependenciasDeMenu): AlClicEnFila {
         break;
       case "menu":
         abrirMenu(dep, ctx, clic.evento, fecha);
+        break;
+      case "eliminar":
+        // El mismo camino que el ítem del ⋯: son la misma acción por dos
+        // puertas, y dos implementaciones divergirían justo en si pregunta.
+        eliminarTarea(dep.app, dep.store, ctx, dep.confirmarAlEliminar());
         break;
     }
   };
@@ -163,7 +172,9 @@ function abrirMenu(
     i
       .setTitle(STRINGS.menu.completarYArchivar)
       .setIcon("archive")
-      .onClick(() => void archivarTarea(dep.app, dep.store, ctx, fecha(), dep.notaDeLog())),
+      .onClick(() =>
+        void archivarTarea(dep.app, dep.store, ctx, fecha(), dep.notaDeLog(), dep.confirmarAlArchivar()),
+      ),
   );
 
   menu.addSeparator();
@@ -172,7 +183,7 @@ function abrirMenu(
       .setTitle(STRINGS.menu.eliminar)
       .setIcon("trash-2")
       .setWarning(true)
-      .onClick(() => eliminarTarea(dep.app, dep.store, ctx)),
+      .onClick(() => eliminarTarea(dep.app, dep.store, ctx, dep.confirmarAlEliminar())),
   );
 
   menu.showAtMouseEvent(evento);

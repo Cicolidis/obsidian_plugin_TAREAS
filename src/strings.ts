@@ -75,6 +75,32 @@ export const STRINGS = {
         "puede hacer nada es peor que un botón que no está.",
       marcador: "vacío = sin segundo botón",
     },
+    completarAlTildar: {
+      nombre: "Tildar el checkbox completa la tarea",
+      descripcion:
+        "Al tildar una tarea a mano, el plugin le escribe la fecha de completado y tilda " +
+        "también lo que cuelga de ella, igual que «Completar y descartar» del ⋯. Sin esto, " +
+        "tildar deja la tarea hecha pero sin fecha, y el historial la necesita. Reconoce el " +
+        "hecho, no el gesto: anda con el mouse, con el teclado y con Outliner. No archiva.",
+    },
+    botonEliminar: {
+      nombre: "Fila de botones: incluir 🗑 Eliminar",
+      descripcion:
+        "Un quinto botón, al final de la fila, que borra la tarea y su subárbol. Obsidian no " +
+        "es un outliner y borrar una tarea anidada a mano es incómodo; esto lo hace de un " +
+        "clic. Va último, lo más lejos posible del ★.",
+    },
+    confirmaciones: {
+      nombre: "Preguntar antes de escribir",
+      descripcion:
+        "Archivar no pierde nada: la tarea queda «[x]» en su lugar y el bloque va al " +
+        "historial. Eliminar sí borra, y con la nota cerrada no hay Ctrl-Z que lo deshaga: " +
+        "el subárbol más grande del corpus son 77 líneas, medido. Archivar pregunta igual " +
+        "cuando la tarea ya figura en el historial, porque ahí el cartel evita una entrada " +
+        "repetida en vez de agregar un paso.",
+      archivar: "Preguntar antes de archivar",
+      eliminar: "Preguntar antes de eliminar",
+    },
     filaDeBotones: {
       nombre: "Fila de botones sobre la tarea",
       descripcion:
@@ -137,6 +163,7 @@ export const STRINGS = {
     sacarDe: (wb: string) => `Sacar de «${wb}»`,
     todosLosWorkbenches: "Todos los workbenches…",
     masAcciones: "Prioridad, completar, eliminar…",
+    eliminar: "Eliminar la tarea y todo lo que cuelga de ella",
     /** El tooltip de la fila entera cuando la línea tiene el token roto. */
     ilegible: "Esta tarea tiene el token ilegible: no se puede escribir sobre ella.",
   },
