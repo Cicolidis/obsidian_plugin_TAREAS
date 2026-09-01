@@ -1104,6 +1104,10 @@ significa que el botón no se dibuja.** Inventarle un nombre por omisión sería
 peor — se escribiría en el token de la primera tarea que el usuario toque sin
 haberlo elegido.
 
+**El elegido, después de seis vueltas mirándolo: la columna en su margen
+propio, con revelación por hover.** Los otros cinco quedan encendibles, que es
+para lo que sirve el patrón.
+
 **Seis lugares donde puede vivir la fila**, y conviven (patrón `designFlags.ts`):
 sobre el final de la línea con degradado, sin fondo, en pastilla; en el margen
 derecho; antes del checkbox; y una **columna en el margen izquierdo** con el

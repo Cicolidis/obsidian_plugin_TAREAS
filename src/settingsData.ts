@@ -31,7 +31,7 @@ export type EstiloDePrioridad = (typeof ESTILOS_DE_PRIORIDAD)[number];
  * | `pastilla` | ídem | los cuatro adentro de una pastilla con borde: se lee como **un** control |
  * | `margen` | **afuera** del texto, a la derecha | nunca tapa una palabra, y no depende del largo de la tarea |
  * | `izquierda` | antes del checkbox, después del filete | columna fija: todas las filas alineadas, indentación aparte |
- * | `columna` | en el margen izquierdo, en pastilla | el orden pedido en la 2.ª vuelta: número de línea · botones · filete · plegado · checkbox. Los botones de los workbenches donde la tarea **ya está** se ven siempre; el resto aparece al pasar el mouse |
+ * | `columna` | en un **margen propio**, a la derecha de los números de línea | el orden pedido en la 2.ª vuelta: número de línea · botones · filete · plegado · checkbox. Los botones de los workbenches donde la tarea **ya está** se ven siempre; el resto aparece al pasar el mouse. **Es el elegido**, con revelación por hover |
  *
  * `margen` e `izquierda` son las dos que **no pueden tapar texto**, que era la
  * objeción de fondo al primero. Las dos cuestan margen de nota: si la ventana
@@ -260,7 +260,7 @@ export function sanearEstilo(valor: unknown): EstiloDePrioridad {
 export function sanearEstiloDeFila(valor: unknown): EstiloDeFila {
   return (ESTILOS_DE_FILA as readonly unknown[]).includes(valor)
     ? (valor as EstiloDeFila)
-    : "pastilla";
+    : "columna";
 }
 
 /** Un modo conocido y **ofrecido**, o `hover`. Ver `MODOS_DE_REVELACION`. */
@@ -279,7 +279,7 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   workbenchSecundario: "",
   filaDeBotones: true,
   modoDeRevelacion: "hover",
-  estiloDeFila: "pastilla",
+  estiloDeFila: "columna",
   decoracionesEnLaNota: true,
   estiloDePrioridad: "barra-checkbox",
   indicadorGlifo: false,

@@ -501,8 +501,25 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	   El hueco de la derecha **no es estético**: el filete se dibuja como
 	   `::before` de `.cm-line` a `-1.9rem` de su borde, o sea que se sale del
 	   contenido y se mete en la zona del margen. Con 4px, el ⋯ quedaba abajo del
-	   filete — reportado en la cuarta vuelta. Este hueco es el que los separa. */
+	   filete — reportado en la cuarta vuelta. Este hueco es el que los separa.
+
+	   El de la izquierda es al revés: se **descuenta**. El margen de números de
+	   CodeMirror trae `padding: 0 3px 0 5px` —leído en `@codemirror/view`
+	   6.38.6, no tanteado— y a esos 3px se les suman los 2px de la pastilla y el
+	   aire que el botón deja alrededor de su ícono. Eran unos 7px y se veían
+	   como demasiados. Con `-3px` se recupera exactamente el padding del margen
+	   de al lado, y el hueco que queda es solo el del propio botón.
+
+	   Los dos son valores que se miran, no se deducen. Se pueden cambiar sin
+	   recompilar con un fragmento de CSS en el vault:
+
+	       .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen {
+	         --tareas-margen-hueco: 1.4rem;
+	         --tareas-margen-antesala: -3px;
+	       }
+	*/
 	padding-inline-end: var(--tareas-margen-hueco, 1.4rem);
+	margin-inline-start: var(--tareas-margen-antesala, -3px);
 }
 
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
