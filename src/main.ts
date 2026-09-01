@@ -1,6 +1,7 @@
 import {
   App,
   MarkdownView,
+  Platform,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -23,7 +24,8 @@ import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
 import { filaDeBotones, filaEnElMargen } from "./editor/filaDeBotones.js";
 import { cursorExterno } from "./editor/cursorExterno.js";
 import { lineaHover } from "./editor/lineaHover.js";
-import { manejarClicEnFila } from "./editor/menuDeTarea.js";
+import { archivarAlClic } from "./editor/archivarAlClic.js";
+import { manejarClicEnFila, manejarClicEnCheckbox } from "./editor/menuDeTarea.js";
 import { checkboxAutomatico } from "./editor/autoCheckbox.js";
 import { completarAlTildar } from "./editor/completarAlTildar.js";
 import { clicAlFinal } from "./editor/clicAlFinal.js";
@@ -153,6 +155,18 @@ export default class TareasPlugin extends Plugin {
       // la línea el `:hover` del CSS alcanza, y acá no, porque el margen es
       // hermano de `.cm-line` y no su descendiente.
       lineaHover((state) => this.filaEnMargenActiva(state)),
+      // Cmd+clic en el checkbox: completar y archivar de un gesto. Es el único
+      // mecanismo del plugin que **intercepta un clic**, y tiene su propio
+      // interruptor por eso: en el teléfono no existe y depende de llegar antes
+      // que el handler de Obsidian. El ⋯ sigue siendo el camino que anda
+      // siempre.
+      archivarAlClic({
+        activo: (state) => this.settings.archivarConModificador && this.enNotaDeTareas(state),
+        // `Cmd` en macOS y `Ctrl` en el resto. `Ctrl+clic` en macOS es el clic
+        // derecho, así que ahí no se puede usar.
+        esModificador: (e) => (Platform.isMacOS ? e.metaKey : e.ctrlKey),
+        alArchivar: manejarClicEnCheckbox(this.dependenciasDeMenu()),
+      }),
     ]);
 
     this.sincronizarIndicadores();
@@ -253,18 +267,30 @@ export default class TareasPlugin extends Plugin {
     return {
       favoritos: () => this.favoritos(),
       conEliminar: () => this.settings.botonEliminar,
-      alClic: manejarClicEnFila({
-        app: this.app,
-        store: this.store,
-        notas: () => this.notasDelStore(),
-        favoritos: () => this.favoritos(),
-        notaDeLog: () => this.settings.notaDeLog,
-        confirmarAlArchivar: () => this.settings.confirmarAlArchivar,
-        confirmarAlEliminar: () => this.settings.confirmarAlEliminar,
-        archivoDe: (state: EditorState) =>
-          state.field(editorInfoField, false)?.file?.path ?? null,
-      }),
+      alClic: manejarClicEnFila(this.dependenciasDeMenu()),
       dibujarIcono: (el: HTMLElement, icono: string) => setIcon(el, icono),
+    };
+  }
+
+  /**
+   * Lo que las acciones necesitan del mundo. **Un solo lugar.**
+   *
+   * Lo comparten la fila de botones y el Cmd+clic en el checkbox: son dos
+   * puertas a las mismas acciones, y dos copias de estas dependencias
+   * divergirían justo donde más caro sale — en qué notas actúa y a dónde
+   * archiva.
+   */
+  private dependenciasDeMenu() {
+    return {
+      app: this.app,
+      store: this.store,
+      notas: () => this.notasDelStore(),
+      favoritos: () => this.favoritos(),
+      notaDeLog: () => this.settings.notaDeLog,
+      confirmarAlArchivar: () => this.settings.confirmarAlArchivar,
+      confirmarAlEliminar: () => this.settings.confirmarAlEliminar,
+      archivoDe: (state: EditorState) =>
+        state.field(editorInfoField, false)?.file?.path ?? null,
     };
   }
 
@@ -461,6 +487,16 @@ class TareasSettingTab extends PluginSettingTab {
       .addToggle((t) =>
         t.setValue(this.plugin.settings.completarAlTildar).onChange(async (v) => {
           this.plugin.settings.completarAlTildar = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.archivarConModificador.nombre)
+      .setDesc(STRINGS.ajustes.archivarConModificador.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.archivarConModificador).onChange(async (v) => {
+          this.plugin.settings.archivarConModificador = v;
           await this.plugin.guardar();
         }),
       );

@@ -152,6 +152,17 @@ export interface TareasSettings {
    */
   completarAlTildar: boolean;
   /**
+   * Cmd+clic (Ctrl+clic fuera de macOS) en el checkbox: completar y archivar.
+   *
+   * Encendido por omisión, y con interruptor propio porque es el único
+   * mecanismo del plugin que **intercepta un clic**: un modificador no deja
+   * rastro en la transacción, así que no se puede reconocer el hecho como hace
+   * `completarAlTildar`. Eso lo vuelve estructuralmente más frágil —depende de
+   * llegar antes que el handler de Obsidian y en el teléfono no existe—, y el
+   * ⋯ sigue siendo el camino que anda siempre.
+   */
+  archivarConModificador: boolean;
+  /**
    * ¿Archivar pregunta antes?
    *
    * **Apagado por omisión, y es una decisión del usuario contra una medición
@@ -323,6 +334,7 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   filaDeBotones: true,
   botonEliminar: true,
   completarAlTildar: true,
+  archivarConModificador: true,
   confirmarAlArchivar: false,
   confirmarAlEliminar: false,
   modoDeRevelacion: "hover",
@@ -379,6 +391,8 @@ export function cargarSettings(saved: unknown): TareasSettings {
     filaDeBotones: raw.filaDeBotones ?? DEFAULT_SETTINGS.filaDeBotones,
     botonEliminar: raw.botonEliminar ?? DEFAULT_SETTINGS.botonEliminar,
     completarAlTildar: raw.completarAlTildar ?? DEFAULT_SETTINGS.completarAlTildar,
+    archivarConModificador:
+      raw.archivarConModificador ?? DEFAULT_SETTINGS.archivarConModificador,
     confirmarAlArchivar: raw.confirmarAlArchivar ?? DEFAULT_SETTINGS.confirmarAlArchivar,
     confirmarAlEliminar: raw.confirmarAlEliminar ?? DEFAULT_SETTINGS.confirmarAlEliminar,
     modoDeRevelacion: sanearRevelacion(raw.modoDeRevelacion),

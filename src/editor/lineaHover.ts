@@ -6,7 +6,7 @@ import {
   type EditorState,
   type Extension,
 } from "@codemirror/state";
-import { EditorView, GutterMarker, gutterLineClass } from "@codemirror/view";
+import { EditorView, GutterMarker, ViewPlugin, gutterLineClass } from "@codemirror/view";
 
 /**
  * Qué línea tiene el mouse encima, para que el margen lo sepa.
@@ -34,7 +34,39 @@ import { EditorView, GutterMarker, gutterLineClass } from "@codemirror/view";
  *
  * Se despacha **solo cuando cambia la línea**, no en cada píxel: si no, sería
  * una transacción por movimiento del mouse.
+ *
+ * ## Por qué el oyente va en el **scroller** y no en el contenido
+ *
+ * Reportado al verificar el paso 6a: yendo del texto hacia la izquierda, los
+ * botones desaparecían **antes** de llegar a ellos, y en una tarea anidada eso
+ * es un recorrido largo. Molesto justamente donde más falta hace.
+ *
+ * La primera versión usaba `EditorView.domEventHandlers`, y la documentación de
+ * `@codemirror/view` lo dice sin vueltas: «These are registered on the **content
+ * element**». O sea que el `mousemove` solo llega sobre `.cm-content`, y salir
+ * de ahí dispara su `mouseleave` y apaga la línea. Entre el borde del contenido
+ * y el margen hay unos 40 px de `.cm-contentContainer` donde no hay ni una cosa
+ * ni la otra: los botones ya se apagaron y el `:hover` del margen todavía no
+ * los encendió.
+ *
+ * **Y lo que decidió el arreglo fue una medición, no un razonamiento.** La
+ * sonda de hover en la consola de Obsidian mostró que `posAtCoords(…, false)`
+ * devuelve **la línea correcta en todo el recorrido**, también sobre
+ * `.cm-contentContainer` y sobre el propio `.cm-gutter`:
+ *
+ * ```
+ * x=495 cm-hmd-list-indent …      · pos 330
+ * x=280 cm-contentContainer       · pos 330
+ * x=260 cm-gutter tareas-margen   · pos 330
+ * x=238 tareas-fila               · pos 330
+ * ```
+ *
+ * Nunca devuelve `null`. Así que no hacía falta inventar nada: alcanza con
+ * escuchar donde el mouse efectivamente está, que es `scrollDOM` —el elemento
+ * que contiene **a la vez** el contenido y los márgenes—. De ahí el
+ * `ViewPlugin`: es la única forma de enganchar un oyente ahí.
  */
+
 /**
  * Qué línea pasa a tener el mouse encima.
  *
@@ -80,15 +112,20 @@ export function lineaHover(activo: (state: EditorState) => boolean): Extension {
       return from === null ? RangeSet.empty : RangeSet.of([marca.range(from)]);
     }),
 
-    EditorView.domEventHandlers({
-      mousemove(evento, view) {
-        actualizar(view, activo, evento);
-        return false;
-      },
-      mouseleave(_evento, view) {
-        publicar(view, null);
-        return false;
-      },
+    // No es una decoración: es un oyente y un `StateEffect`. La regla de la
+    // §5.5 —las decoraciones van en un `StateField`— sigue cumpliéndose, porque
+    // la clase la sigue poniendo el `gutterLineClass.compute` de arriba.
+    ViewPlugin.define((view) => {
+      const mover = (e: MouseEvent) => actualizar(view, activo, e);
+      const salir = () => publicar(view, null);
+      view.scrollDOM.addEventListener("mousemove", mover);
+      view.scrollDOM.addEventListener("mouseleave", salir);
+      return {
+        destroy() {
+          view.scrollDOM.removeEventListener("mousemove", mover);
+          view.scrollDOM.removeEventListener("mouseleave", salir);
+        },
+      };
     }),
   ];
 }

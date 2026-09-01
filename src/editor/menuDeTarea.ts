@@ -70,6 +70,36 @@ export interface DependenciasDeMenu {
   ahora?: () => string;
 }
 
+/**
+ * Qué pasa con un Cmd+clic sobre el checkbox: completar y archivar.
+ *
+ * Mismo recorrido que la fila —`elegirEnLinea` traduce la coordenada de ahora a
+ * la del índice, que puede ser de hace un rato— y misma negativa sobre una
+ * línea ilegible. Es una puerta más a `archivarTarea`, no un camino nuevo.
+ */
+export function manejarClicEnCheckbox(
+  dep: DependenciasDeMenu,
+): (view: { state: EditorState }, linea: number, texto: string) => void {
+  const fecha = dep.ahora ?? (() => hoy());
+
+  return (view, linea, texto) => {
+    if (parseTaskToken(texto).estado === "ilegible") {
+      new Notice(STRINGS.avisos.tokenIlegible, 8000);
+      return;
+    }
+    const ctx = elegirEnLinea(dep.store, dep.notas(), dep.archivoDe(view.state), linea, texto);
+    if (!ctx) return;
+    void archivarTarea(
+      dep.app,
+      dep.store,
+      ctx,
+      fecha(),
+      dep.notaDeLog(),
+      dep.confirmarAlArchivar(),
+    );
+  };
+}
+
 export function manejarClicEnFila(dep: DependenciasDeMenu): AlClicEnFila {
   const fecha = dep.ahora ?? (() => hoy());
 

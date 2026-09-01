@@ -35,6 +35,7 @@ import { aplicarLote, seEncontro, ubicarLinea } from "./ubicar.js";
 import {
   claveDe,
   idsACompletar,
+  idsADestildar,
   porClave,
   subarbolDe,
   tareasDelGrupo,
@@ -163,6 +164,41 @@ export function planDeCompletar(
 export function yaEstaCompleta(tareas: readonly Task[], clave: Clave): boolean {
   const indice = porClave(tareas);
   return idsACompletar(tareas, clave).every((c) => indice.get(c)?.hecha ?? true);
+}
+
+/**
+ * Qué líneas cambia **destildar** una tarea: una sola, y le borra el `done`.
+ *
+ * Es la inversa de `planDeCompletar` y no es simétrica a propósito, en las dos
+ * cosas que la distinguen:
+ *
+ * - **No baja por el subárbol.** Es `idsADestildar`, que la spec ya decidía
+ *   así: destildar en cascada borraría trabajo terminado de un clic, y volver a
+ *   tildar la madre los completa de nuevo igual.
+ * - **Borra el `done`.** Una fecha de completado sobre una tarea pendiente es
+ *   un dato que miente, y el historial y la vista de archivadas la leen. Es lo
+ *   mismo que `planDeReinicio` hace con un grupo cíclico entero; acá es con
+ *   una sola tarea.
+ *
+ * Una tarea que ya está pendiente y sin `done` no produce ningún cambio, así
+ * que llamar a esto de más no escribe nada.
+ */
+export function planDeDestildar(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+): CambioDeLinea[] {
+  const indice = porClave(tareas);
+  const cambios: CambioDeLinea[] = [];
+  for (const c of idsADestildar(tareas, clave)) {
+    const t = indice.get(c);
+    if (!t) continue;
+    const texto = doc.lineas[t.linea]?.texto;
+    if (texto === undefined) continue;
+    const x = cambio(doc, t.linea, marcar(texto, " ", { done: null }));
+    if (x) cambios.push(x);
+  }
+  return cambios;
 }
 
 // ------------------------------------ archivar y eliminar (§12, paso 6a)

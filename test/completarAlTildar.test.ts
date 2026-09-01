@@ -71,12 +71,41 @@ describe("completarAlTildar — el hecho, no el gesto", () => {
   });
 });
 
-describe("completarAlTildar — lo que **no** dispara", () => {
-  it("destildar no escribe nada", () => {
+describe("completarAlTildar — destildar borra la fecha", () => {
+  it("destildar le saca el `done`: una fecha sobre una tarea pendiente miente", () => {
     const st = estado(`- [x] hecha %%t:done=${HOY}%%`);
-    expect(tildar(st, 1, " ")).toBe(`- [ ] hecha %%t:done=${HOY}%%`);
+    expect(tildar(st, 1, " ")).toBe("- [ ] hecha");
   });
 
+  it("y conserva el resto del token", () => {
+    const st = estado(`- [x] hecha %%t:id=a3f2;wb=foco;done=${HOY}%%`);
+    expect(tildar(st, 1, " ")).toBe("- [ ] hecha %%t:id=a3f2;wb=foco%%");
+  });
+
+  it("**no** baja por el subárbol: destildar en cascada borraría trabajo hecho", () => {
+    // La asimetría está decidida en `idsADestildar`, no es un olvido. Volver a
+    // tildar la madre las completa a todas de nuevo igual.
+    const st = estado(
+      `- [x] madre %%t:done=${HOY}%%\n\t- [x] hija %%t:done=${HOY}%%`,
+    );
+    expect(tildar(st, 1, " ")).toBe(`- [ ] madre\n\t- [x] hija %%t:done=${HOY}%%`);
+  });
+
+  it("una tarea sin `done` que se destilda no produce ningún cambio", () => {
+    const st = estado("- [x] vieja sin fecha");
+    expect(tildar(st, 1, " ")).toBe("- [ ] vieja sin fecha");
+  });
+
+  it("a una con el token ilegible no se le toca el token (invariante 7)", () => {
+    // El tilde lo cambió el usuario y **queda cambiado**: este filtro no
+    // deshace ediciones, solo agrega o saca metadatos. Lo que el invariante 7
+    // protege es que el plugin no reescriba una línea que no entiende.
+    const st = estado("- [x] rota %%t:zz=1%%");
+    expect(tildar(st, 1, " ")).toBe("- [ ] rota %%t:zz=1%%");
+  });
+});
+
+describe("completarAlTildar — lo que **no** dispara", () => {
   it("editar el texto de una tarea ya tildada no le pone fecha", () => {
     // Es el falso positivo que importa: 29 tareas del corpus están en `[x]` sin
     // `done`, y tocarles una letra no significa que se completaron hoy.

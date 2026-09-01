@@ -83,6 +83,14 @@ export const STRINGS = {
         "tildar deja la tarea hecha pero sin fecha, y el historial la necesita. Reconoce el " +
         "hecho, no el gesto: anda con el mouse, con el teclado y con Outliner. No archiva.",
     },
+    archivarConModificador: {
+      nombre: "Cmd+clic en el checkbox: completar y archivar",
+      descripcion:
+        "Ctrl+clic fuera de macOS. Hace de un gesto lo que el ⋯ hace en dos. Es el único " +
+        "mecanismo del plugin que intercepta un clic —un modificador no deja rastro en el " +
+        "documento, así que no hay otra forma de verlo— y por eso es más frágil: en el " +
+        "teléfono no existe. El ⋯ anda siempre.",
+    },
     botonEliminar: {
       nombre: "Fila de botones: incluir 🗑 Eliminar",
       descripcion:

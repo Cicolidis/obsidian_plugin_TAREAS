@@ -102,8 +102,12 @@ for (const marca of [
   "completar-y-archivar-la-tarea-del-cursor",
   "eliminar-la-tarea-del-cursor",
   "tareas-confirmar",
-  // Lo que salió de la verificación del paso 6a: el tilde que completa.
+  // Lo que salió de la verificación del paso 6a: el tilde que completa, el
+  // Cmd+clic que archiva, y el oyente del hover en el scroller — los tres son
+  // mecanismos que, si se caen del bundle, no dan error: dejan de andar.
   "completarAlTildar",
+  "task-list-item-checkbox",
+  "scrollDOM",
 ]) {
   if (!src.includes(marca)) fallas.push(`falta "${marca}" en el bundle`);
 }
