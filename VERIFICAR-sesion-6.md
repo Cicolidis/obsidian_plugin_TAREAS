@@ -3,9 +3,12 @@
 **Ya está desplegada** (`npm run deploy`). Reiniciá Obsidian o apagá y prendé el
 plugin.
 
-Son **veinticuatro comprobaciones**. Las tres primeras (§0) hay que hacerlas
-antes que nada: este es el primer paso en que el plugin **escribe en el
-historial**, y conviene tener una copia.
+Son **treinta y seis comprobaciones**, más los tres preparativos de la §0, que
+hay que hacer antes que nada: este es el primer paso en que el plugin **escribe
+en el historial**, y conviene tener una copia.
+
+Para anotar lo que salga está `RESULTADOS-sesion-6.md`, que se llena y se pega
+entero como prompt.
 
 ## Qué hay ahora
 
