@@ -716,6 +716,25 @@ problema del filete ni del margen por separado: es que uno se dibuja en
 coordenadas del otro. El hueco de la derecha del margen es lo que los separa, y
 es un valor que hay que **mirar**, no deducir.
 
+### Lo que la quinta verificación del paso 4b midió
+
+**31/08/2026.**
+
+**28. Una regla de CSS sin scope alcanza a las dos formas de la fila.** Hay dos
+—el widget, que vive adentro de `.cm-line`, y el marcador del margen, que vive
+afuera— y se revelan distinto, porque el `:hover` de la línea no llega al
+margen. Al pasar la columna a un `gutter` quedó en pie un
+`body.tareas-revelar-hover … .tareas-fila { opacity: 0 }` **sin decir cuál**, y
+se cayó el override que lo restauraba: en el margen los botones no aparecían
+nunca en modo hover y sí en modo siempre.
+
+No lo agarró ningún test, y no lo podía agarrar: resolver una cascada de CSS
+pide un navegador. Lo que sí se puede es prohibir la forma que lo causa.
+`scripts/humo.mjs` se niega a desplegar un `styles.css` donde un bloque toque
+`opacity` o `pointer-events` sobre `.tareas-fila` sin nombrar `.cm-line` o
+`.cm-gutter` — verificado volviendo a meter la regla vieja y viendo fallar el
+despliegue.
+
 ---
 
 ## 6. Modelo de datos

@@ -541,7 +541,22 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 
 /* --- los modos de revelación --------------------------------------------- */
 
-body.tareas-revelar-hover .markdown-source-view.mod-cm6 .tareas-fila {
+/*
+ * **Todo lo de acá va scopeado a `.cm-line`, y eso no es prolijidad.**
+ *
+ * Hay dos formas de la misma fila: el widget, que vive adentro de la línea, y el
+ * marcador del margen, que vive afuera. Una regla que diga `.tareas-fila` a
+ * secas alcanza a las dos — y las dos se revelan de manera distinta, porque el
+ * `:hover` de la línea no llega al margen.
+ *
+ * Costó una vuelta de verificación entera: al pasar la columna a un `gutter`
+ * quedó en pie el `opacity: 0` sin scope y se cayó el override que lo
+ * restauraba, así que en el margen los botones no aparecían **nunca** en modo
+ * hover y sí en modo siempre. `scripts/humo.mjs` ahora se niega a desplegar un
+ * `styles.css` donde una regla de visibilidad de la fila no diga a cuál de las
+ * dos formas se refiere.
+ */
+body.tareas-revelar-hover .markdown-source-view.mod-cm6 .cm-line .tareas-fila {
 	opacity: 0;
 	/* Invisible **y** intocable: sin esto la fila se sigue comiendo los clics
 	   que van al final del texto. */
@@ -554,13 +569,21 @@ body.tareas-revelar-hover .markdown-source-view.mod-cm6 .cm-line:focus-within .t
 	pointer-events: auto;
 }
 
-body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .tareas-fila {
+body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .cm-line .tareas-fila {
 	opacity: 0.5;
 	pointer-events: auto;
 }
 
 body.tareas-revelar-siempre .markdown-source-view.mod-cm6 .cm-line:hover .tareas-fila {
 	opacity: 1;
+}
+
+/* Y en el margen la fila entera está siempre visible: lo que se apaga ahí son
+   los **botones** que no están encendidos, más abajo. Se escribe explícito en
+   vez de confiar en que nadie vuelva a escribir una regla sin scope. */
+.markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .tareas-fila {
+	opacity: 1;
+	pointer-events: auto;
 }
 
 /* --- `columna` con revelación por hover: los activos no se esconden ------- */

@@ -138,6 +138,40 @@ try {
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
   }
+
+  // 4c) **Toda regla que apague o encienda la fila tiene que decir de cuál
+  // habla.**
+  //
+  // Hay dos formas de la misma fila —el widget, adentro de `.cm-line`, y el
+  // marcador del margen, afuera— y se revelan de manera distinta, porque el
+  // `:hover` de la línea no llega al margen. Una regla que diga `.tareas-fila`
+  // a secas alcanza a las dos, y ahí el modo «con el mouse encima» apaga los
+  // botones del margen para siempre: no hay nada que los vuelva a encender.
+  //
+  // Costó una vuelta entera de verificación, y no lo agarró ningún test porque
+  // no hay forma de resolver una cascada de CSS sin un navegador. Esto sí:
+  // cada bloque que toque `opacity` o `pointer-events` sobre `.tareas-fila`
+  // tiene que nombrar `.cm-line` o `.cm-gutter`.
+  // Se miran los bloques **sin comentarios**: adentro de uno hay cualquier cosa,
+  // y un comentario que nombre la clase no es una regla.
+  const sinComentarios = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const bloque of sinComentarios.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const cuerpo = bloque[2];
+    if (!/(^|[;\s])(opacity|pointer-events)\s*:/.test(cuerpo)) continue;
+
+    for (const selector of bloque[1].split(",")) {
+      // Solo cuando la regla apunta **a la fila misma**: si el último tramo es
+      // otra cosa —un `.tareas-boton`, por ejemplo— la fila es contexto y no
+      // el objetivo, y ahí no hay nada que decidir.
+      const ultimo = selector.trim().split(/\s+/).at(-1) ?? "";
+      if (!/\.tareas-fila\b/.test(ultimo)) continue;
+      if (/\.cm-line|\.cm-gutter/.test(selector)) continue;
+      fallas.push(
+        `regla de visibilidad de la fila sin decir a cuál de las dos: "${selector.trim()}"`,
+      );
+    }
+  }
+
 } catch {
   fallas.push("no se pudo leer styles.css");
 }

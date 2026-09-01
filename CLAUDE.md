@@ -196,6 +196,18 @@ Sin entorno DOM instalado, mirar lo que construye un `toDOM` cuesta un
 barato que agregar una dependencia, y alcanza para leer estructura, clases y
 atributos, que es donde estaba el bug.
 
+**Y lo que no se puede mirar, hay que hacerlo fallar en el pipeline.** Una
+cascada de CSS no se resuelve sin un navegador: en la sesión 5, al pasar la fila
+de botones a un margen, quedó en pie un `opacity: 0` sobre `.tareas-fila` sin
+decir **cuál** de las dos formas —el widget vive adentro de `.cm-line`, el
+marcador del margen afuera— y en el margen no había nada que la volviera a
+encender. Ningún test lo agarró y yo no lo podía ver. Lo que sí se puede es
+escribir la regla que la prohíbe: `humo.mjs` se niega a desplegar un
+`styles.css` donde un bloque toque `opacity` o `pointer-events` sobre
+`.tareas-fila` sin nombrar `.cm-line` o `.cm-gutter`. Cuando el ojo no llega, la
+alternativa no es mirar más fuerte: es convertir la regla en algo que el
+pipeline pueda comprobar.
+
 Y hay que leer la salida **de los instrumentos**, no solo la del código. En la
 sesión 5 el espía del cursor imprimía el token como `%t:id=…%`: la consola de
 Chrome —que es la de Obsidian— trata el primer argumento de `console.log` como
