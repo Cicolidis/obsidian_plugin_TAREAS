@@ -37,6 +37,12 @@ si traía una selección explícita— está `scripts/espia-cursor.js`, que se p
 igual en la consola. Sirve para lo que los tests con filtros encadenados no
 pueden ver: Outliner interceptando la tecla, y lo que Obsidian despacha detrás.
 
+Para lo que se ve en pantalla y no se puede deducir —cuántos márgenes hay, qué
+ancho tiene cada uno, cuánto mide un hueco— está `scripts/espia-margen.js`. Nació
+de una cuenta que daba 7 px donde la pantalla mostraba 45: cuando el número
+calculado y el visto no coinciden, falta un elemento en el modelo, y eso solo lo
+contesta el navegador.
+
 Para leer el CSS o el JS internos de Obsidian en vez de deducirlos, están los scripts de Anotaciones (`extraer-css-de-obsidian.mjs`).
 
 Hay además un **MCP conectado al Obsidian de esta máquina**. Sirve como tercer

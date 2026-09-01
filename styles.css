@@ -522,10 +522,17 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	margin-inline-start: var(--tareas-margen-antesala, -3px);
 }
 
+/*
+ * **Arriba, no al medio.** CodeMirror le da al elemento del margen la altura del
+ * bloque entero, así que en una tarea que ocupa tres renglones `align-items:
+ * center` deja los botones flotando en el medio, lejos del checkbox. Reportado
+ * en la sexta vuelta, y es exactamente el mismo error que el filete tenía y que
+ * ya se arregló: el ancla de todo lo que acompaña a una tarea es su **primer
+ * renglón**.
+ */
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
 	display: flex;
-	align-items: center;
-	/* La altura la pone CodeMirror por línea; esto solo centra adentro. */
+	align-items: flex-start;
 }
 
 /* Adentro del margen la fila no se posiciona: la columna **es** su lugar. */
@@ -535,7 +542,9 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .tareas-fila {
 	position: static;
-	height: auto;
+	/* Un renglón exacto, y los botones centrados adentro: la misma cuenta que
+	   hace el filete. Con `auto` la fila crecía hasta el alto de la tarea. */
+	height: calc(var(--line-height-normal, 1.5) * 1em);
 	gap: 0;
 	padding: 0 2px;
 	border: 1px solid transparent;
