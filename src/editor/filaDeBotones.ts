@@ -147,21 +147,57 @@ export class FilaWidget extends WidgetType {
   }
 
   override toDOM(view: EditorView): HTMLElement {
-    return construirFila(this.fila, this.opciones, (boton, elemento, evento) => {
-      const donde = resolver(view, elemento);
-      if (donde === null) return;
-      this.opciones.alClic({
-        view,
-        linea: donde.linea,
-        texto: donde.texto,
-        boton,
-        ilegible: this.fila.ilegible,
-        elemento,
-        evento,
-      });
+    return construirFila(this.fila, this.opciones, {
+      modo: "propio",
+      alClic: (boton, elemento, evento) => {
+        const donde = resolver(view, elemento);
+        if (donde === null) return;
+        this.opciones.alClic({
+          view,
+          linea: donde.linea,
+          texto: donde.texto,
+          boton,
+          ilegible: this.fila.ilegible,
+          elemento,
+          evento,
+        });
+      },
     });
   }
 }
+
+/**
+ * Quién atiende el clic, que **no es lo mismo en las dos formas de la fila**.
+ *
+ * Era un parámetro `alClic` y el margen le pasaba una función vacía, con la
+ * idea de que el clic lo resolvía su `domEventHandlers`. **No lo resolvía
+ * nunca**, y por eso los cuatro botones del estilo «columna» no hacían nada:
+ * se veían, daban la manito, y el clic moría en silencio.
+ *
+ * El mecanismo, leído en `@codemirror/view` 6.38.6 y no supuesto
+ * (`SingleGutterView`):
+ *
+ * ```js
+ * for (let prop in config.domEventHandlers) {
+ *     this.dom.addEventListener(prop, (event) => { … })   // this.dom = .cm-gutter
+ * }
+ * ```
+ *
+ * El margen engancha sus handlers **en el `.cm-gutter`**, que es un ancestro
+ * del botón, y **en fase de burbujeo**. El `stopPropagation()` que el botón
+ * hacía en su propio `click` —necesario en el widget, para que CodeMirror no
+ * trate el clic como suyo— cortaba la burbuja antes de llegar ahí.
+ *
+ * Una función vacía escondía la diferencia detrás de algo que parecía inocuo.
+ * Ahora los dos modos se nombran, y `test/filaDeBotones.test.ts` comprueba en
+ * un DOM falso que el clic del margen **llega a su ancestro** y el del widget
+ * **no**.
+ */
+export type ResolucionDelClic =
+  /** El widget: el botón atiende el clic y lo corta ahí. */
+  | { modo: "propio"; alClic: (boton: Boton, elemento: HTMLElement, evento: MouseEvent) => void }
+  /** El margen: el clic tiene que **subir hasta el `.cm-gutter`**. */
+  | { modo: "burbuja" };
 
 /**
  * El DOM de la fila. Lo comparten el widget y el marcador del margen.
@@ -170,12 +206,15 @@ export class FilaWidget extends WidgetType {
  * cuatro botones en pantalla, y si cada una armara su DOM, un arreglo de
  * accesibilidad o una clase nueva entraría en una y no en la otra. Lo que
  * cambia entre las dos es **cómo se sabe sobre qué línea se hizo clic**, y eso
- * es justo lo que entra por `alClic`.
+ * entra por `resolucion`.
+ *
+ * Se exporta para el test: es el único lugar donde se decide si el clic se
+ * atiende acá o se deja subir, y esa decisión no se puede mirar desde afuera.
  */
-function construirFila(
+export function construirFila(
   fila: Fila,
   opciones: OpcionesDeFila,
-  alClic: (boton: Boton, elemento: HTMLElement, evento: MouseEvent) => void,
+  resolucion: ResolucionDelClic,
 ): HTMLElement {
   const ancla = document.createElement("span");
   ancla.className = "tareas-fila-ancla";
@@ -232,15 +271,23 @@ function construirFila(
     if (fila.ilegible) boton.setAttribute("aria-disabled", "true");
     opciones.dibujarIcono(boton, b.icono);
 
+    // El `mousedown` se ataja en los dos modos: es lo que evita que el
+    // navegador ponga un caret o empiece a seleccionar. Cortarle la burbuja no
+    // le saca nada al margen, cuyo `mousedown` solo devuelve `true` para hacer
+    // el mismo `preventDefault` que ya se hizo acá.
     boton.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
     });
-    boton.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      alClic(b, boton, e);
-    });
+    // El `click`, en cambio, **solo** cuando lo atiende el botón. En el margen
+    // tiene que llegar al `.cm-gutter`, que es quien sabe sobre qué línea fue.
+    if (resolucion.modo === "propio") {
+      boton.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resolucion.alClic(b, boton, e);
+      });
+    }
 
     grupo.appendChild(boton);
   }
@@ -404,7 +451,7 @@ function construir(
  * reciben el `BlockInfo` de la línea, **fresco en el momento del evento**. Es la
  * misma garantía del invariante 10 por otra puerta, y encima más directa.
  */
-class FilaMarker extends GutterMarker {
+export class FilaMarker extends GutterMarker {
   private readonly clave: string;
 
   constructor(
@@ -426,7 +473,7 @@ class FilaMarker extends GutterMarker {
     // El clic no se resuelve acá: lo hace el `domEventHandlers` del margen, que
     // recibe la línea fresca. Acá solo se marca cada botón para poder
     // reconocerlo desde allá.
-    const ancla = construirFila(this.fila, this.opciones, () => {});
+    const ancla = construirFila(this.fila, this.opciones, { modo: "burbuja" });
     const botones = ancla.querySelectorAll("button");
     this.fila.botones.forEach((b, i) => {
       botones[i]?.setAttribute("data-accion", b.accion);
