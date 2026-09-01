@@ -533,6 +533,22 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
 	display: flex;
 	align-items: flex-start;
+	/* Y arriba **del texto**, no del bloque. Leído en el `app.css` del asar
+	   1.13.7: `.mod-cm6 .HyperMD-list-line.cm-line { padding-top:
+	   var(--list-spacing) }`. Una línea de tarea es una línea de lista, así que
+	   lleva ese relleno arriba y el elemento del margen cubre el bloque entero,
+	   relleno incluido. Sin esto los botones quedan justo esa cantidad más
+	   altos que el número, el filete y el checkbox — reportado en la sexta
+	   vuelta, y es un desfasaje chico que solo se ve al lado de otra cosa.
+
+	   Si igual queda corrido, el número se ajusta a ojo desde un fragmento de
+	   CSS del vault, sin recompilar:
+
+	       .markdown-source-view.mod-cm6 .cm-gutter.tareas-margen .cm-gutterElement {
+	         --tareas-margen-nudge: 2px;
+	       }
+	*/
+	padding-top: var(--tareas-margen-nudge, var(--list-spacing, 0px));
 }
 
 /* Adentro del margen la fila no se posiciona: la columna **es** su lugar. */
