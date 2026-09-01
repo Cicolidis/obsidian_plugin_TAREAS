@@ -697,3 +697,21 @@ body:not(.tareas-fila-columna) .markdown-source-view.mod-cm6 .cm-gutter.tareas-m
   font-family: var(--font-monospace);
   resize: vertical;
 }
+
+/* --------------------------------------------------------------------------
+ * El modal de confirmación de «archivar» y «eliminar» (§12, paso 6a).
+ *
+ * Lo único que hace falta es que las tres frases se lean como tres y no como
+ * un párrafo: la §12 pide que la confirmación diga «cuántas líneas y en qué
+ * nota», y eso tiene que verse de un vistazo. El resto lo pone Obsidian.
+ * -------------------------------------------------------------------------- */
+
+.tareas-confirmar .tareas-confirmar-detalle {
+  margin: 0 0 var(--size-4-2) 0;
+  line-height: var(--line-height-normal);
+}
+
+/* La última no necesita separarse del renglón de botones más que el resto. */
+.tareas-confirmar .tareas-confirmar-detalle:last-of-type {
+  margin-bottom: var(--size-4-3);
+}

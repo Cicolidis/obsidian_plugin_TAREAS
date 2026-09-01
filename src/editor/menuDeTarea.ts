@@ -3,8 +3,10 @@ import type { EditorState } from "@codemirror/state";
 import { workbenchesDelPopover, type Favoritos } from "../botones.js";
 import {
   alternarWorkbench,
+  archivarTarea,
   completarTarea,
   elegirEnLinea,
+  eliminarTarea,
   fijarPrioridad,
   hoy,
   nivelVisible,
@@ -35,16 +37,13 @@ import type { AlClicEnFila } from "./filaDeBotones.js";
  *
  * ## Qué **no** está en el ⋯, y por qué
  *
- * La §13.0 lista seis cosas en el menú. Hoy solo tres tienen capa 1 y 2 detrás
- * —prioridad, completar y descartar, y los workbenches— y las otras se dejan
- * afuera en vez de aparecer grises:
+ * La §13.0 lista seis cosas en el menú. Con el paso 6a entraron «completar y
+ * archivar» y «eliminar», así que quedan dos afuera:
  *
  * | Del menú | Por qué no |
  * |---|---|
  * | Fecha | `setTaskToken` sabe escribir `due`, pero no hay con qué elegir una |
  * | Recurrencia | Ídem con `rec`, y el botón por grupo es de la §11 |
- * | Completar y archivar | `archivado.ts` tiene la lógica pura y ninguna escritura: toca dos archivos a la vez. Paso 6 |
- * | Eliminar | Es el descarte físico de la §12, con confirmación. Paso 6 |
  *
  * Un ítem gris ocupa el mismo lugar que uno que anda y no hace nada: es la
  * misma decisión que dejó al ◐ sin dibujar cuando no tiene workbench.
@@ -55,6 +54,8 @@ export interface DependenciasDeMenu {
   /** La lista efectiva, leída en el momento: los ajustes cambian sin recargar. */
   notas: () => readonly string[];
   favoritos: () => Favoritos;
+  /** A dónde archiva (§12). Se lee en el momento, como el resto. */
+  notaDeLog: () => string;
   /**
    * De un editor a un archivo del vault.
    *
@@ -108,7 +109,7 @@ export function manejarClicEnFila(dep: DependenciasDeMenu): AlClicEnFila {
 }
 
 /**
- * El ⋯: prioridad y completar. Nada más, por ahora.
+ * El ⋯: prioridad, los dos verbos de terminar una tarea, y el descarte.
  *
  * Los tres niveles van planos y no en un submenú: `setSubmenu` no está en las
  * tipificaciones públicas de Obsidian, y un rótulo con `setIsLabel` más tres
@@ -117,6 +118,20 @@ export function manejarClicEnFila(dep: DependenciasDeMenu): AlClicEnFila {
  * El nivel marcado es el que **se ve** (`nivelVisible`), no el propio: una hija
  * sin `p=` se dibuja con la prioridad de su madre, y marcar «normal» sobre una
  * línea que se ve roja diría lo contrario de lo que muestra la pantalla.
+ *
+ * ## El orden es fijo, y no se acomoda a la tarea
+ *
+ * La §12 dice que el default —descartar o archivar— se deriva del tamaño del
+ * bloque, y `archivarPorDefecto` sabe calcularlo. **Acá no se usa para mover
+ * los ítems de lugar.** Un menú cuyo primer ítem cambia según la tarea es un
+ * menú que no se puede aprender, y estos dos son la acción más frecuente del
+ * plugin: la memoria muscular vale más que la sugerencia. El default va a
+ * importar cuando haya **un solo** gesto de completar —un botón de la fila— y
+ * entonces sí decide cuál corre.
+ *
+ * «Eliminar» va después de un separador y con `setWarning`: es la única entrada
+ * del menú que pierde texto, y tiene que verse distinta antes de abrirla, no
+ * solo en el modal.
  */
 function abrirMenu(
   dep: DependenciasDeMenu,
@@ -143,6 +158,21 @@ function abrirMenu(
       .setTitle(STRINGS.menu.completarYDescartar)
       .setIcon("check")
       .onClick(() => completarTarea(dep.app, dep.store, ctx, fecha())),
+  );
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.completarYArchivar)
+      .setIcon("archive")
+      .onClick(() => void archivarTarea(dep.app, dep.store, ctx, fecha(), dep.notaDeLog())),
+  );
+
+  menu.addSeparator();
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.eliminar)
+      .setIcon("trash-2")
+      .setWarning(true)
+      .onClick(() => eliminarTarea(dep.app, dep.store, ctx)),
   );
 
   menu.showAtMouseEvent(evento);

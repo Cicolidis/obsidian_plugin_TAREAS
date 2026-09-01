@@ -64,7 +64,9 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   tareas-fila             el ancla y la fila; si se cae, los botones no se ven
 //   tareas-revelar-         el modo de revelación, que viaja como clase de `body`
 //   setIcon                 sin esto los botones son cuatro cuadrados vacíos
-//   los cuatro ids          un comando que se cae del bundle no da error: no aparece
+//   los seis ids            un comando que se cae del bundle no da error: no aparece
+//   escribirArchivado       la escritura en dos archivos (§12, paso 6a)
+//   tareas-confirmar        el modal; sin él, archivar y eliminar no preguntan nada
 //
 // El id del plugin no se busca acá: vive en el manifiesto y se valida abajo.
 for (const marca of [
@@ -95,6 +97,11 @@ for (const marca of [
   "asignar-workbench-favorito",
   "subir-prioridad-del-cursor",
   "bajar-prioridad-del-cursor",
+  // Paso 6a: terminar una tarea. El modal es lo que separa «eliminar» de
+  // «eliminar sin preguntar», así que su clase también se busca.
+  "completar-y-archivar-la-tarea-del-cursor",
+  "eliminar-la-tarea-del-cursor",
+  "tareas-confirmar",
 ]) {
   if (!src.includes(marca)) fallas.push(`falta "${marca}" en el bundle`);
 }

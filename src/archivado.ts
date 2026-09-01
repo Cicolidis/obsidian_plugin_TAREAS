@@ -15,8 +15,10 @@ import {
   arbolDe,
   headingsDe,
   insertarLineas,
+  parseDocumento,
   rangoDelSubarbol,
   recorrer,
+  renderDocumento,
   type Documento,
   type Nodo,
 } from "./documento.js";
@@ -46,8 +48,20 @@ export function marcaDeFecha(fecha: string): string {
  * reconstruir leyendo el heading de nivel 1.
  */
 export function caminoDeArchivado(archivo: string, proyecto: string | null): string[] {
-  const nota = archivo.replace(/^.*\//, "").replace(/\.md$/, "");
+  const nota = nombreDeNota(archivo);
   return proyecto === null ? [nota] : [nota, proyecto];
+}
+
+/**
+ * El nombre de una nota, sin carpeta y sin `.md`.
+ *
+ * Vive acá porque es lo que el LOG usa como heading de nivel 1, y lo comparten
+ * el archivado y los carteles de confirmación: los dos tienen que llamar a la
+ * nota de la misma manera, o el modal diría «tareas_COLE» y el historial
+ * quedaría bajo otra cosa.
+ */
+export function nombreDeNota(archivo: string): string {
+  return archivo.replace(/^.*\//, "").replace(/\.md$/, "");
 }
 
 /**
@@ -221,6 +235,65 @@ function finDeSeccion(log: Documento, nHeading: number, nivel: number): number {
 /** El LOG con el bloque ya archivado. */
 export function aplicarArchivado(log: Documento, plan: PlanDeArchivado): Documento {
   return insertarLineas(log, plan.linea, plan.lineas);
+}
+
+/**
+ * El LOG entero, con el bloque ya archivado. **Es lo que corre adentro de
+ * `vault.process()`.**
+ *
+ * Acá está la decisión que separa al LOG del resto de las escrituras del
+ * plugin, y conviene decirla entera porque contradice lo que uno esperaría:
+ *
+ * > **La inserción en el LOG no se ubica: se recalcula.** Todo lo demás que el
+ * > plugin escribe lleva el texto que esperaba encontrar y lo verifica
+ * > (invariante 10, `ubicar.ts`), porque el plan se armó sobre una foto vieja.
+ * > Acá no hace falta: la posición es una **función del contenido del LOG**, y
+ * > `process` entrega los bytes frescos. Recalcular sobre ellos es
+ * > estrictamente más correcto que verificar un ancla vieja.
+ *
+ * Y no es solo más simple: es lo único que sostiene el **invariante 6** cuando
+ * hay más de un dispositivo. Con una inserción ubicada, un heading que otra
+ * máquina acaba de crear por Sync no lo ve nadie y el archivado lo duplica en
+ * silencio. Recalculando, `planDeArchivado` lo encuentra y engancha ahí.
+ *
+ * Cuesta 0,011 ms sobre el LOG de hoy (51 líneas) y 0,17 ms sobre uno veinte
+ * veces más grande, medido el 01/09/2026. No hay ninguna razón para ser astuto.
+ *
+ * Devuelve también el plan: quien avisa necesita poder decir cuántos headings
+ * se crearon, y eso solo se sabe acá adentro.
+ */
+export function archivarEnElLog(
+  texto: string,
+  camino: readonly string[],
+  bloque: readonly string[],
+): { texto: string; plan: PlanDeArchivado } {
+  const log = parseDocumento(texto);
+  const plan = planDeArchivado(log, camino, bloque);
+  return { texto: renderDocumento(aplicarArchivado(log, plan)), plan };
+}
+
+/**
+ * Hasta cuántas líneas «completar y archivar» **no** pide confirmación.
+ *
+ * Medido el 01/09/2026 sobre el corpus: **251 de 389 tareas (64,5%) son hojas
+ * de una sola línea**. El hallazgo que ordena la §12 es que tildar tiene que
+ * costar menos que borrar, así que pedirle un modal a dos de cada tres
+ * archivados sería trabajar en contra de la razón de ser de esta sección.
+ *
+ * Con dos líneas o más sí confirma, y ahí el modal gana lo que le falta al
+ * caso de una: el usuario está moviendo contenido que puede no estar mirando
+ * —el subárbol colapsado, las notas ocultas— y el destino en el LOG es
+ * información que no puede ver de otro modo, porque el LOG está siempre
+ * cerrado.
+ *
+ * El número vive acá solo. Repetido en la capa 3 y en la 1 divergiría, y la
+ * divergencia sería «a veces pregunta y a veces no».
+ */
+export const LINEAS_SIN_CONFIRMAR = 1;
+
+/** ¿Este bloque es lo bastante grande como para preguntar antes? */
+export function archivarPideConfirmacion(bloque: readonly string[]): boolean {
+  return bloque.length > LINEAS_SIN_CONFIRMAR;
 }
 
 /**

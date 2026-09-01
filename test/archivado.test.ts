@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   aplicarArchivado,
+  archivarEnElLog,
+  archivarPideConfirmacion,
   archivarPorDefecto,
   bloqueParaElLog,
   caminoDeArchivado,
   nodoDeTarea,
   parseLineaArchivada,
+  nombreDeNota,
   parseLog,
   planDeArchivado,
 } from "../src/archivado.js";
@@ -168,8 +171,10 @@ describe("planDeArchivado", () => {
 
 describe("archivarPorDefecto (§12)", () => {
   it("una hoja se descarta; una con subárbol o con notas se archiva", () => {
-    // El default sale del tamaño del bloque: p50 = 2 líneas, la mayoría son
-    // hojas.
+    // El default sale del tamaño del bloque. Medido el 01/09/2026 sobre todas
+    // las tareas del corpus —que es lo que ve el botón—: p50 = 1 línea y 251
+    // de 389 (64,5%) son hojas. La §2 dice p50 = 2 porque midió el subárbol de
+    // las tareas **raíz**, que son otras.
     expect(archivarPorDefecto(nodoDe("- [x] sola", "sola").n)).toBe(false);
     expect(archivarPorDefecto(nodoDe("- [x] con nota\n\t- la nota", "con nota").n)).toBe(true);
     expect(archivarPorDefecto(nodoDe("- [x] madre\n\t- [x] hija", "madre").n)).toBe(true);
@@ -286,6 +291,86 @@ describe("parseLog", () => {
         notas: ["\t- 30 copias"],
         linea: 4,
       },
+    ]);
+  });
+});
+
+describe("archivarEnElLog — lo que corre adentro de `vault.process()`", () => {
+  const LOG = "# PESTALOZZI\n\n- algo viejo";
+
+  it("devuelve el LOG entero, con el bloque puesto", () => {
+    const { texto } = archivarEnElLog(LOG, ["tareas_X"], ["- lo nuevo [✓ 2026-08-24]"]);
+    expect(texto).toBe(
+      "# PESTALOZZI\n\n- algo viejo\n\n# tareas_X\n\n- lo nuevo [✓ 2026-08-24]",
+    );
+  });
+
+  it("no toca una sola línea de las que ya estaban", () => {
+    const { texto } = archivarEnElLog(LOG, ["tareas_X"], ["- lo nuevo"]);
+    expect(texto.startsWith(LOG)).toBe(true);
+  });
+
+  it("el resultado se vuelve a leer byte por byte (invariante 9)", () => {
+    const { texto } = archivarEnElLog(LOG, ["tareas_X", "p_Y"], ["- a", "\t- b"]);
+    expect(renderDocumento(parseDocumento(texto))).toBe(texto);
+  });
+
+  it("dice cuántos headings creó, que es lo que el cartel necesita", () => {
+    const uno = archivarEnElLog(LOG, ["tareas_X"], ["- a"]);
+    expect(uno.plan.headingsNuevos).toEqual([{ nivel: 1, texto: "tareas_X" }]);
+    // Y archivar de nuevo en el mismo camino no crea ninguno (invariante 6).
+    const dos = archivarEnElLog(uno.texto, ["tareas_X"], ["- b"]);
+    expect(dos.plan.headingsNuevos).toEqual([]);
+  });
+
+  it("recalcular es lo que evita duplicar un heading que apareció en el medio", () => {
+    // El caso que decidió que el LOG **no** lleve un lote ubicado: el plan se
+    // arma sobre una foto y, para cuando se escribe, otro dispositivo creó la
+    // sección por Sync. Como se recalcula sobre los bytes frescos, engancha.
+    const foto = LOG;
+    const conLaSeccion = archivarEnElLog(foto, ["tareas_X"], ["- de otra máquina"]).texto;
+    const r = archivarEnElLog(conLaSeccion, ["tareas_X"], ["- lo mío"]);
+    expect(r.plan.headingsNuevos).toEqual([]);
+    expect(r.texto.match(/^# tareas_X$/gm)).toHaveLength(1);
+  });
+
+  it("archivar N bloques en el mismo camino crea el camino una sola vez (inv. 6)", () => {
+    let texto = LOG;
+    for (let i = 0; i < 5; i++) {
+      texto = archivarEnElLog(texto, ["tareas_X", "p_Y"], [`- tarea ${i}`]).texto;
+    }
+    expect(texto.match(/^# tareas_X$/gm)).toHaveLength(1);
+    expect(texto.match(/^## p_Y$/gm)).toHaveLength(1);
+    for (let i = 0; i < 5; i++) expect(texto).toContain(`- tarea ${i}`);
+  });
+});
+
+describe("cuándo se pregunta antes de archivar", () => {
+  it("una hoja de una línea no pregunta; dos líneas o más sí", () => {
+    // El umbral sale de la medición del 01/09/2026: 251 de 389 tareas (64,5%)
+    // son hojas de una línea, y la §12 existe porque tildar tiene que costar
+    // menos que borrar.
+    expect(archivarPideConfirmacion(["- sola"])).toBe(false);
+    expect(archivarPideConfirmacion(["- madre", "\t- hija"])).toBe(true);
+  });
+
+  it("un bloque vacío tampoco pregunta: no hay nada que decir", () => {
+    expect(archivarPideConfirmacion([])).toBe(false);
+  });
+});
+
+describe("nombreDeNota", () => {
+  it("saca la carpeta y la extensión, que es como el LOG llama a la nota", () => {
+    expect(nombreDeNota("0_inbox/tareas_X.md")).toBe("tareas_X");
+    expect(nombreDeNota("tareas_X.md")).toBe("tareas_X");
+    expect(nombreDeNota("a/b/c.md")).toBe("c");
+  });
+
+  it("es exactamente lo que `caminoDeArchivado` pone de heading de nivel 1", () => {
+    // Si los dos divergieran, el cartel diría una nota y el historial la
+    // guardaría bajo otra.
+    expect(caminoDeArchivado("0_inbox/tareas_X.md", null)).toEqual([
+      nombreDeNota("0_inbox/tareas_X.md"),
     ]);
   });
 });

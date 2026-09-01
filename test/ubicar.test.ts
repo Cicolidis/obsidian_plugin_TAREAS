@@ -1,10 +1,20 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import type { CambioDeLinea } from "../src/documento.js";
+import {
+  arbolDe,
+  eliminarLineas,
+  lineasDelSubarbol,
+  parseDocumento,
+  rangoDelSubarbol,
+  recorrer,
+  renderDocumento,
+  type CambioDeLote,
+} from "../src/documento.js";
 import {
   aplicarLote,
   loteInverso,
   seEncontro,
+  ubicarBloque,
   ubicarLinea,
   ubicarLote,
 } from "../src/ubicar.js";
@@ -12,14 +22,32 @@ import { documento } from "./arbitrarios.js";
 
 /**
  * Lo que este archivo prueba es una sola cosa, dicha de muchas maneras:
- * **ninguna escritura toca una línea cuyo texto no era el esperado.**
+ * **ninguna escritura toca un tramo cuyo texto no era el esperado.**
  *
- * Es el invariante 10, y es el riesgo que el paso 3 existe para matar. Los
- * casos de abajo cubren las cuatro respuestas posibles; las propiedades cubren
- * el caso que a nadie se le ocurrió.
+ * Es el invariante 10, y es el riesgo que el paso 3 existe para matar. Desde el
+ * paso 6a un lote puede además **cambiar la cantidad de líneas** —archivar
+ * verifica el bloque entero, eliminar lo borra— y eso agrega una pregunta que
+ * antes no existía: **si el resultado depende del orden en que vinieron los
+ * cambios.** No depende, y esa es la propiedad titular de acá.
  */
 
 const L = (texto: string) => texto.split("\n");
+
+/** Un reemplazo de una línea. */
+const R = (linea: number, antes: string, despues: string): CambioDeLote => ({
+  tipo: "reemplazo",
+  linea,
+  antes,
+  despues,
+});
+
+/** Un tramo de N líneas por M. Con `despues: []` es un borrado. */
+const B = (linea: number, antes: string[], despues: string[]): CambioDeLote => ({
+  tipo: "bloque",
+  linea,
+  antes,
+  despues,
+});
 
 describe("ubicarLinea — las cuatro respuestas", () => {
   const lineas = L("# nota\n\n- [ ] una\n- [ ] otra\n- [ ] una");
@@ -73,13 +101,41 @@ describe("ubicarLinea — las cuatro respuestas", () => {
   });
 });
 
+describe("ubicarBloque — la misma regla, estirada a un tramo", () => {
+  const lineas = L("# nota\n- [ ] una\n\t- nota\n- [ ] otra\n- [ ] una\n\t- nota");
+
+  it("el tramo coincide donde se esperaba", () => {
+    expect(ubicarBloque(lineas, 1, ["- [ ] una", "\t- nota"])).toEqual({ estado: "ok", linea: 1 });
+  });
+
+  it("un tramo que se corrió se encuentra entero", () => {
+    expect(ubicarBloque(lineas, 0, ["- [ ] otra"])).toMatchObject({ estado: "movida", linea: 3 });
+  });
+
+  it("un tramo repetido no se adivina", () => {
+    expect(ubicarBloque(lineas, 0, ["- [ ] una", "\t- nota"])).toEqual({
+      estado: "ambigua",
+      lineas: [1, 4],
+    });
+  });
+
+  it("un tramo que se sale del final no coincide, y se busca", () => {
+    expect(ubicarBloque(lineas, 5, ["\t- nota", "de más"])).toEqual({ estado: "ausente" });
+  });
+
+  it("un `antes` vacío no se ubica nunca: sin ancla no hay nada que verificar", () => {
+    // Es lo que deja la **inserción** afuera de este módulo por ahora.
+    expect(ubicarBloque(lineas, 0, [])).toEqual({ estado: "ausente" });
+  });
+});
+
 describe("ubicarLote — todo o nada", () => {
   const texto = "# nota\n- [ ] una\n- [ ] otra\n\t- [ ] hija";
 
   it("todas ubicadas: se aplican todas", () => {
     const { texto: despues, resultado } = aplicarLote(texto, [
-      { linea: 1, antes: "- [ ] una", despues: "- [x] una" },
-      { linea: 3, antes: "\t- [ ] hija", despues: "\t- [x] hija" },
+      R(1, "- [ ] una", "- [x] una"),
+      R(3, "\t- [ ] hija", "\t- [x] hija"),
     ]);
     expect(resultado.estado).toBe("ok");
     expect(despues).toBe("# nota\n- [x] una\n- [ ] otra\n\t- [x] hija");
@@ -87,8 +143,8 @@ describe("ubicarLote — todo o nada", () => {
 
   it("una sola no ubicada y no se escribe ninguna", () => {
     const { texto: despues, resultado } = aplicarLote(texto, [
-      { linea: 1, antes: "- [ ] una", despues: "- [x] una" },
-      { linea: 2, antes: "- [ ] la que alguien borró", despues: "- [x] ídem" },
+      R(1, "- [ ] una", "- [x] una"),
+      R(2, "- [ ] la que alguien borró", "- [x] ídem"),
     ]);
     expect(resultado.estado).toBe("no-ubicada");
     expect(despues).toBe(texto);
@@ -96,16 +152,15 @@ describe("ubicarLote — todo o nada", () => {
 
   it("el aviso dice **cuáles** fallaron, no solo que falló", () => {
     const r = ubicarLote(L(texto), [
-      { linea: 1, antes: "- [ ] una", despues: "x" },
-      { linea: 9, antes: "- [ ] fantasma", despues: "x" },
-      { linea: 9, antes: "- [ ] otro fantasma", despues: "x" },
+      R(1, "- [ ] una", "x"),
+      R(9, "- [ ] fantasma", "x"),
+      R(9, "- [ ] otro fantasma", "x"),
     ]);
     expect(r.estado).toBe("no-ubicada");
     if (r.estado !== "no-ubicada") throw new Error("imposible");
-    expect(r.fallas.map((f) => f.cambio.antes)).toEqual([
-      "- [ ] fantasma",
-      "- [ ] otro fantasma",
-    ]);
+    expect(
+      r.fallas.map((f) => (f.cambio.tipo === "reemplazo" ? f.cambio.antes : f.cambio.antes[0])),
+    ).toEqual(["- [ ] fantasma", "- [ ] otro fantasma"]);
   });
 
   it("dos cambios que caen en la misma línea: colisión, y no se escribe nada", () => {
@@ -113,8 +168,8 @@ describe("ubicarLote — todo o nada", () => {
     // puede atribuir, y elegir una es exactamente lo que no se hace.
     const dup = "- [ ] igual\n- [ ] igual";
     const r = aplicarLote(dup, [
-      { linea: 5, antes: "- [ ] igual", despues: "- [x] igual" },
-      { linea: 6, antes: "- [ ] igual", despues: "- [x] igual" },
+      R(5, "- [ ] igual", "- [x] igual"),
+      R(6, "- [ ] igual", "- [x] igual"),
     ]);
     // Las dos dan ambigua antes de llegar a la colisión, que es lo mismo de
     // fondo: no se escribe.
@@ -123,11 +178,27 @@ describe("ubicarLote — todo o nada", () => {
   });
 
   it("la colisión se detecta cuando una es exacta y la otra se buscó", () => {
-    const r = ubicarLote(L("- [ ] a\n- [ ] b"), [
-      { linea: 0, antes: "- [ ] a", despues: "1" },
-      { linea: 7, antes: "- [ ] a", despues: "2" },
-    ]);
+    const r = ubicarLote(L("- [ ] a\n- [ ] b"), [R(0, "- [ ] a", "1"), R(7, "- [ ] a", "2")]);
     expect(r).toMatchObject({ estado: "colisión", linea: 0 });
+  });
+
+  it("un reemplazo adentro de un tramo que otro cambio borra: colisión", () => {
+    // El caso nuevo del paso 6a. Sin esta regla, el resultado dependería de
+    // cuál se aplicara primero, que es exactamente lo que no puede pasar.
+    const r = ubicarLote(L(texto), [
+      B(1, ["- [ ] una", "- [ ] otra"], []),
+      R(2, "- [ ] otra", "- [x] otra"),
+    ]);
+    expect(r.estado).toBe("colisión");
+  });
+
+  it("dos tramos que se tocan pero no se pisan sí se aplican", () => {
+    const { texto: despues, resultado } = aplicarLote(texto, [
+      B(1, ["- [ ] una"], ["- [x] una"]),
+      B(2, ["- [ ] otra", "\t- [ ] hija"], []),
+    ]);
+    expect(resultado.estado).toBe("ok");
+    expect(despues).toBe("# nota\n- [x] una");
   });
 
   it("un lote vacío devuelve el mismo texto sin partirlo", () => {
@@ -136,11 +207,45 @@ describe("ubicarLote — todo o nada", () => {
   });
 
   it("cuenta cuántas hubo que buscar", () => {
-    const r = ubicarLote(L(texto), [
-      { linea: 1, antes: "- [ ] una", despues: "x" },
-      { linea: 99, antes: "- [ ] otra", despues: "y" },
-    ]);
+    const r = ubicarLote(L(texto), [R(1, "- [ ] una", "x"), R(99, "- [ ] otra", "y")]);
     expect(r).toMatchObject({ estado: "ok", movidas: 1 });
+  });
+});
+
+describe("borrar y verificar — las dos formas nuevas del bloque", () => {
+  const texto = "# nota\n- [ ] madre\n\t- una nota\n\t- [ ] hija\n- [ ] otra";
+
+  it("borrar un tramo se lleva el tramo y nada más", () => {
+    const { texto: despues, resultado } = aplicarLote(texto, [
+      B(1, ["- [ ] madre", "\t- una nota", "\t- [ ] hija"], []),
+    ]);
+    expect(resultado.estado).toBe("ok");
+    expect(despues).toBe("# nota\n- [ ] otra");
+  });
+
+  it("un bloque con las dos caras iguales no cambia un byte", () => {
+    const { texto: despues, resultado } = aplicarLote(texto, [
+      B(2, ["\t- una nota"], ["\t- una nota"]),
+    ]);
+    expect(resultado.estado).toBe("ok");
+    expect(despues).toBe(texto);
+  });
+
+  it("una verificación cuyo texto ya no está hace fallar el lote entero", () => {
+    // Es lo que hace que archivar no copie al historial una nota que cambió.
+    const { texto: despues, resultado } = aplicarLote(texto, [
+      R(1, "- [ ] madre", "- [x] madre"),
+      B(2, ["\t- la nota que decía otra cosa"], ["\t- la nota que decía otra cosa"]),
+    ]);
+    expect(resultado.estado).toBe("no-ubicada");
+    expect(despues).toBe(texto);
+  });
+
+  it("un tramo se reemplaza por otro de distinto largo", () => {
+    const { texto: despues } = aplicarLote(texto, [
+      B(1, ["- [ ] madre", "\t- una nota"], ["- [x] madre"]),
+    ]);
+    expect(despues).toBe("# nota\n- [x] madre\n\t- [ ] hija\n- [ ] otra");
   });
 });
 
@@ -157,10 +262,73 @@ const docConLineas = documento.chain((texto) => {
     .map((indices) => ({ texto, indices }));
 });
 
+/** Lo mismo, más una forma por cambio y unas claves para permutar el lote. */
+const docConLoteMixto = docConLineas.chain(({ texto, indices }) =>
+  fc
+    .tuple(
+      fc.array(fc.integer({ min: 0, max: 3 }), {
+        minLength: indices.length,
+        maxLength: indices.length,
+      }),
+      fc.array(fc.nat({ max: 1000 }), {
+        minLength: indices.length,
+        maxLength: indices.length,
+      }),
+    )
+    .map(([formas, claves]) => ({ texto, indices, formas, claves })),
+);
+
 /** El lote que marca esas líneas, con un sufijo que garantiza que cambian. */
-function loteDe(texto: string, indices: readonly number[]): CambioDeLinea[] {
+function loteDe(texto: string, indices: readonly number[]): CambioDeLote[] {
   const lineas = texto.split("\n");
-  return indices.map((i) => ({ linea: i, antes: lineas[i]!, despues: `${lineas[i]} ✎` }));
+  return indices.map((i) => R(i, lineas[i]!, `${lineas[i]} ✎`));
+}
+
+/**
+ * Un lote con las cuatro formas mezcladas y **rangos disjuntos**.
+ *
+ * Los rangos se reparten recorriendo los índices en orden y llevando cuál es la
+ * primera línea todavía libre: solaparlos daría `colisión`, que es correcto
+ * pero prueba otra cosa. Que el lote **se entregue** desordenado es el punto de
+ * la propiedad de más abajo, y de eso se encarga `permutar`.
+ */
+function loteMixto(
+  texto: string,
+  indices: readonly number[],
+  formas: readonly number[],
+): CambioDeLote[] {
+  const lineas = texto.split("\n");
+  const salida: CambioDeLote[] = [];
+  let libre = 0;
+  [...new Set(indices)]
+    .sort((a, b) => a - b)
+    .forEach((i, k) => {
+      if (i < libre) return;
+      const forma = formas[k] ?? 0;
+      const largo = Math.min(forma === 0 ? 1 : forma, lineas.length - i);
+      if (largo < 1) return;
+      const antes = lineas.slice(i, i + largo);
+      libre = i + largo;
+      if (forma === 0) salida.push(R(i, antes[0]!, `${antes[0]} ✎`));
+      else if (forma === 1) salida.push(B(i, antes, [])); // borrar
+      else if (forma === 2) salida.push(B(i, antes, antes)); // verificar
+      else salida.push(B(i, antes, [`${antes[0]} ✎`])); // N por 1
+    });
+  return salida;
+}
+
+/**
+ * Una permutación guiada por el generador.
+ *
+ * No es uniforme —los empates conservan el orden— y no hace falta que lo sea:
+ * alcanza con que el lote llegue desordenado de muchas maneras distintas para
+ * exponer cualquier dependencia del orden.
+ */
+function permutar<T>(xs: readonly T[], claves: readonly number[]): T[] {
+  return xs
+    .map((x, i) => ({ x, k: claves[i] ?? i }))
+    .sort((a, b) => a.k - b.k)
+    .map((p) => p.x);
 }
 
 describe("invariante 10 — nada se escribe sin verificar qué había", () => {
@@ -170,6 +338,37 @@ describe("invariante 10 — nada se escribe sin verificar qué había", () => {
         const lineas = texto.split("\n");
         for (const i of indices) {
           expect(ubicarLinea(lineas, i, lineas[i]!)).toEqual({ estado: "ok", linea: i });
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("un bloque de una línea da exactamente lo mismo que `ubicarLinea`", () => {
+    // Son la misma decisión y por eso una delega en la otra. Esta propiedad es
+    // lo que impide que vuelvan a ser dos implementaciones.
+    fc.assert(
+      fc.property(docConLineas, fc.integer({ min: -3, max: 40 }), ({ texto, indices }, sugerida) => {
+        const lineas = texto.split("\n");
+        for (const i of indices) {
+          expect(ubicarBloque(lineas, sugerida, [lineas[i]!])).toEqual(
+            ubicarLinea(lineas, sugerida, lineas[i]!),
+          );
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("un reemplazo y el bloque equivalente escriben lo mismo", () => {
+    fc.assert(
+      fc.property(docConLineas, ({ texto, indices }) => {
+        const lineas = texto.split("\n");
+        for (const i of indices) {
+          const a = aplicarLote(texto, [R(i, lineas[i]!, "✎")]);
+          const b = aplicarLote(texto, [B(i, [lineas[i]!], ["✎"])]);
+          expect(b.texto).toBe(a.texto);
+          expect(b.resultado.estado).toBe(a.resultado.estado);
         }
       }),
       corridas,
@@ -197,6 +396,31 @@ describe("invariante 10 — nada se escribe sin verificar qué había", () => {
     );
   });
 
+  it("y también mueve k líneas la ubicación de un tramo", () => {
+    fc.assert(
+      fc.property(docConLineas, fc.nat({ max: 8 }), ({ texto, indices }, k) => {
+        const lineas = texto.split("\n");
+        const relleno = Array.from({ length: k }, (_, j) => `«relleno ${j}»`);
+        const corrido = [...relleno, ...lineas];
+
+        for (const i of indices) {
+          const tramo = lineas.slice(i, i + 3);
+          if (tramo.length === 0) continue;
+          // Ídem: un tramo repetido no se puede atribuir, y no saberlo es la
+          // respuesta correcta.
+          let veces = 0;
+          for (let j = 0; j + tramo.length <= lineas.length; j++) {
+            if (tramo.every((t, o) => lineas[j + o] === t)) veces++;
+          }
+          if (veces !== 1) continue;
+          const u = ubicarBloque(corrido, i, tramo);
+          expect(seEncontro(u) && u.linea, `tramo en ${i}, k=${k}`).toBe(i + k);
+        }
+      }),
+      corridas,
+    );
+  });
+
   it("aplicar un lote cambia exactamente las líneas ubicadas y ninguna otra", () => {
     fc.assert(
       fc.property(docConLineas, ({ texto, indices }) => {
@@ -210,7 +434,10 @@ describe("invariante 10 — nada se escribe sin verificar qué había", () => {
         expect(ahora.length).toBe(antes.length);
 
         const tocadas = new Map(
-          resultado.ubicados.map((u) => [u.ubicacion.linea, u.cambio.despues]),
+          resultado.ubicados.map((u) => [
+            u.ubicacion.linea,
+            u.cambio.tipo === "reemplazo" ? u.cambio.despues : u.cambio.despues[0],
+          ]),
         );
         for (let i = 0; i < antes.length; i++) {
           expect(ahora[i], `línea ${i}`).toBe(tocadas.has(i) ? tocadas.get(i) : antes[i]);
@@ -237,11 +464,7 @@ describe("invariante 10 — nada se escribe sin verificar qué había", () => {
     fc.assert(
       fc.property(docConLineas, fc.nat({ max: 20 }), ({ texto, indices }, donde) => {
         const validos = loteDe(texto, indices);
-        const roto: CambioDeLinea = {
-          linea: donde,
-          antes: "«línea que este documento no tiene»",
-          despues: "no debería escribirse jamás",
-        };
+        const roto = R(donde, "«línea que este documento no tiene»", "no debería escribirse jamás");
         const cambios = [...validos];
         cambios.splice(Math.min(donde, cambios.length), 0, roto);
 
@@ -259,6 +482,109 @@ describe("invariante 10 — nada se escribe sin verificar qué había", () => {
         expect(aplicarLote(texto, []).texto).toBe(texto);
       }),
       corridas,
+    );
+  });
+});
+
+describe("un lote mixto no depende del orden en que vino", () => {
+  it("cualquier permutación del lote da el mismo texto", () => {
+    // La propiedad titular del paso 6a. Un lote que inserta o borra corre las
+    // líneas de abajo, así que aplicar «uno y después el otro» tendría que
+    // renumerar. El aplicador de una pasada evita el problema en vez de
+    // resolverlo, y esto es lo que lo fija.
+    fc.assert(
+      fc.property(docConLoteMixto, ({ texto, indices, formas, claves }) => {
+        const cambios = loteMixto(texto, indices, formas);
+        const a = aplicarLote(texto, cambios);
+        const b = aplicarLote(texto, permutar(cambios, claves));
+        expect(b.texto).toBe(a.texto);
+        expect(b.resultado.estado).toBe(a.resultado.estado);
+      }),
+      corridas,
+    );
+  });
+
+  it("y el mismo diagnóstico cuando uno no se puede ubicar", () => {
+    fc.assert(
+      fc.property(docConLoteMixto, fc.nat({ max: 20 }), ({ texto, indices, formas, claves }, d) => {
+        const cambios = [...loteMixto(texto, indices, formas)];
+        cambios.splice(Math.min(d, cambios.length), 0, B(d, ["«tramo que no existe»"], []));
+
+        const a = aplicarLote(texto, cambios);
+        const b = aplicarLote(texto, permutar(cambios, claves));
+        expect(a.resultado.estado).toBe("no-ubicada");
+        expect(b.resultado.estado).toBe("no-ubicada");
+        expect(a.texto).toBe(texto);
+        expect(b.texto).toBe(texto);
+      }),
+      corridas,
+    );
+  });
+
+  it("las líneas que ningún cambio reclama salen idénticas y en orden", () => {
+    fc.assert(
+      fc.property(docConLoteMixto, ({ texto, indices, formas }) => {
+        const cambios = loteMixto(texto, indices, formas);
+        const { texto: despues, resultado } = aplicarLote(texto, cambios);
+        if (resultado.estado !== "ok") {
+          expect(despues).toBe(texto);
+          return;
+        }
+
+        const antes = texto.split("\n");
+        const reclamadas = new Set<number>();
+        for (const u of resultado.ubicados) {
+          const largo = u.cambio.tipo === "reemplazo" ? 1 : u.cambio.antes.length;
+          for (let j = 0; j < largo; j++) reclamadas.add(u.ubicacion.linea + j);
+        }
+
+        const libres = antes.filter((_, i) => !reclamadas.has(i));
+        const ahora = despues.split("\n");
+        // Cada línea libre sigue estando, en el mismo orden relativo.
+        let i = 0;
+        for (const l of libres) {
+          const j = ahora.indexOf(l, i);
+          expect(j, `se perdió ${JSON.stringify(l.slice(0, 30))}`).toBeGreaterThanOrEqual(0);
+          i = j + 1;
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("un lote de puras verificaciones no cambia un byte", () => {
+    fc.assert(
+      fc.property(docConLineas, ({ texto, indices }) => {
+        const lineas = texto.split("\n");
+        const cambios = [...new Set(indices)]
+          .sort((a, b) => a - b)
+          .map((i) => B(i, [lineas[i]!], [lineas[i]!]));
+        const { texto: despues, resultado } = aplicarLote(texto, cambios);
+        if (resultado.estado !== "ok") return; // líneas repetidas: negarse es correcto
+        expect(despues).toBe(texto);
+      }),
+      corridas,
+    );
+  });
+});
+
+describe("borrar un subárbol: dos implementaciones que se controlan", () => {
+  it("`aplicarLote` y `eliminarLineas` dan el mismo archivo", () => {
+    // `documento.ts` sabe borrar en memoria y `ubicar.ts` sabe borrar en disco.
+    // Que coincidan no es redundancia: es lo que impide que el descarte físico
+    // de la §12 haga en el vault algo distinto de lo que los tests miran.
+    fc.assert(
+      fc.property(documento, (texto) => {
+        const doc = parseDocumento(texto);
+        for (const nodo of recorrer(arbolDe(doc))) {
+          const { desde, hasta } = rangoDelSubarbol(nodo);
+          const antes = lineasDelSubarbol(doc, nodo);
+          const { texto: porLote, resultado } = aplicarLote(texto, [B(desde, antes, [])]);
+          if (resultado.estado !== "ok") continue; // subárbol repetido: no se borra
+          expect(porLote).toBe(renderDocumento(eliminarLineas(doc, desde, hasta)));
+        }
+      }),
+      { numRuns: 200 },
     );
   });
 });

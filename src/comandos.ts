@@ -25,19 +25,34 @@ import { Notice, type App, type Editor, type MarkdownFileInfo } from "obsidian";
 import {
   elegirTarea,
   ilegiblesDelSubarbol,
+  planDeArchivarEnLaNota,
   planDeCompletar,
+  planDeEliminar,
   planDePrioridad,
   planDeWorkbench,
   yaEstaCompleta,
   type Eleccion,
 } from "./acciones.js";
+import {
+  archivarPideConfirmacion,
+  bloqueParaElLog,
+  caminoDeArchivado,
+  nodoDeTarea,
+  nombreDeNota,
+  planDeArchivado,
+} from "./archivado.js";
 import { bajar, subir } from "./color.js";
 import type { Prioridad } from "./token.js";
-import type { CambioDeLinea } from "./documento.js";
+import { parseDocumento, type CambioDeLote } from "./documento.js";
 import type { StoreDeTareas } from "./store.js";
 import { STRINGS } from "./strings.js";
 import { prioridadEfectiva, type Clave } from "./tareas.js";
-import { escribir, type ResultadoDeEscritura } from "./vault/escribir.js";
+import { confirmar } from "./ui/confirmar.js";
+import {
+  escribir,
+  escribirArchivado,
+  type ResultadoDeEscritura,
+} from "./vault/escribir.js";
 
 /** Hoy, en `AAAA-MM-DD` y en hora local. */
 export function hoy(fecha = new Date()): string {
@@ -136,7 +151,7 @@ export async function aplicar(
   app: App,
   store: StoreDeTareas,
   archivo: string,
-  cambios: readonly CambioDeLinea[],
+  cambios: readonly CambioDeLote[],
   exito: (n: number) => string | null,
 ): Promise<ResultadoDeEscritura> {
   const r = await escribir(app, archivo, cambios);
@@ -284,6 +299,160 @@ export function completarTarea(
 }
 
 /**
+ * Completar y **archivar** (§12): el bloque va al historial y la tarea queda `[x]`.
+ *
+ * Es el único camino del plugin que toca **dos archivos**, y por eso es el
+ * único que no puede cumplir «o todos los cambios o ninguno» de punta a punta.
+ * El orden, el paso en seco y el porqué están en `vault/escribir.ts`; acá queda
+ * lo de arriba: armar el bloque, mirar dónde caería, preguntar si hace falta, y
+ * contar lo que pasó.
+ *
+ * **El historial se lee acá, fresco y solo para la confirmación.** No sale del
+ * store: la §12 dice que el LOG se lee cuando se abre la vista, nunca al
+ * arrancar, y `notasDeTrabajo` lo excluye. Lo que se escribe se recalcula
+ * después, adentro de `process`, sobre los bytes de ese momento — así que entre
+ * lo que dice el cartel y lo que se escribe puede haber **una** diferencia: si
+ * otro dispositivo creó la sección en el medio, el cartel dice que la crea y
+ * resulta que no hacía falta. Es la diferencia correcta: la otra —duplicar el
+ * heading— es la que rompe el invariante 6.
+ */
+export async function archivarTarea(
+  app: App,
+  store: StoreDeTareas,
+  ctx: Contexto,
+  hoyStr: string,
+  notaDeLog: string,
+): Promise<void> {
+  const doc = store.documento(ctx.archivo)!;
+  const tareas = store.tareasDe(ctx.archivo);
+  const tarea = store.buscar(ctx.archivo, ctx.clave);
+  const nodo = tarea ? nodoDeTarea(doc, tarea.linea) : null;
+  if (!tarea || !nodo) {
+    new Notice(STRINGS.avisos.sinTarea);
+    return;
+  }
+
+  const bloque = bloqueParaElLog(doc, nodo, hoyStr);
+  const camino = caminoDeArchivado(ctx.archivo, tarea.proyecto);
+  const cambios = planDeArchivarEnLaNota(doc, tareas, ctx.clave, hoyStr);
+
+  // El historial, leído entero y ahora. Son 1,3 KB.
+  const archivoDelLog = app.vault.getFileByPath(notaDeLog);
+  if (!archivoDelLog) {
+    new Notice(STRINGS.avisos.sinLog(notaDeLog), 10000);
+    return;
+  }
+  const previo = planDeArchivado(
+    parseDocumento(await app.vault.cachedRead(archivoDelLog)),
+    camino,
+    bloque,
+  );
+
+  // Igual que al completar: saltear una línea rota es lo correcto (§5.3), pero
+  // saltearla en silencio deja una madre en `[x]` y una hija en `[ ]`.
+  const rotas = ilegiblesDelSubarbol(doc, tareas, ctx.clave);
+  if (rotas.length) new Notice(STRINGS.avisos.ilegibles(rotas.length), 8000);
+
+  const escribirlo = () =>
+    void escribirYAvisar(app, store, ctx, { archivo: notaDeLog, camino, bloque }, cambios);
+
+  if (!archivarPideConfirmacion(bloque)) {
+    escribirlo();
+    return;
+  }
+
+  const completadas = planDeCompletar(doc, tareas, ctx.clave, hoyStr).length;
+  const t = STRINGS.confirmar.archivar;
+  confirmar(
+    app,
+    {
+      titulo: t.titulo,
+      detalle: [
+        t.alLog(bloque.length, camino.join(" / ")),
+        ...(previo.headingsNuevos.length ? [t.creaSeccion(camino.join(" / "))] : []),
+        completadas === 0
+          ? t.yaEstabaCompleta(nombreDeNota(ctx.archivo))
+          : t.enLaNota(completadas, nombreDeNota(ctx.archivo)),
+        t.deshacer,
+      ],
+      aceptar: t.aceptar,
+    },
+    escribirlo,
+  );
+}
+
+/**
+ * Escribe el archivado y traduce el resultado en un cartel.
+ *
+ * Los cuatro finales están separados porque cada uno se arregla distinto, y uno
+ * de ellos —`media-operacion`— es el único estado a medias que el plugin puede
+ * dejar. Ese aviso es largo a propósito: media operación que termina en
+ * silencio es peor que una que no ocurrió.
+ */
+async function escribirYAvisar(
+  app: App,
+  store: StoreDeTareas,
+  ctx: Contexto,
+  log: { archivo: string; camino: readonly string[]; bloque: readonly string[] },
+  cambios: readonly CambioDeLote[],
+): Promise<void> {
+  const r = await escribirArchivado(app, log, { archivo: ctx.archivo, cambios });
+
+  switch (r.estado) {
+    case "escrito":
+      store.absorber(ctx.archivo, r.contenido, "escritura");
+      new Notice(
+        STRINGS.avisos.archivado(log.bloque.length, log.camino.join(" / ")) +
+          (r.movidas > 0 ? " (se había corrido)" : ""),
+      );
+      break;
+    case "no-ubicada":
+      // El paso en seco: no se escribió nada, ni en el historial.
+      new Notice(STRINGS.avisos.noUbicada, 8000);
+      break;
+    case "sin-archivo":
+      new Notice(
+        r.cual === "log" ? STRINGS.avisos.sinLog(log.archivo) : STRINGS.avisos.sinNota(ctx.archivo),
+        10000,
+      );
+      break;
+    case "media-operacion":
+      new Notice(STRINGS.avisos.mediaOperacion(r.alLog), 0);
+      break;
+  }
+}
+
+/**
+ * El descarte físico de la §12: **borra** la tarea y su subárbol.
+ *
+ * Es la única acción del plugin que pierde texto, así que confirma **siempre**,
+ * sin umbral: el umbral del archivado existe porque archivar no pierde nada
+ * (§12 — la tarea queda `[x]` en su lugar y el bloque queda en el historial), y
+ * acá esa razón no aplica.
+ */
+export function eliminarTarea(app: App, store: StoreDeTareas, ctx: Contexto): void {
+  const doc = store.documento(ctx.archivo)!;
+  const plan = planDeEliminar(doc, store.tareasDe(ctx.archivo), ctx.clave);
+  const cuantas = plan.length === 1 ? plan[0]!.antes.length : 0;
+  if (cuantas === 0) {
+    new Notice(STRINGS.avisos.sinTarea);
+    return;
+  }
+
+  const t = STRINGS.confirmar.eliminar;
+  confirmar(
+    app,
+    {
+      titulo: t.titulo,
+      detalle: [t.borra(cuantas, nombreDeNota(ctx.archivo)), t.noArchiva, t.deshacer],
+      aceptar: t.aceptar,
+      peligrosa: true,
+    },
+    () => void aplicar(app, store, ctx.archivo, plan, () => STRINGS.avisos.eliminado(cuantas)),
+  );
+}
+
+/**
  * Subir o bajar la prioridad de la tarea del cursor.
  *
  * `subir` y `bajar` topan en vez de dar la vuelta, así que hay un caso en que no
@@ -307,6 +476,8 @@ export interface DependenciasDeComandos {
   /** La lista efectiva, leída en el momento: los ajustes cambian sin recargar. */
   notas: () => readonly string[];
   workbench: () => string;
+  /** A dónde archiva. Se lee en el momento: el ajuste cambia sin recargar. */
+  notaDeLog: () => string;
   ahora?: () => string;
 }
 
@@ -329,6 +500,22 @@ export function comandos(dep: DependenciasDeComandos) {
       editorCallback: (editor: Editor, vista: MarkdownFileInfo) => {
         const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
         if (ctx) alternarWorkbench(dep.app, dep.store, ctx, dep.workbench());
+      },
+    },
+    {
+      id: "completar-y-archivar-la-tarea-del-cursor",
+      name: STRINGS.comandos.archivar,
+      editorCallback: (editor: Editor, vista: MarkdownFileInfo) => {
+        const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
+        if (ctx) void archivarTarea(dep.app, dep.store, ctx, fecha(), dep.notaDeLog());
+      },
+    },
+    {
+      id: "eliminar-la-tarea-del-cursor",
+      name: STRINGS.comandos.eliminar,
+      editorCallback: (editor: Editor, vista: MarkdownFileInfo) => {
+        const ctx = tareaDelCursor(dep.store, editor, vista, dep.notas());
+        if (ctx) eliminarTarea(dep.app, dep.store, ctx);
       },
     },
     {

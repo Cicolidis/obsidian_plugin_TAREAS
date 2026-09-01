@@ -158,6 +158,7 @@ export default class TareasPlugin extends Plugin {
       store: this.store,
       notas: () => this.notasDelStore(),
       workbench: () => this.settings.workbenchFavorito,
+      notaDeLog: () => this.settings.notaDeLog,
     })) {
       this.addCommand(c);
     }
@@ -243,6 +244,7 @@ export default class TareasPlugin extends Plugin {
         store: this.store,
         notas: () => this.notasDelStore(),
         favoritos: () => this.favoritos(),
+        notaDeLog: () => this.settings.notaDeLog,
         archivoDe: (state: EditorState) =>
           state.field(editorInfoField, false)?.file?.path ?? null,
       }),

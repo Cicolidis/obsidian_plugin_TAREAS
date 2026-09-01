@@ -1,7 +1,7 @@
 /**
  * Los planes: qué líneas cambia cada acción del usuario, y en qué las cambia.
  *
- * Capa 1 entera. **Nada de acá escribe.** Devuelven `CambioDeLinea[]` y quien
+ * Capa 1 entera. **Nada de acá escribe.** Devuelven `CambioDeLote[]` y quien
  * escribe es `vault/escribir.ts`, que es el único lugar del plugin que toca el
  * disco. La separación no es estética; compra tres cosas:
  *
@@ -11,17 +11,27 @@
  *    pasa por el editor: con la nota cerrada no hay nada que lo deshaga, y con
  *    la nota abierta sí (§5.5 punto 15). Para decir «vas a reiniciar 23
  *    tareas» hay que tener el plan antes de aplicarlo.
- * 3. Cada `CambioDeLinea` lleva `antes`, así que **nada se escribe sin decir
+ * 3. Cada cambio lleva `antes`, así que **nada se escribe sin decir
  *    qué esperaba encontrar**. Es el invariante 10, y lo verifica `ubicar.ts`.
  *
  * Un plan se arma sobre el documento que el store tiene en memoria; para cuando
  * se escribe, el archivo puede haberse corrido. Por eso el número de línea de un
  * plan es una **sugerencia** y el texto de `antes` es el dato duro.
  */
-import { reemplazarLinea, type CambioDeLinea, type Documento } from "./documento.js";
+import {
+  arbolDe,
+  lineasDelSubarbol,
+  nodoEnLinea,
+  parseDocumento,
+  rangoDelSubarbol,
+  renderDocumento,
+  type CambioDeLinea,
+  type CambioDeLote,
+  type Documento,
+} from "./documento.js";
 import { esTarea, parseBullet, renderBullet } from "./linea.js";
 import { esNotaDeTareas } from "./notas.js";
-import { seEncontro, ubicarLinea } from "./ubicar.js";
+import { aplicarLote, seEncontro, ubicarLinea } from "./ubicar.js";
 import {
   claveDe,
   idsACompletar,
@@ -51,7 +61,7 @@ import {
 function cambio(doc: Documento, linea: number, despues: string): CambioDeLinea | null {
   const antes = doc.lineas[linea]?.texto;
   if (antes === undefined || antes === despues) return null;
-  return { linea, antes, despues };
+  return { tipo: "reemplazo", linea, antes, despues };
 }
 
 /** El checkbox de una línea, cambiado de estado. La línea entera si no es bullet. */
@@ -153,6 +163,88 @@ export function planDeCompletar(
 export function yaEstaCompleta(tareas: readonly Task[], clave: Clave): boolean {
   const indice = porClave(tareas);
   return idsACompletar(tareas, clave).every((c) => indice.get(c)?.hecha ?? true);
+}
+
+// ------------------------------------ archivar y eliminar (§12, paso 6a)
+
+/**
+ * Lo que la **nota** recibe al archivar: el bloque entero, como una unidad.
+ *
+ * Archivar toca dos archivos —la nota y el LOG— y del LOG se encarga
+ * `archivado.ts`. Acá va la mitad de la nota, y es un solo `bloque` y no N
+ * reemplazos por una razón concreta:
+ *
+ * > **Lo que se copia al LOG tiene que ser lo que estaba en la nota.** El
+ * > bloque incluye las notas sin checkbox del subárbol (§4.3), que ningún
+ * > cambio de línea toca y que por lo tanto nadie verificaría. Al viajar
+ * > adentro del `antes` del bloque, si alguna cambió desde que se armó el plan,
+ * > el lote entero se niega en vez de archivar texto viejo.
+ *
+ * El `despues` son las mismas líneas con los cambios de `planDeCompletar`
+ * aplicados: la §12 dice que archivar **también** completa, y que **no borra la
+ * línea de la nota**. La tarea queda `[x]` en su lugar y las vistas la ocultan.
+ *
+ * Una tarea que ya estaba completa da un bloque con las dos caras iguales: no
+ * se escribe nada en la nota —un `process` que devuelve lo mismo no dispara
+ * ningún evento— y el LOG recibe la entrada igual, que es lo correcto.
+ */
+export function planDeArchivarEnLaNota(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+  hoy: string,
+): CambioDeLote[] {
+  const t = porClave(tareas).get(clave);
+  if (!t) return [];
+  const nodo = nodoEnLinea(arbolDe(doc), t.linea);
+  if (!nodo) return [];
+
+  const { desde } = rangoDelSubarbol(nodo);
+  const antes = lineasDelSubarbol(doc, nodo);
+  const despues = antes.slice();
+  for (const c of planDeCompletar(doc, tareas, clave, hoy)) {
+    const i = c.linea - desde;
+    // No puede pasar: el subárbol de tareas (`padre`/`hijos`) está contenido en
+    // el subárbol del documento. Si alguna vez dejara de estarlo, archivar
+    // escribiría el bloque **sin** completar esa línea, y eso no se ve.
+    if (i < 0 || i >= despues.length) {
+      throw new RangeError(`el plan de completar salió del subárbol: línea ${c.linea}`);
+    }
+    despues[i] = c.despues;
+  }
+  return [{ tipo: "bloque", linea: desde, antes, despues }];
+}
+
+/**
+ * El descarte físico de la §12: **borra** la línea y su subárbol de la nota.
+ *
+ * Es la única acción del plugin que pierde texto, y por eso es la única con
+ * confirmación propia y más dura. No escribe nada en el LOG —para eso está
+ * archivar— y no se deshace desde la interfaz.
+ *
+ * El rango sale del **nodo del documento**, no del árbol de tareas: lo que se
+ * borra incluye las notas sin checkbox y los blancos de adentro, que son parte
+ * del bloque. Los blancos de **después** del último descendiente no entran:
+ * pertenecen a lo que sigue, no al subárbol (`rangoDelSubarbol`).
+ *
+ * El `antes` es el subárbol verbatim, así que un bloque que ya no está donde
+ * estaba se busca entero, y si aparece repetido no se borra nada. Medido sobre
+ * el corpus: 38 de 389 subárboles (9,8%) aparecen repetidos verbatim en su
+ * nota, y esos son exactamente los casos en que esta acción se va a negar con
+ * el índice atrasado. Negarse es la respuesta correcta: borrar el subárbol
+ * equivocado no tiene vuelta.
+ */
+export function planDeEliminar(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+): CambioDeLote[] {
+  const t = porClave(tareas).get(clave);
+  if (!t) return [];
+  const nodo = nodoEnLinea(arbolDe(doc), t.linea);
+  if (!nodo) return [];
+  const { desde } = rangoDelSubarbol(nodo);
+  return [{ tipo: "bloque", linea: desde, antes: lineasDelSubarbol(doc, nodo), despues: [] }];
 }
 
 // ----------------------------------------------------- workbench (§9, §5.4)
@@ -307,8 +399,16 @@ export function planDeReinicio(
  * el `antes` de cada cambio contra lo que hay ahí en ese momento. Acá no hace
  * falta: el documento es el mismo con el que se armó el plan.
  */
-export function aplicarPlan(doc: Documento, cambios: readonly CambioDeLinea[]): Documento {
-  return cambios.reduce((d, c) => reemplazarLinea(d, c.linea, c.despues), doc);
+export function aplicarPlan(doc: Documento, cambios: readonly CambioDeLote[]): Documento {
+  const { texto, resultado } = aplicarLote(renderDocumento(doc), cambios);
+  // Sobre el mismo documento con el que se armó el plan esto no puede fallar.
+  // Si falla, es un bug del plan y tiene que hacer ruido: devolver el documento
+  // intacto lo convertiría en «la acción no hizo nada», que es el modo de falla
+  // más caro de este plugin porque no se ve.
+  if (resultado.estado !== "ok") {
+    throw new Error(`un plan no se ubicó sobre su propio documento: ${resultado.estado}`);
+  }
+  return parseDocumento(texto);
 }
 
 /** La clave de la tarea que está en esta línea, o `null` si no hay ninguna. */

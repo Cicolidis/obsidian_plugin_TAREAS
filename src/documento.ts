@@ -232,10 +232,38 @@ export function recorrer(nodos: readonly Nodo[]): Nodo[] {
  * que a veces se deshace y a veces no, que es peor que nunca.
  */
 export interface CambioDeLinea {
+  tipo: "reemplazo";
   linea: number;
   antes: string;
   despues: string;
 }
+
+/**
+ * Un **tramo** de N líneas que se reemplaza por M, y las N que esperaba encontrar.
+ *
+ * Es la generalización que el paso 6a necesitó, y cubre tres cosas con una sola
+ * forma: borrar (`despues` vacío), verificar sin tocar (`despues` igual a
+ * `antes`) y reescribir varias líneas **como una unidad**.
+ *
+ * La tercera es la que importa para archivar: el bloque que se copia al LOG
+ * incluye las notas sin checkbox (§4.3), que ningún cambio de línea toca. Al
+ * viajar adentro de `antes`, si alguna cambió el lote entero se niega en vez de
+ * archivar texto viejo.
+ *
+ * **`antes` nunca puede ser vacío**: un cambio sin ancla no se puede verificar,
+ * y eso es lo que deja la inserción afuera por ahora. Lo hace cumplir
+ * `ubicarBloque`, que un `antes` vacío lo da por `ausente`.
+ */
+export interface CambioDeBloque {
+  tipo: "bloque";
+  /** La primera línea del tramo. */
+  linea: number;
+  antes: readonly string[];
+  despues: readonly string[];
+}
+
+/** Cualquiera de los dos. Es lo que `ubicar.ts` ubica y aplica. */
+export type CambioDeLote = CambioDeLinea | CambioDeBloque;
 
 /**
  * Líneas nuevas insertadas **antes** de la línea `n`.

@@ -85,6 +85,7 @@ describe("planDeReinicio", () => {
     const { plan } = reiniciar(raw, "lunes");
     expect(plan).toEqual([
       {
+        tipo: "reemplazo",
         linea: 1,
         antes: "- [x] a %%t:rec=lunes;done=2026-08-24%%",
         despues: "- [ ] a %%t:rec=lunes%%",

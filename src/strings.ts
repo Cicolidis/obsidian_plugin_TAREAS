@@ -78,8 +78,9 @@ export const STRINGS = {
     filaDeBotones: {
       nombre: "Fila de botones sobre la tarea",
       descripcion:
-        "★ y ◐ mandan al workbench de arriba, → los muestra todos, y ⋯ abre prioridad y " +
-        "completar. No suma ancho al renglón ni cambia la altura de la línea.",
+        "★ y ◐ mandan al workbench de arriba, → los muestra todos, y ⋯ abre prioridad, " +
+        "completar, archivar y eliminar. No suma ancho al renglón ni cambia la altura de " +
+        "la línea.",
     },
     estiloDeFila: {
       nombre: "Fila de botones: dónde va",
@@ -135,7 +136,7 @@ export const STRINGS = {
     mandarA: (wb: string) => `Mandar a «${wb}»`,
     sacarDe: (wb: string) => `Sacar de «${wb}»`,
     todosLosWorkbenches: "Todos los workbenches…",
-    masAcciones: "Prioridad, completar…",
+    masAcciones: "Prioridad, completar, eliminar…",
     /** El tooltip de la fila entera cuando la línea tiene el token roto. */
     ilegible: "Esta tarea tiene el token ilegible: no se puede escribir sobre ella.",
   },
@@ -144,6 +145,8 @@ export const STRINGS = {
     /** Los tres niveles como ítems de menú. `prioridades` los dice en prosa. */
     niveles: ["Normal", "Alta", "Muy alta"] as const,
     completarYDescartar: "Completar y descartar",
+    completarYArchivar: "Completar y archivar",
+    eliminar: "Eliminar…",
     workbenchNuevo: "Workbench nuevo…",
     nuevoWorkbench: {
       titulo: "Workbench nuevo",
@@ -161,9 +164,54 @@ export const STRINGS = {
   },
   comandos: {
     completar: "Completar la tarea del cursor",
+    archivar: "Completar y archivar la tarea del cursor",
+    eliminar: "Eliminar la tarea del cursor",
     workbench: "Asignar la tarea del cursor al workbench favorito",
     subirPrioridad: "Subir la prioridad de la tarea del cursor",
     bajarPrioridad: "Bajar la prioridad de la tarea del cursor",
+  },
+  /**
+   * Los dos modales de la §12. Se escriben acá enteros porque son el único
+   * lugar donde el plugin le explica al usuario qué va a pasar **antes** de que
+   * pase, y eso no se improvisa en el sitio de la llamada.
+   *
+   * Los dos dicen lo mismo en el mismo orden: qué se toca, cuánto, y qué pasa
+   * con Ctrl-Z. Lo tercero está **medido** (§5.5 punto 15) y es asimétrico: con
+   * la nota abierta la escritura vuelve al editor y entra a su historial; con la
+   * nota cerrada, `vault.process()` no pasa por el editor y no hay nada que lo
+   * deshaga. El historial está siempre cerrado.
+   */
+  confirmar: {
+    cancelar: "Cancelar",
+    archivar: {
+      titulo: "Completar y archivar",
+      /** El bloque que se copia. */
+      alLog: (n: number, camino: string) =>
+        `${n === 1 ? "1 línea va" : `${n} líneas van`} al historial, bajo «${camino}».`,
+      /** Solo si el camino todavía no existe en el historial. */
+      creaSeccion: (camino: string) => `Se crea la sección «${camino}», al final del archivo.`,
+      /** Lo que pasa del lado de la nota. La §12: archivar no borra. */
+      enLaNota: (n: number, nota: string) =>
+        `${n === 1 ? "1 tarea queda" : `${n} tareas quedan`} en «[x]» en ${nota}. No se borra nada.`,
+      /** Y el caso de la que ya estaba completa: en la nota no cambia nada. */
+      yaEstabaCompleta: (nota: string) =>
+        `La tarea ya está completa: en ${nota} no se cambia nada.`,
+      deshacer:
+        "Con la nota abierta, Ctrl-Z deshace lo que se escribe en ella. En el historial no: " +
+        "esa nota está cerrada y nada lo deshace.",
+      aceptar: "Archivar",
+    },
+    eliminar: {
+      titulo: "Eliminar la tarea",
+      borra: (n: number, nota: string) =>
+        `Se ${n === 1 ? "borra 1 línea" : `borran ${n} líneas`} de ${nota}: la tarea y todo lo ` +
+        "que cuelga de ella, notas incluidas.",
+      noArchiva: "No se escribe nada en el historial. Esto no archiva: borra.",
+      deshacer:
+        "No se deshace desde el plugin. Con la nota abierta queda en el historial del editor; " +
+        "con la nota cerrada, no hay nada que lo deshaga.",
+      aceptar: "Eliminar",
+    },
   },
   /** Los tres niveles de la §14, para decirlos en los avisos. */
   prioridades: ["normal", "alta", "muy alta"] as const,
@@ -196,6 +244,29 @@ export const STRINGS = {
     saleDelWorkbench: (n: number, wb: string) =>
       `${n === 1 ? "1 tarea" : `${n} tareas`} fuera de «${wb}».`,
     sinCambios: "No había nada que cambiar.",
+    archivado: (n: number, camino: string) =>
+      `Archivada: ${n === 1 ? "1 línea" : `${n} líneas`} al historial, bajo «${camino}».`,
+    eliminado: (n: number) =>
+      `${n === 1 ? "1 línea borrada" : `${n} líneas borradas`}.`,
+    /**
+     * El único aviso del plugin que describe un estado **a medias**, y por eso
+     * es largo a propósito: media operación que termina en silencio es peor que
+     * una que no ocurrió. Dice qué quedó hecho y qué hay que mirar.
+     *
+     * El «NO» va en mayúsculas y no en negrita porque **`Notice` no renderiza
+     * markdown**: recibe un string y lo pone como `textContent`. Un `**no**`
+     * se ve con los asteriscos. Se descubrió leyendo la salida, no con un test.
+     */
+    mediaOperacion: (n: number) =>
+      `Se escribieron ${n === 1 ? "1 línea" : `${n} líneas`} en el historial, pero la tarea ` +
+      "NO quedó completada en su nota: alguna línea ya no está donde estaba, o aparece " +
+      "repetida. Revisá la tarea y volvé a intentar; si la archivás de nuevo, el historial va " +
+      "a tener la entrada dos veces.",
+    /** El LOG no existe. Nombra el ajuste, que es donde se arregla. */
+    sinLog: (ruta: string) =>
+      `No encuentro la nota de historial «${ruta}». Revisá «Nota de historial» en los ajustes.`,
+    /** La otra mitad: el archivo de la tarea desapareció entre el clic y el write. */
+    sinNota: (ruta: string) => `No encuentro la nota «${ruta}». No se escribió nada.`,
     /** El aviso que importa: no se escribió, y por qué. */
     noUbicada:
       "No se escribió nada: alguna línea ya no está donde estaba, o aparece repetida. " +

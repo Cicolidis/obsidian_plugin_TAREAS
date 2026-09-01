@@ -4,7 +4,9 @@ import {
   aplicarPlan,
   claveEnLinea,
   elegirTarea,
+  planDeArchivarEnLaNota,
   planDeCompletar,
+  planDeEliminar,
   planDePrioridad,
   planDeWorkbench,
   yaEstaCompleta,
@@ -477,6 +479,215 @@ describe("elegirTarea — el bug de B5, y el que no se veía", () => {
           estado: "ok",
           clave,
         });
+      }),
+      corridas,
+    );
+  });
+});
+
+// ------------------------------------ terminar una tarea (§12, paso 6a)
+
+/** El único bloque de un plan de acá, o el error de que no había uno. */
+function unicoBloque(plan: readonly { tipo: string }[]) {
+  expect(plan).toHaveLength(1);
+  const c = plan[0]!;
+  if (c.tipo !== "bloque") throw new Error(`se esperaba un bloque y vino ${c.tipo}`);
+  return c as { tipo: "bloque"; linea: number; antes: readonly string[]; despues: readonly string[] };
+}
+
+describe("planDeEliminar — el descarte físico (§12)", () => {
+  const eliminar = (raw: string, linea: number) => {
+    const { doc, tareas } = armar(raw);
+    const plan = planDeEliminar(doc, tareas, claveDe(A, linea));
+    return { plan, texto: renderDocumento(aplicarPlan(doc, plan)) };
+  };
+
+  it("borra la tarea y todo lo que cuelga de ella", () => {
+    const raw = "## h\n- [ ] madre\n\t- [ ] hija\n\t\t- [ ] nieta\n- [ ] otra";
+    const { texto } = eliminar(raw, 1);
+    expect(texto).toBe("## h\n- [ ] otra");
+  });
+
+  it("se lleva las notas sin checkbox del subárbol", () => {
+    const raw = "- [ ] madre\n\t- una nota\n\t- otra nota\n- [ ] otra";
+    expect(eliminar(raw, 0).texto).toBe("- [ ] otra");
+  });
+
+  it("borrar una hija no toca a la madre", () => {
+    const raw = "- [ ] madre\n\t- [ ] hija\n\t- [ ] hermana";
+    expect(eliminar(raw, 1).texto).toBe("- [ ] madre\n\t- [ ] hermana");
+  });
+
+  it("los blancos de **adentro** entran; los de después, no", () => {
+    // `rangoDelSubarbol`: un blanco no corta el árbol, pero lo que va después
+    // del último descendiente pertenece a lo que sigue.
+    const raw = "- [ ] madre\n\n\t- [ ] hija\n\n- [ ] otra";
+    expect(eliminar(raw, 0).texto).toBe("\n- [ ] otra");
+  });
+
+  it("el `antes` es el subárbol verbatim: es lo que se verifica antes de borrar", () => {
+    const raw = "- [ ] madre %%t:id=a3f2%%\n\t- una nota   \n\t- [x] hija";
+    const b = unicoBloque(eliminar(raw, 0).plan);
+    expect(b.linea).toBe(0);
+    expect(b.antes).toEqual([
+      "- [ ] madre %%t:id=a3f2%%",
+      "\t- una nota   ",
+      "\t- [x] hija",
+    ]);
+    expect(b.despues).toEqual([]);
+  });
+
+  it("una tarea que el índice no tiene no produce ningún cambio", () => {
+    const { doc, tareas } = armar("- [ ] sola");
+    expect(planDeEliminar(doc, tareas, claveDe(A, 99))).toEqual([]);
+  });
+
+  it("un token ilegible no impide borrar: borrar no reescribe nada", () => {
+    // El invariante 7 protege de **reescribir** a ciegas una línea que no se
+    // entiende. Borrarla es una decisión del usuario sobre texto que ve.
+    //
+    // Ojo: hoy el ⋯ igual se niega sobre una línea ilegible, porque la fila
+    // entera lo hace desde la sesión 5 —«un control que miente es peor que uno
+    // apagado»—. O sea que esta capacidad de la capa 1 solo se alcanza por la
+    // paleta. Si algún día conviene abrir el ⋯ ahí, este test ya dice que la
+    // capa 1 lo aguanta.
+    const raw = "- [ ] rota %%t:zz=1%%\n- [ ] otra";
+    expect(eliminar(raw, 0).texto).toBe("- [ ] otra");
+  });
+});
+
+describe("planDeArchivarEnLaNota — el bloque entero como unidad (§12)", () => {
+  const archivar = (raw: string, linea: number) => {
+    const { doc, tareas } = armar(raw);
+    const plan = planDeArchivarEnLaNota(doc, tareas, claveDe(A, linea), HOY);
+    return { plan, texto: renderDocumento(aplicarPlan(doc, plan)) };
+  };
+
+  it("marca `[x]` y escribe `done`, y **no borra la línea**", () => {
+    const raw = "- [ ] madre\n\t- [ ] hija";
+    expect(archivar(raw, 0).texto).toBe(
+      `- [x] madre %%t:done=${HOY}%%\n\t- [x] hija %%t:done=${HOY}%%`,
+    );
+  });
+
+  it("las notas sin checkbox salen idénticas (invariante 3)", () => {
+    const raw = "- [ ] madre\n\t- una nota con **negrita** y   espacios   \n\t- [ ] hija";
+    const b = unicoBloque(archivar(raw, 0).plan);
+    expect(b.despues[1]).toBe("\t- una nota con **negrita** y   espacios   ");
+  });
+
+  it("el `antes` lleva las notas, que es lo que hace que no se archive texto viejo", () => {
+    // Ningún cambio de línea toca un bullet sin checkbox, así que sin esto
+    // nadie verificaría lo que se copia al historial.
+    const raw = "- [ ] madre\n\t- la nota valiosa";
+    const b = unicoBloque(archivar(raw, 0).plan);
+    expect(b.antes).toEqual(["- [ ] madre", "\t- la nota valiosa"]);
+  });
+
+  it("es **un solo** cambio, no uno por línea", () => {
+    const raw = "- [ ] madre\n\t- [ ] hija\n\t\t- [ ] nieta";
+    expect(archivar(raw, 0).plan).toHaveLength(1);
+  });
+
+  it("una tarea ya completa da un bloque con las dos caras iguales", () => {
+    // No se escribe nada en la nota —un `process` que devuelve lo mismo no
+    // dispara ningún evento— y el historial recibe la entrada igual.
+    const raw = `- [x] hecha %%t:done=2026-08-01%%`;
+    const b = unicoBloque(archivar(raw, 0).plan);
+    expect(b.despues).toEqual(b.antes);
+    expect(archivar(raw, 0).texto).toBe(raw);
+  });
+
+  it("una línea con el token ilegible queda intacta (invariante 7)", () => {
+    const raw = "- [ ] madre\n\t- [ ] rota %%t:zz=1%%";
+    const b = unicoBloque(archivar(raw, 0).plan);
+    expect(b.despues[1]).toBe("\t- [ ] rota %%t:zz=1%%");
+  });
+
+  it("una tarea que el índice no tiene no produce ningún cambio", () => {
+    const { doc, tareas } = armar("- [ ] sola");
+    expect(planDeArchivarEnLaNota(doc, tareas, claveDe(A, 99), HOY)).toEqual([]);
+  });
+});
+
+describe("propiedades de terminar una tarea", () => {
+  const corridas = { numRuns: 300 };
+
+  it("archivar nunca cambia la cantidad de líneas del archivo (§12: no borra)", () => {
+    fc.assert(
+      fc.property(documento, (raw) => {
+        const { doc, tareas } = armar(raw);
+        for (const t of tareas) {
+          const plan = planDeArchivarEnLaNota(doc, tareas, claveDe(A, t.linea), HOY);
+          const b = unicoBloque(plan);
+          expect(b.despues).toHaveLength(b.antes.length);
+          expect(renderDocumento(aplicarPlan(doc, plan)).split("\n")).toHaveLength(
+            raw.split("\n").length,
+          );
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("archivar y eliminar reclaman exactamente el mismo tramo", () => {
+    // Uno lo reescribe y el otro lo borra, pero «el bloque de esta tarea» tiene
+    // que ser una sola cosa: si divergieran, la confirmación de archivar diría
+    // un número y la de eliminar otro sobre la misma tarea.
+    fc.assert(
+      fc.property(documento, (raw) => {
+        const { doc, tareas } = armar(raw);
+        for (const t of tareas) {
+          const clave = claveDe(A, t.linea);
+          const a = unicoBloque(planDeArchivarEnLaNota(doc, tareas, clave, HOY));
+          const e = unicoBloque(planDeEliminar(doc, tareas, clave));
+          expect(a.linea).toBe(e.linea);
+          expect(a.antes).toEqual(e.antes);
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("archivar completa exactamente lo mismo que `planDeCompletar`", () => {
+    // Archivar **también** completa (§12). Si las dos rutas divergieran,
+    // archivar dejaría una madre en `[x]` y una hija en `[ ]`.
+    fc.assert(
+      fc.property(documento, (raw) => {
+        const { doc, tareas } = armar(raw);
+        for (const t of tareas) {
+          const clave = claveDe(A, t.linea);
+          const porArchivar = renderDocumento(
+            aplicarPlan(doc, planDeArchivarEnLaNota(doc, tareas, clave, HOY)),
+          );
+          const porCompletar = renderDocumento(
+            aplicarPlan(doc, planDeCompletar(doc, tareas, clave, HOY)),
+          );
+          expect(porArchivar).toBe(porCompletar);
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("eliminar se lleva el subárbol y **nada** más", () => {
+    // Se compara el **texto**, no el arreglo de líneas, y eso lo enseñó esta
+    // propiedad al fallar. Un archivo no puede tener cero líneas: borrar la
+    // única tarea de una nota la deja en `""`, que releída es una línea vacía.
+    // Comparar arreglos afirmaba algo más fuerte que la verdad justo en el
+    // borde, que es donde una propiedad tiene que decir la verdad.
+    fc.assert(
+      fc.property(documento, (raw) => {
+        const { doc, tareas } = armar(raw);
+        for (const t of tareas) {
+          const plan = planDeEliminar(doc, tareas, claveDe(A, t.linea));
+          const b = unicoBloque(plan);
+          const esperado = raw
+            .split("\n")
+            .filter((_, i) => i < b.linea || i >= b.linea + b.antes.length)
+            .join("\n");
+          expect(renderDocumento(aplicarPlan(doc, plan))).toBe(esperado);
+        }
       }),
       corridas,
     );

@@ -905,6 +905,36 @@ nada que lo deshaga. (Con la nota abierta sí: la escritura vuelve al editor y
 entra a su historial. Ver §5.5 punto 15 — a veces sí y a veces no, que es peor
 que nunca.)
 
+### Y entre dos archivos no se puede cumplir
+
+**Agregado el 01/09/2026, al construir el paso 6a.** Archivar escribe en la nota
+—marcar `[x]`, escribir `done`— **y** en el LOG. `vault.process()` es de a un
+archivo, así que no hay forma de hacer las dos atómicamente. Lo que sí se puede
+es elegir en qué orden se rompe y achicar la ventana:
+
+1. **Primero el LOG, después la nota.** Si falla la segunda queda una entrada de
+   historial de una tarea que sigue pendiente: **se ve, y se arregla**. Al revés
+   queda una tarea completada sin registro, que es una pérdida que **no se
+   nota**. Es el mismo criterio con el que el rango atómico del token eligió el
+   daño reversible (§5.5 punto 1).
+2. **Un paso en seco antes de tocar el LOG.** Se corre `process` sobre la nota
+   devolviendo `data` **intacto**, solo para preguntar si el lote se podría
+   ubicar. No es una escritura, y eso está medido: un `process` que devuelve lo
+   mismo que recibió no dispara `modify` ni `changed` y deja el `mtime` igual.
+   Ataja la falla realista —`no-ubicada`— antes de tocar el LOG, y deja la
+   ventana en los microsegundos que hay entre las dos llamadas.
+3. **Media operación no puede terminar en silencio.** Es su propio estado, con
+   su propio aviso, que dice qué quedó hecho y qué hay que mirar.
+
+Y una excepción que vale la pena mirar de frente: **la inserción en el LOG no se
+ubica, se recalcula.** Su posición es una *función del contenido del LOG* —la
+calcula `planDeArchivado` leyéndolo—, y `process` entrega los bytes frescos, así
+que recalcular sobre ellos es estrictamente más correcto que verificar un ancla
+vieja. No es solo más simple: **es lo único que sostiene el invariante 6 con más
+de un dispositivo**. Con una inserción ubicada, un heading que otra máquina
+acaba de crear por Sync no lo ve nadie y el archivado lo duplica en silencio.
+Cuesta 0,011 ms sobre el LOG de hoy y 0,17 ms sobre uno veinte veces más grande.
+
 ---
 
 ## 9. Árboles
@@ -1043,7 +1073,7 @@ Conclusión de diseño: **tildar tiene que costar menos que borrar**, y hay dos 
 | **Completar y descartar** | Marca `[x] done=`, la saca de las vistas, **no** escribe en el LOG | Tarea hoja, sin hijos ni notas |
 | **Completar y archivar** | Marca `[x] done=`, escribe el bloque en `tareas_LOG.md`, la saca de las vistas | Tarea con subárbol o con notas |
 
-El default se deriva del tamaño del bloque (p50 = 2 líneas: la mayoría son hojas), y siempre se puede forzar el otro con un modificador. **Ninguno de los dos borra la línea de la nota**: la tarea queda `[x]` en su lugar y las vistas la ocultan. El descarte físico es una acción aparte, explícita, con confirmación.
+El default se deriva del tamaño del bloque, y siempre se puede forzar el otro con un modificador. **Medido el 01/09/2026 sobre *todas* las tareas** —que es lo que ve el botón, no solo las raíces que midió la §2—: el subárbol tiene p50 **1** línea, y **251 de 389 tareas (64,5%) son hojas de una sola línea**. La conclusión no cambia; el número sí, y la versión anterior de esta frase decía «p50 = 2» apoyándose en una medición que contaba otra cosa. **Ninguno de los dos borra la línea de la nota**: la tarea queda `[x]` en su lugar y las vistas la ocultan. El descarte físico es una acción aparte, explícita, con confirmación.
 
 ### Formato del LOG
 
@@ -1067,6 +1097,44 @@ ninguno.
 - Va el subárbol completo, incluidas las notas sin checkbox. En el LOG actual
   esas líneas son el contenido valioso. La fecha va en la raíz del bloque; un
   descendiente solo la lleva si tiene un `done` escrito y **distinto**.
+
+### Lo que el paso 6a decidió y midió
+
+**01/09/2026.** Cuatro cosas, todas apoyadas en contar antes de decidir.
+
+**1. El LOG de hoy, contado.** 51 líneas, 37 bullets, **0 checkboxes**, **0
+marcas `[✓ AAAA-MM-DD]`**, 7 headings de niveles 1 y 2, y no termina en `\n`.
+O sea que la marca de fecha **sigue siendo formato nuevo**, como esta sección
+afirmaba. Confirmado, no supuesto — y hay un test del corpus que lo vuelve a
+contar y avisa el día que deje de ser cierto.
+
+**2. Ninguno de los caminos de archivado engancha todavía.** El corpus produce
+**5 caminos distintos**, todos de un solo nivel —ninguna tarea cuelga de un
+heading de proyecto, porque solo el wikilink lo define (§4.1) y todavía no hay
+ninguno— y **ninguno coincide** con los 7 headings que el LOG ya tiene. O sea
+que el primer archivado de cada nota crea su sección, al final del archivo, y
+después no se crea ninguna más: son 5 headings en toda la vida del LOG hasta la
+migración del paso 8.
+
+**3. Cuándo se pregunta.** Archivar **no confirma** un bloque de una sola línea,
+y sí confirma con dos o más. El umbral sale de la medición: el 64,5% de las
+tareas son hojas de una línea, y el hallazgo que ordena esta sección es que
+tildar tiene que costar menos que borrar. Con dos líneas o más el modal gana lo
+que le falta al caso de una: el usuario está moviendo contenido que puede no
+estar mirando —el subárbol colapsado, las notas ocultas— y **el destino en el
+LOG es información que no puede ver de otro modo**, porque el LOG está siempre
+cerrado. Eliminar confirma **siempre**: es la única acción del plugin que pierde
+texto.
+
+**4. Archivar verifica el bloque entero, no línea por línea.** Es lo que hace
+que «se preserva verbatim» (§4.3) valga también en el momento de escribir:
+ningún cambio de línea toca un bullet sin checkbox, así que sin esto nadie
+verificaría lo que se copia al historial y una nota editada en el medio se
+archivaría con el texto viejo. El bloque viaja adentro del `antes` de un solo
+cambio, y si alguna línea cambió, **el archivado se niega entero**. Medido: de
+los 389 subárboles del corpus, 38 (9,8%) aparecen repetidos verbatim en su nota
+y son los que se van a negar con el índice atrasado — de los de más de una
+línea, 14 de 138. Un tramo largo es **menos** ambiguo que una línea suelta.
 
 ### El LOG se lee por una vista, y el archivo sigue siendo legible solo
 
@@ -1343,6 +1411,8 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
 9. **Parsear las siete notas y volver a escribirlas sin cambios no altera ningún byte.** Es la prueba diferencial más barata y la que más bugs de reescritura atrapa.
 10. **Ninguna línea se identifica por su número: se identifica por su texto.**
+    Y desde el paso 6a, **ningún tramo tampoco**: lo que se borra o se archiva
+    lleva sus N líneas verbatim y se verifica entero.
     Vale en los dos extremos de una acción —al **elegir** sobre qué tarea actúa
     el usuario, y al **escribir**— porque en los dos hay una coordenada fresca
     contra una foto vieja. Y una acción se aplica entera o no se aplica.
@@ -1381,7 +1451,8 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 4a | **Decoración pasiva sobre la nota**: ocultar el token, defender el rango atómico, colores de prioridad | El frente principal (§13.0). Es un port re-arquitecturado con las trampas ya documentadas |
 | 4b | ~~**La fila de botones** de la §13.0: ★ ◐ → ⋯~~ | Hecho. Código sin precedente: Anotaciones no tiene botones sobre la línea, tiene una barra global y gutters |
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |
-| 6 | **Completar / descartar / archivar al LOG** | Resuelve el hallazgo del 7,5% |
+| 6a | ~~**Completar y archivar** al LOG (§12) y **eliminar** con confirmación~~ | Hecho. Resuelve el hallazgo del 7,5% |
+| 6b | **Fecha** y **recurrencia** en el ⋯, más el botón de reinicio por grupo (§11) | Necesita controles de entrada y `resolverDue` contra el reloj |
 | 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |
 | 8 | Migración (§19) | Al final: reescribe notas reales, y conviene que el parser esté probado |
 | 9 | Layout de paneles | Alcance chico, entra en cualquier hueco |
