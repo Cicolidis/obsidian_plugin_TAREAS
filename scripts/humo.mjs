@@ -202,6 +202,29 @@ try {
   fallas.push("no se pudo leer manifest.json");
 }
 
+// ---------------------------------------------------------------------------
+// Las guías de verificación dicen cuántas comprobaciones son. Dos veces dije un
+// número y era otro —24 cuando eran 36, 18 cuando eran 29—, y las dos veces lo
+// encontré contando a mano después de entregarla. Es exactamente el caso de la
+// §«mirar la salida»: cuando el ojo no llega, la regla se convierte en algo que
+// el pipeline pueda comprobar.
+// ---------------------------------------------------------------------------
+try {
+  const { readdirSync } = await import("node:fs");
+  const raiz = new URL("../", import.meta.url);
+  for (const nombre of readdirSync(raiz).filter((f) => /^VERIFICAR-.*\.md$/.test(f))) {
+    const guia = readFileSync(new URL(nombre, raiz), "utf8");
+    const filas = (guia.match(/^\| [A-Z]\d+ /gm) ?? []).length;
+    const dice = /Son \*\*(\d+) comprobaciones\*\*/.exec(guia);
+    if (!dice) continue; // una guía que no promete un número no miente
+    if (Number(dice[1]) !== filas) {
+      fallas.push(`${nombre} dice ${dice[1]} comprobaciones y tiene ${filas}`);
+    }
+  }
+} catch (err) {
+  fallas.push(`no se pudieron contar las comprobaciones de las guías: ${err.message}`);
+}
+
 if (fallas.length > 0) {
   console.error(`Prueba de humo FALLIDA sobre ${ruta}:`);
   for (const f of fallas) console.error(`  - ${f}`);

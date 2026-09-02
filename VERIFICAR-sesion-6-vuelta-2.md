@@ -17,8 +17,12 @@ Lo que **sigue valiendo** de la primera vuelta: B (el bloque en el historial), C
 (archivar no borra), E (cancelar no escribe) y F (el índice congelado). Nada de
 eso cambió.
 
-Son **dieciocho comprobaciones**. Las de la §C son las que más importan: son los
-gestos del editor, y ahí es donde un filtro nuevo hace daño sin avisar.
+Son **29 comprobaciones** (A 6 · B 6 · C 7 · D 4 · E 4 · F 2). Las de la §C son
+las que más importan: son los gestos del editor, y ahí es donde un filtro nuevo
+hace daño sin avisar.
+
+Para anotar lo que salga está `RESULTADOS-sesion-6-vuelta-2.md`, que se llena y
+se pega entero como prompt.
 
 ---
 
