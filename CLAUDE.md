@@ -222,6 +222,18 @@ escribir la regla que la prohíbe: `humo.mjs` se niega a desplegar un
 alternativa no es mirar más fuerte: es convertir la regla en algo que el
 pipeline pueda comprobar.
 
+**Un instrumento miente antes que el código, y hay que sospechar del cero.** En
+la sesión 6 pasó tres veces seguidas: una sonda que medía diez segundos **desde
+que se pegaba** —y se cerraba antes de que uno volviera a Obsidian— informó cero
+llamadas tres veces, y el cero era imposible porque lo que medía estaba
+funcionando a la vista. La misma sonda parcheaba una **instancia** en vez del
+prototipo, así que no veía las otras vistas abiertas. Y un test reproducía un
+Enter sin la continuación de lista que Obsidian sí pone, y **fallaba también sin
+el cambio que decía medir**. Dos reglas de eso: **un instrumento con reloj propio
+miente sin avisar** —los que se consultan a mano, no—, y **antes de creerle a un
+resultado sorprendente, comprobar que el instrumento mide lo que dice**, corriendo
+el mismo test con el cambio revertido.
+
 Y hay que leer la salida **de los instrumentos**, no solo la del código. En la
 sesión 5 el espía del cursor imprimía el token como `%t:id=…%`: la consola de
 Chrome —que es la de Obsidian— trata el primer argumento de `console.log` como
@@ -236,6 +248,21 @@ argumento devuelve la cadena tal cual. Todo `console.log` de un espía va como
 El comportamiento del editor —cursor, selección, teclado, cómo se ve algo— no se puede comprobar desde acá. Al terminar un cambio que lo toque, entregar una **lista concreta de qué observar**, no un «probalo a ver».
 
 Un cambio de diseño se prueba **encendiéndolo**, no reemplazando el anterior. Ver `designFlags.ts` de Anotaciones.
+
+**Un resultado de verificación vale sobre un binario, no en abstracto.** En la
+sesión 6 él verificó 36 comprobaciones y, mientras llegaban los resultados, se
+commitearon tres cambios encima —uno sobre `cursor.ts`, que interviene en cada
+escritura, y un `transactionFilter` nuevo, que cambia lo que hace el teclado—.
+Dar por verificado lo que se probó sobre otro `main.js` es exactamente el error
+que el invariante 10 evita un escalón más abajo. Dos consecuencias prácticas:
+**toda guía de verificación empieza pidiendo sobre qué corrió** —el commit y el
+`mtime` del `main.js` desplegado, con un comando que lo imprima—, y **si se
+commitea código mientras la verificación está en curso, hay que decir qué caducó
+y por qué**, en vez de esperar los resultados como si nada.
+
+Y las guías prometen un número de comprobaciones que hay que contar, no estimar:
+dos veces se escribió uno equivocado. `humo.mjs` cuenta las filas de cada
+`VERIFICAR-*.md` y se niega a desplegar si no coincide.
 
 ---
 
