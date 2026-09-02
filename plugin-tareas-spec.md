@@ -1246,6 +1246,72 @@ control que promete lo que no puede hacer es peor que uno apagado. **Eso salió
 de mirar la salida** —los tests pasaban y el tooltip decía «Mandar a foco»—, no
 de un test.
 
+### Lo que la verificación del paso 6a cambió en el frente principal
+
+**01/09/2026.** Cuatro decisiones del usuario y dos mecanismos leídos del
+sistema. Todas salieron de **usar** el plugin, no de mirarlo.
+
+**1. Tildar el checkbox es completar la tarea, y destildarlo es descompletarla.**
+Era el agujero más grande de la §12: el gesto más natural y más frecuente era el
+único que **no** pasaba por el plugin, así que la fecha de completado —que es lo
+que el historial y la vista de archivadas leen— solo existía si uno se acordaba
+de usar el ⋯. Ahora tildar escribe `done=` y baja por el subárbol (§9), y
+destildar le borra el `done` y **no** baja: eso último ya estaba decidido en
+`idsADestildar`, porque destildar en cascada borraría trabajo terminado de un
+clic.
+
+Se hace **reconociendo el hecho, no el gesto** (§5.5 punto 5): un
+`transactionFilter` que pregunta si alguna línea quedó igual salvo por el tilde.
+De ahí sale gratis que ande con el mouse, con el teclado, con Outliner y desde
+el teléfono. Corre último —`Prec.high`— para ver la línea con el token ya en su
+lugar.
+
+**2. Cmd+clic en el checkbox archiva, y es el único mecanismo del plugin que
+intercepta un clic.** Vale escribir por qué, porque parece contradecir lo
+anterior y no lo hace: **un modificador no deja rastro en la transacción** —
+`Cmd+clic` y `clic` producen el mismo cambio de documento— así que mirar el
+resultado no alcanza; y archivar toca dos archivos, que un `transactionFilter`
+no puede. Es estructuralmente más frágil: depende de correr en fase de captura
+antes que el handler de Obsidian, y **en móvil no existe**. Tiene interruptor
+propio, y el ⋯ sigue siendo el camino que anda siempre.
+
+**3. Las confirmaciones se apagan, y la repetida no.** Yo había propuesto
+preguntar al archivar con dos líneas o más (138 de 389 tareas, 35,5%) y al usarlo
+resultó fricción, que es exactamente lo que esta sección existe para eliminar.
+Gana el uso: por omisión no pregunta ni al archivar ni al eliminar, con ajuste
+para volver. La excepción es **archivar algo que ya figura en el historial**, que
+pregunta siempre: ahí el cartel evita una entrada repetida en vez de agregar un
+paso.
+
+Y el 🗑 entra a la fila como quinto botón, **último**, lo más lejos posible del
+★. La objeción quedó dicha una vez y la decisión es del usuario: es la única
+acción que pierde texto, el subárbol más grande del corpus son 77 líneas, y con
+la nota cerrada no hay Ctrl-Z. Lo que lo separa de un clic errado es el color al
+pasarle el mouse.
+
+**4. El hover del margen se resolvió midiendo, no razonando.** Los botones se
+apagaban yendo del texto hacia la izquierda, antes de llegar a ellos. La causa
+está escrita en `@codemirror/view`: los `domEventHandlers` «are registered on the
+**content element**», así que salir de `.cm-content` dispara su `mouseleave`, y
+entre el borde del contenido y el margen hay unos 40 px donde ya no hay
+`mousemove` y todavía no hay `:hover`.
+
+Lo que decidió el arreglo fue la sonda en la consola: **`posAtCoords(…, false)`
+devuelve la línea correcta en todo el recorrido**, también sobre
+`.cm-contentContainer` y sobre el propio `.cm-gutter`, y nunca `null`. O sea que
+no había nada que inventar — alcanzaba con escuchar donde el mouse está de
+verdad, que es `scrollDOM`. Va en un `ViewPlugin`, que es la única forma de
+enganchar ahí; **no contradice la regla del `StateField`** porque no es una
+decoración: la clase la sigue poniendo un `gutterLineClass.compute`.
+
+**Y dos cosas que la §5.5 gana de esta vuelta.** Una: `MenuItem.setWarning(true)`
+pone la clase `is-warning` —verificado adentro del asar 1.13.7— pero **Obsidian
+no la colorea**; la documentación de la API dice «will become red» y en realidad
+depende del tema. Dos: `reubicarCursor` identificaba la línea por su texto
+**visible**, y completar cambia justamente eso, así que el cursor caía en la
+columna 0 y Live Preview desarmaba el `- [ ] `. No se había visto porque la
+verificación de la sesión 5 probó el ★, que solo toca el token.
+
 ### 13.1 Pestaña Workbenches
 
 La principal. Selector de workbench arriba; uno o varios en columnas. Colapso según §9. Recurrentes agrupadas aparte. Editar, completar, descartar y sacar del workbench, todo desde acá.
