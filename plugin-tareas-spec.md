@@ -1262,9 +1262,16 @@ clic.
 
 Se hace **reconociendo el hecho, no el gesto** (§5.5 punto 5): un
 `transactionFilter` que pregunta si alguna línea quedó igual salvo por el tilde.
-De ahí sale gratis que ande con el mouse, con el teclado, con Outliner y desde
-el teléfono. Corre último —`Prec.high`— para ver la línea con el token ya en su
-lugar.
+De ahí sale gratis que ande con el mouse, con el teclado —el comando propio de
+Obsidian, `editor:toggle-checklist-status`—, con Outliner y desde el teléfono.
+Corre último —`Prec.high`— para ver la línea con el token ya en su lugar.
+
+Con un límite que la verificación encontró y que **no es del filtro**: escribir
+la `x` a mano adentro de `[ ]` no completa nada, porque insertar sin borrar el
+espacio deja `[x ]`, y `[x ]` no es un checkbox —la §4.2 y el parser exigen
+exactamente un carácter entre corchetes—. La línea deja de ser una tarea en el
+camino, y negarse es lo correcto. No es de Live Preview ni de Outliner, que fue
+lo que primero pareció.
 
 **2. Cmd+clic en el checkbox archiva, y es el único mecanismo del plugin que
 intercepta un clic.** Vale escribir por qué, porque parece contradecir lo
@@ -1303,6 +1310,35 @@ no había nada que inventar — alcanzaba con escuchar donde el mouse está de
 verdad, que es `scrollDOM`. Va en un `ViewPlugin`, que es la única forma de
 enganchar ahí; **no contradice la regla del `StateField`** porque no es una
 decoración: la clase la sigue poniendo un `gutterLineClass.compute`.
+
+**Y lo que costó, medido.** Mover el oyente al `scrollDOM` significa que
+`posAtCoords` corre también sobre los márgenes, y eso había que medirlo antes de
+darlo por bueno. Con la sonda en la consola, moviendo el mouse por una nota de
+402 líneas:
+
+```
+posAtCoords: 4590 llamadas · 620,5 ms en total · 0,1352 ms cada una
+```
+
+El navegador junta los `mousemove` en uno por cuadro, así que 4590 llamadas son
+del orden de **76 segundos de movimiento continuo**, y **0,135 ms es el 0,8% de
+un cuadro de 16,7 ms**. Está en la misma liga que lo que ya se acepta por
+transacción —decorar la nota entera cuesta 0,65 ms y construir la fila entre 0,1
+y 0,2— así que no hay nada que optimizar.
+
+Se consideró y se descartó cachear por `clientY` —la línea del documento depende
+solo de la altura, así que el movimiento horizontal, que es el que motivó el
+arreglo, podría costar cero—. **No se hace**: una caché que hay que invalidar al
+scrollear es una superficie de bug nueva a cambio del 0,8% de un cuadro. Si
+alguna vez el número sube, está el camino escrito.
+
+**Y una corrección a cómo se prueba esto.** La primera sonda dio **cero
+llamadas, tres veces**, y el cero era del instrumento: medía diez segundos desde
+que se pegaba —si uno tardaba en volver a Obsidian la ventana ya se había
+cerrado— y parcheaba una instancia en lugar del prototipo. Es la tercera vez en
+esta sesión que un instrumento miente antes que el código, después del `%%` en
+`console.log` y del Enter sin continuación de lista. **Un instrumento con reloj
+propio miente sin avisar**: los que se consultan a mano no.
 
 **Y dos cosas que la §5.5 gana de esta vuelta.** Una: `MenuItem.setWarning(true)`
 pone la clase `is-warning` —verificado adentro del asar 1.13.7— pero **Obsidian

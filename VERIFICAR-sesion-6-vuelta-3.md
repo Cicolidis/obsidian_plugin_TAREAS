@@ -29,8 +29,8 @@ corrección que hacía falta.
 
 | # | Qué hacer | Qué tiene que pasar |
 |---|---|---|
-| A1 | **En modo código fuente** (Ajustes → Editor → «Modo de edición por omisión» → *Código fuente*), poner el cursor adentro de un `[ ]` y escribir una `x` | Completa igual que un clic: queda `[x]` con `done=` y baja por el subárbol. **En Live Preview esto no se puede hacer, y no es Outliner:** Obsidian reemplaza el `- [ ] ` por un widget y no hay dónde poner el cursor. La guía anterior estaba mal |
-| A2 | Buscar una tarea que ya esté `[x]` **y sin fecha** —hay 29 en el corpus— y escribirle una letra **en el texto**, no en el checkbox | **No** le aparece un `done` de hoy. Es el guardia contra el falso positivo: esas tareas se completaron otro día |
+| A1 | Con el cursor sobre una tarea, correr el comando de Obsidian **«Alternar el estado de la lista de tareas»** (`editor:toggle-checklist-status`, Cmd/Ctrl+Enter) | Completa igual que un clic: queda `[x]` con `done=` y baja por el subárbol. **Es la prueba que importa**, porque es un camino que no pasa por el checkbox y demuestra que el filtro reconoce el hecho y no el gesto |
+| A2 | Buscar una tarea que ya esté `[x]` **y sin fecha** —hay 29 en el corpus— y escribirle una letra **en el texto**. **No hay que hacer nada más: la comprobación es mirar la línea.** Poné el cursor al final del texto en modo código fuente para ver el token | La línea **no** gana un `%%t:done=…%%` de hoy. Es el guardia contra el falso positivo: esas tareas se completaron otro día y la fecha sería mentira |
 | A3 | La sonda de abajo, en la **consola de Obsidian** | Ver los números que pide |
 
 ```js
@@ -45,6 +45,12 @@ instrumento, no del código.
 
 Lo que necesito: **las tres cifras** que imprime. Si «ms cada una» está por
 debajo de 0,05 no hay nada que hacer; si está cerca de 1 ms, sí.
+
+> **Por qué se cayó la A1 anterior.** Pedía escribir una `x` adentro del `[ ]`, y
+> eso no se puede hacer **en ningún modo**: insertar sin borrar el espacio deja
+> `[x ]`, y `[x ]` no es un checkbox —el parser exige exactamente un carácter
+> entre corchetes—, así que la línea deja de ser una tarea en el camino. No era
+> Live Preview ni Outliner: era la guía. Queda fijado con un test.
 
 ## B. El orden nuevo de la fila
 
@@ -77,12 +83,10 @@ que absorber desde adentro guardaría un documento incompleto.
 No hace falta el molde grande. Con esto alcanza:
 
 ```
-A1 _   A2 _   A3 _
-B1 _   B2 _   B3 _
-C1 _
-
-A3 · posAtCoords: _ llamadas · _ ms en total · _ ms cada una
+A1 _   A2 _
 
 Lo que vi mirando y no estaba acá:
 - _
 ```
+
+*A3, B1, B2, B3 y C1 ya están cerradas.*

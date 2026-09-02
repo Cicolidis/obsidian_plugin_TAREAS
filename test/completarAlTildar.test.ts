@@ -118,6 +118,23 @@ describe("completarAlTildar — lo que **no** dispara", () => {
     expect(despues).toBe("- [x] vieja sin fechas");
   });
 
+  it("escribir una `x` **adentro** de `[ ]` no completa: rompe el checkbox", () => {
+    // Reportado al verificar la tercera vuelta, y la guía estaba mal: insertar
+    // sin borrar el espacio da `[x ]`, y `[x ]` **no es un checkbox** —el
+    // parser exige exactamente un carácter entre corchetes—. O sea que la línea
+    // deja de ser una tarea en el camino, y este filtro tiene razón en no hacer
+    // nada. Para tildar con el teclado está el comando propio de Obsidian
+    // (`editor:toggle-checklist-status`), que lo hace en una sola transacción.
+    const st = estado("- [ ] tarea");
+    const linea = st.doc.line(1);
+    const i = linea.text.indexOf("[") + 1;
+    const despues = st.update({
+      changes: { from: linea.from + i, to: linea.from + i, insert: "x" },
+      userEvent: "input",
+    }).state.doc.toString();
+    expect(despues).toBe("- [x ] tarea");
+  });
+
   it("tildar y escribir en la misma transacción no cuenta", () => {
     // Deliberadamente estrecho: si cambió algo más que el tilde, alguien está
     // editando, y escribirle encima es peor que no hacer nada.
