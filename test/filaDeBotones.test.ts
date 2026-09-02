@@ -328,7 +328,79 @@ describe("a dónde llega el clic de un botón", () => {
       for (const boton of ancla.querySelectorAll("button")) {
         NodoFalso.despachar(boton, "click");
       }
-      expect(acciones).toEqual(fila.botones.map((b) => b.accion));
+      // Al revés del canónico: en el margen el mouse llega desde el texto, así
+      // que el 🗑 tiene que quedar el más lejos. Ver `ordenDelMargen`.
+      expect(acciones).toEqual([...fila.botones].reverse().map((b) => b.accion));
+    });
+  });
+});
+
+describe("el orden de la fila en el margen", () => {
+  /**
+   * El orden canónico de `filaDe` es el de la §13.0 —`★ ◐ → ⋯ 🗑`— y es el
+   * correcto con la fila **a la derecha** del texto: el mouse llega desde la
+   * izquierda y toca primero el ★, que es el más usado, y último el 🗑.
+   *
+   * En el margen el mouse llega **desde el texto**, o sea desde la derecha, y
+   * el orden canónico deja el botón que borra sin preguntar como el primero que
+   * uno se cruza. La sonda de hover de la verificación lo mostró en
+   * coordenadas: `eliminar` en x=235 y `wb-primario` en x=153, con el texto
+   * empezando cerca de x=280.
+   */
+  const conCinco = () => filaDe("- [ ] x", FAV, true)!;
+
+  it("el orden canónico es el de la §13.0, con el 🗑 último", () => {
+    expect(conCinco().botones.map((b) => b.accion)).toEqual([
+      "wb-primario",
+      "wb-secundario",
+      "popover",
+      "menu",
+      "eliminar",
+    ]);
+  });
+
+  it("el marcador del margen lo dibuja al revés", () => {
+    conDocumentoFalso(() => {
+      const ancla = new FilaMarker(conCinco(), opciones()).toDOM() as unknown as NodoFalso;
+      expect(
+        ancla.querySelectorAll("button").map((b) => b.getAttribute("data-accion")),
+      ).toEqual(["eliminar", "menu", "popover", "wb-secundario", "wb-primario"]);
+    });
+  });
+
+  it("y el 🗑 queda **el más lejos** del texto, que es el punto", () => {
+    conDocumentoFalso(() => {
+      const ancla = new FilaMarker(conCinco(), opciones()).toDOM() as unknown as NodoFalso;
+      const acciones = ancla.querySelectorAll("button").map((b) => b.getAttribute("data-accion"));
+      // El texto está a la derecha, así que el último del arreglo es el más
+      // cercano a él y el primero es el más lejano.
+      expect(acciones.at(-1)).toBe("wb-primario");
+      expect(acciones[0]).toBe("eliminar");
+    });
+  });
+
+  it("el widget **no** se invierte: ahí el mouse llega desde el otro lado", () => {
+    conDocumentoFalso(() => {
+      const fila = conCinco();
+      const ancla = construirFila(fila, opciones(), {
+        modo: "propio",
+        alClic: () => {},
+      }) as unknown as NodoFalso;
+      const clases = ancla.querySelectorAll("button").map((b) => b.className);
+      expect(clases[0]).toContain("tareas-boton-wb-primario");
+      expect(clases.at(-1)).toContain("tareas-boton-eliminar");
+    });
+  });
+
+  it("cada botón sigue llevando su `data-accion`, que es cómo se lo reconoce", () => {
+    // Invertir el arreglo y no la marca dejaría el clic andando sobre el botón
+    // equivocado, que es peor que no andar.
+    conDocumentoFalso(() => {
+      const ancla = new FilaMarker(conCinco(), opciones()).toDOM() as unknown as NodoFalso;
+      for (const b of ancla.querySelectorAll("button")) {
+        const accion = b.getAttribute("data-accion");
+        expect(b.className, `${accion}`).toContain(`tareas-boton-${accion}`);
+      }
     });
   });
 });

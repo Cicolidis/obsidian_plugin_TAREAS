@@ -78,8 +78,8 @@ Trabajá sobre una tarea **con token** (mandala a un workbench primero).
 | C3 | **Backspace** desde el comienzo de la línea de abajo | Une las dos y queda **una sola línea legible**, con un solo token |
 | C4 | **Flecha derecha** desde el final del texto | Cruza a la línea de abajo de un teclazo |
 | C5 | **Clic al final de la línea**, en el vacío de la derecha | El cursor queda en **esa** línea |
-| C6 | Escribir una `x` a mano adentro de un `[ ]` | Completa igual que un clic: es el mismo hecho |
-| C7 | **Escribir en el medio de una tarea que ya está `[x]`** | **No** le aparece un `done` de hoy. Son 29 tareas del corpus las que están `[x]` sin fecha |
+| C6 | **En modo código fuente** (Ajustes → Editor → Modo de edición por omisión), escribir una `x` a mano adentro de un `[ ]` | Completa igual que un clic: es el mismo hecho. **En Live Preview esto no se puede hacer y no es de Outliner:** Obsidian reemplaza el `- [ ] ` por un widget, así que no hay dónde poner el cursor. La guía estaba mal |
+| C7 | **Escribir una letra en el texto** de una tarea que ya está `[x]` **y no tiene fecha** — en el texto, no en el checkbox | **No** le aparece un `done` de hoy. Son 29 tareas del corpus las que están `[x]` sin fecha, y ninguna se completó hoy |
 
 ## D. El cursor, que es lo que cambió por abajo
 
@@ -104,8 +104,14 @@ también sobre los márgenes. Debería ser marginal, pero **no lo pude medir des
 Claude Code**. La sonda, en la **consola de Obsidian**:
 
 ```js
-(() => { let n = 0, t = 0; const cm = app.workspace.activeEditor.editor.cm; const o = cm.posAtCoords.bind(cm); cm.posAtCoords = (...a) => { const t0 = performance.now(); const r = o(...a); t += performance.now() - t0; n++; return r; }; setTimeout(() => { console.log("%s", `posAtCoords: ${n} llamadas · ${t.toFixed(1)} ms en total · ${(t / Math.max(1, n)).toFixed(3)} ms cada una`); cm.posAtCoords = o; }, 10000); console.log("%s", "medí 10 segundos moviendo el mouse por la nota"); })()
+(() => { const P = Object.getPrototypeOf(app.workspace.activeEditor.editor.cm); const o = P.posAtCoords; let n = 0, t = 0; P.posAtCoords = function (...a) { const t0 = performance.now(); const r = o.apply(this, a); t += performance.now() - t0; n++; return r; }; window.__medir = () => { console.log("%s", `posAtCoords: ${n} llamadas · ${t.toFixed(1)} ms en total · ${(t / Math.max(1, n)).toFixed(4)} ms cada una`); }; window.__parar = () => { P.posAtCoords = o; console.log("%s", "sonda sacada"); }; console.log("%s", "sonda puesta. Mové el mouse por la nota y después corré __medir()"); })()
 ```
+
+**Corregida respecto de la vuelta anterior**, donde dio cero tres veces. Aquella
+medía diez segundos **desde que se pegaba**, así que si uno tardaba en volver a
+Obsidian la ventana ya se había cerrado; y parcheaba una instancia en vez del
+prototipo, así que no veía otras vistas abiertas. Esta no tiene reloj: se mide
+cuando uno quiere con `__medir()` y se saca con `__parar()`.
 
 ## F. La consola
 

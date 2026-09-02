@@ -476,14 +476,49 @@ export class FilaMarker extends GutterMarker {
     // El clic no se resuelve acá: lo hace el `domEventHandlers` del margen, que
     // recibe la línea fresca. Acá solo se marca cada botón para poder
     // reconocerlo desde allá.
-    const ancla = construirFila(this.fila, this.opciones, { modo: "burbuja" });
+    const orden = ordenDelMargen(this.fila.botones);
+    const ancla = construirFila({ ...this.fila, botones: orden }, this.opciones, {
+      modo: "burbuja",
+    });
     const botones = ancla.querySelectorAll("button");
-    this.fila.botones.forEach((b, i) => {
+    orden.forEach((b, i) => {
       botones[i]?.setAttribute("data-accion", b.accion);
       if (b.workbench !== null) botones[i]?.setAttribute("data-wb", b.workbench);
     });
     return ancla;
   }
+}
+
+/**
+ * En el margen la fila se dibuja **al revés**, y eso lo decidió una medición.
+ *
+ * `filaDe` los devuelve en el orden de la §13.0 —`★ ◐ → ⋯ 🗑`—, que es el
+ * correcto cuando la fila está **a la derecha** del texto: ahí el mouse llega
+ * desde la izquierda y se encuentra primero con el ★, que es el que más se
+ * aprieta, y último con el 🗑, que es el que borra.
+ *
+ * En el margen es exactamente al revés, y la sonda de hover de la verificación
+ * lo muestra en coordenadas. El texto empieza cerca de `x=280` y los botones
+ * caen así:
+ *
+ * ```
+ * x=235 tareas-boton-eliminar        ← el primero que toca el mouse
+ * x=214 tareas-boton-menu
+ * x=193 tareas-boton-popover
+ * x=173 tareas-boton-wb-secundario
+ * x=153 tareas-boton-wb-primario     ← el más usado, el más lejos
+ * ```
+ *
+ * O sea que el orden canónico, puesto en el margen, deja **el botón que borra
+ * sin preguntar como el primero que uno se cruza** viniendo del texto, y el más
+ * frecuente como el último. Es al revés de lo que hay que hacer.
+ *
+ * Se invierte el **arreglo**, no el CSS. Un `flex-direction: row-reverse` daría
+ * lo mismo a la vista y dejaría el orden del teclado al revés del visual, que es
+ * la clase de detalle que la §20 pide tener resuelto antes de compartir esto.
+ */
+function ordenDelMargen(botones: readonly Boton[]): Boton[] {
+  return [...botones].reverse();
 }
 
 /**
