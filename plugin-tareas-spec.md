@@ -1318,10 +1318,16 @@ darlo por bueno. Con la sonda en la consola, moviendo el mouse por una nota de
 
 ```
 posAtCoords: 4590 llamadas · 620,5 ms en total · 0,1352 ms cada una
+posAtCoords: 1003 llamadas · 127,8 ms en total · 0,1274 ms cada una
 ```
 
+**Dos muestras independientes, de tamaños muy distintos, y el costo por llamada
+coincide**: 0,135 y 0,127 ms. Eso es lo que hace creíble el número — una sola
+corrida no habría distinguido el costo real de una casualidad del JIT, que es
+justo el error que ya se cometió una vez con el test de costo de la fila.
+
 El navegador junta los `mousemove` en uno por cuadro, así que 4590 llamadas son
-del orden de **76 segundos de movimiento continuo**, y **0,135 ms es el 0,8% de
+del orden de **76 segundos de movimiento continuo**, y **0,13 ms es el 0,8% de
 un cuadro de 16,7 ms**. Está en la misma liga que lo que ya se acepta por
 transacción —decorar la nota entera cuesta 0,65 ms y construir la fila entre 0,1
 y 0,2— así que no hay nada que optimizar.
