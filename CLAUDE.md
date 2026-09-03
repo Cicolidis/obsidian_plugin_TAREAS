@@ -51,6 +51,20 @@ de una cuenta que daba 7 px donde la pantalla mostraba 45: cuando el número
 calculado y el visto no coinciden, falta un elemento en el modelo, y eso solo lo
 contesta el navegador.
 
+Para el **ciclo de medición de CodeMirror** —los avisos `Measure loop restarted`
+y `Viewport failed to stabilize` de la §5.5— está `scripts/espia-medicion.js`.
+Nació de que esa comprobación se pidió **seis veces a ojo y nunca reprodujo su
+línea de base**: la última vuelta informó cero, no 1 y 4. Hace tres cosas que
+mirar la consola no hace: cuenta, **scrollea solo** —«angostá la ventana y
+scrolleá hacia arriba» a mano se cumple distinto cada vez— y **demuestra que el
+parche está puesto** haciendo pasar un aviso sintético antes de medir. No tiene
+reloj propio: se consulta con `medicion.leer()`.
+
+> **Una comprobación que en seis vueltas no produjo un número no protege nada**,
+> y anotarla como verde es peor que sacarla. Si algo se pide en una guía de
+> verificación y vuelve vacío dos veces seguidas, la pregunta no es «probá otra
+> vez» sino «¿esto se puede medir?».
+
 Para leer el CSS o el JS internos de Obsidian en vez de deducirlos, están los scripts de Anotaciones (`extraer-css-de-obsidian.mjs`).
 
 Hay además un **MCP conectado al Obsidian de esta máquina**. Sirve como tercer

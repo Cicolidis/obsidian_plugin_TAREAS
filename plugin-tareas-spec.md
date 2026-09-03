@@ -346,12 +346,16 @@ que el método ya nombró: **antes de creerle a un cero, hay que comprobar que e
 instrumento mide lo que dice.** Seis ceros sin esa comprobación es el mismo error
 que la sonda de la sesión 6, repetido más despacio.
 
-Lo que corresponde, y queda pendiente: **un instrumento en vez de una
-indicación.** Una sonda de consola que (1) parchee el logger de CodeMirror,
-(2) **demuestre que lo parcheó** haciendo pasar un aviso sintético por ahí, y
-(3) recién entonces cuente durante un scroll guiado. Hasta que exista, esta
-comprobación **sale de las guías de verificación**: pedirla otra vez es pedir
-seis veces lo mismo y anotarlo seis veces como no concluyente.
+Lo que corresponde: **un instrumento en vez de una indicación**, y ya está
+escrito — `scripts/espia-medicion.js`. Cuenta los avisos, **scrollea solo** —
+«angostá la ventana y scrolleá hacia arriba» a mano se cumple distinto cada vez,
+y esa es la explicación más probable de los seis ceros— y, antes de medir,
+**demuestra que parcheó lo que dice parchear** haciendo pasar un aviso sintético
+por ahí. Se consulta a mano, sin reloj propio.
+
+Hasta que ese instrumento dé un número, la comprobación **sale de las guías de
+verificación**: pedirla otra vez a ojo es pedir seis veces lo mismo y anotarlo
+seis veces como no concluyente.
 
 ### Lo que el paso 4a agregó a esta sección
 
