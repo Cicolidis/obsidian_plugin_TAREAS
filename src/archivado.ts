@@ -35,7 +35,7 @@ export function marcaDeFecha(fecha: string): string {
  *
  * La §12 decía «el mismo camino de headings que la tarea tenía en su nota», y
  * eso al pie de la letra arrastra al historial los andamios de la nota de
- * trabajo: `WORKBENCH`, `INBOX`, `semana 24 - 28`. Son secciones para
+ * trabajo: `WORKBENCH`, `INBOX`, `semana 1 - 5`. Son secciones para
  * organizarse hoy, no categorías de lo ya hecho.
  *
  * La §12 también dice que el LOG «pasa a organizarse por proyecto», y las dos

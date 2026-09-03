@@ -568,7 +568,7 @@ describe("invariante 5 sobre varias notas", () => {
 
 describe("invariante 6 — el archivado es idempotente", () => {
   /** Un camino de headings de uno a tres pasos. */
-  const camino = fc.array(fc.constantFrom("PESTALOZZI", "ACADEMIA", "unidad 1", "unidad 2", "IB"), {
+  const camino = fc.array(fc.constantFrom("EJEMPLO", "ACADEMIA", "unidad 1", "unidad 2", "IB"), {
     minLength: 1,
     maxLength: 3,
   });

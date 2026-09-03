@@ -100,7 +100,7 @@ describe("caminoDeArchivado", () => {
   });
 
   it("no arrastra los andamios de la nota de trabajo", () => {
-    // `WORKBENCH`, `INBOX` y `semana 24 - 28` son secciones para organizarse
+    // `WORKBENCH`, `INBOX` y `semana 1 - 5` son secciones para organizarse
     // hoy, no categorías de lo ya hecho. El camino literal de la §12 las
     // llevaba al historial.
     const camino = caminoDeArchivado("0_inbox/tareas_COLE.md", null);
@@ -109,21 +109,21 @@ describe("caminoDeArchivado", () => {
 });
 
 describe("planDeArchivado", () => {
-  const LOG = "# PESTALOZZI\n\n## unidad 1\n\n- algo viejo\n\n## unidad 2\n\n- otra cosa";
+  const LOG = "# EJEMPLO\n\n## unidad 1\n\n- algo viejo\n\n## unidad 2\n\n- otra cosa";
 
   it("engancha en el camino que ya existe y no duplica el heading", () => {
-    const plan = planDeArchivado(doc(LOG), ["PESTALOZZI", "unidad 1"], ["- nuevo [✓ 2026-08-24]"]);
+    const plan = planDeArchivado(doc(LOG), ["EJEMPLO", "unidad 1"], ["- nuevo [✓ 2026-08-24]"]);
     expect(plan.headingsNuevos).toEqual([]);
     expect(renderDocumento(aplicarArchivado(doc(LOG), plan))).toBe(
-      "# PESTALOZZI\n\n## unidad 1\n\n- algo viejo\n- nuevo [✓ 2026-08-24]\n\n## unidad 2\n\n- otra cosa",
+      "# EJEMPLO\n\n## unidad 1\n\n- algo viejo\n- nuevo [✓ 2026-08-24]\n\n## unidad 2\n\n- otra cosa",
     );
   });
 
   it("crea solo lo que falta del camino", () => {
-    const plan = planDeArchivado(doc(LOG), ["PESTALOZZI", "unidad 9"], ["- nuevo"]);
+    const plan = planDeArchivado(doc(LOG), ["EJEMPLO", "unidad 9"], ["- nuevo"]);
     expect(plan.headingsNuevos).toEqual([{ nivel: 2, texto: "unidad 9" }]);
     expect(renderDocumento(aplicarArchivado(doc(LOG), plan))).toBe(
-      "# PESTALOZZI\n\n## unidad 1\n\n- algo viejo\n\n## unidad 2\n\n- otra cosa\n\n## unidad 9\n\n- nuevo",
+      "# EJEMPLO\n\n## unidad 1\n\n- algo viejo\n\n## unidad 2\n\n- otra cosa\n\n## unidad 9\n\n- nuevo",
     );
   });
 
@@ -153,7 +153,7 @@ describe("planDeArchivado", () => {
   it("archivar dos veces en el mismo camino no duplica el heading (invariante 6)", () => {
     let log = doc(LOG);
     for (const t of ["- uno", "- dos"]) {
-      log = aplicarArchivado(log, planDeArchivado(log, ["PESTALOZZI", "unidad 9"], [t]));
+      log = aplicarArchivado(log, planDeArchivado(log, ["EJEMPLO", "unidad 9"], [t]));
     }
     const texto = renderDocumento(log);
     expect(texto.match(/## unidad 9/g)).toHaveLength(1);
@@ -163,7 +163,7 @@ describe("planDeArchivado", () => {
   it("lo que escribe sigue siendo un archivo que el parser lee igual", () => {
     const log = aplicarArchivado(
       doc(LOG),
-      planDeArchivado(doc(LOG), ["PESTALOZZI", "unidad 9"], ["- nuevo"]),
+      planDeArchivado(doc(LOG), ["EJEMPLO", "unidad 9"], ["- nuevo"]),
     );
     const texto = renderDocumento(log);
     expect(renderDocumento(doc(texto))).toBe(texto);
@@ -183,14 +183,14 @@ describe("archivarPorDefecto (§12)", () => {
 });
 
 describe("dónde crece el LOG", () => {
-  const LOG = "# PESTALOZZI\n\n## unidad 1\n\n- algo viejo";
+  const LOG = "# EJEMPLO\n\n## unidad 1\n\n- algo viejo";
 
   it("una sección nueva va al final, no arriba de lo que ya estaba", () => {
     // Un log crece por abajo. Insertarla arriba dejaría lo recién archivado
     // por encima de los headings que ya existían.
     const plan = planDeArchivado(doc(LOG), ["ACADEMIA", "materia"], ["- nuevo"]);
     expect(renderDocumento(aplicarArchivado(doc(LOG), plan))).toBe(
-      "# PESTALOZZI\n\n## unidad 1\n\n- algo viejo\n\n# ACADEMIA\n\n## materia\n\n- nuevo",
+      "# EJEMPLO\n\n## unidad 1\n\n- algo viejo\n\n# ACADEMIA\n\n## materia\n\n- nuevo",
     );
   });
 
@@ -297,12 +297,12 @@ describe("parseLog", () => {
 });
 
 describe("archivarEnElLog — lo que corre adentro de `vault.process()`", () => {
-  const LOG = "# PESTALOZZI\n\n- algo viejo";
+  const LOG = "# EJEMPLO\n\n- algo viejo";
 
   it("devuelve el LOG entero, con el bloque puesto", () => {
     const { texto } = archivarEnElLog(LOG, ["tareas_X"], ["- lo nuevo [✓ 2026-08-24]"]);
     expect(texto).toBe(
-      "# PESTALOZZI\n\n- algo viejo\n\n# tareas_X\n\n- lo nuevo [✓ 2026-08-24]",
+      "# EJEMPLO\n\n- algo viejo\n\n# tareas_X\n\n- lo nuevo [✓ 2026-08-24]",
     );
   });
 
