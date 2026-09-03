@@ -23,12 +23,17 @@
  */
 import { Notice, type App, type Editor, type MarkdownFileInfo } from "obsidian";
 import {
+  conversionDeDue,
+  dueParaLaLinea,
   elegirTarea,
   ilegiblesDelSubarbol,
   planDeArchivarEnLaNota,
   planDeCompletar,
   planDeEliminar,
+  planDeFecha,
   planDePrioridad,
+  planDeRecurrencia,
+  planDeReinicioEnVarias,
   planDeWorkbench,
   yaEstaCompleta,
   type Eleccion,
@@ -43,15 +48,17 @@ import {
   yaEstaEnElLog,
 } from "./archivado.js";
 import { bajar, subir } from "./color.js";
-import type { Prioridad } from "./token.js";
+import { formaDeDue, parseTaskToken, type Prioridad } from "./token.js";
 import { parseDocumento, type CambioDeLote } from "./documento.js";
 import type { StoreDeTareas } from "./store.js";
 import { STRINGS } from "./strings.js";
 import { prioridadEfectiva, type Clave } from "./tareas.js";
 import { confirmar } from "./ui/confirmar.js";
+import { elegirGrupo } from "./ui/elegirGrupo.js";
 import {
   escribir,
   escribirArchivado,
+  escribirEnVarias,
   type ResultadoDeEscritura,
 } from "./vault/escribir.js";
 
@@ -166,7 +173,7 @@ export async function aplicar(
     // Un fracaso, en cambio, avisa siempre — una escritura que no ocurrió y
     // nadie avisó es indistinguible de un plugin roto.
     if (texto !== null) {
-      new Notice(texto + (r.movidas > 0 ? ` (${r.movidas} se habían corrido)` : ""));
+      new Notice(texto + (r.movidas > 0 ? STRINGS.avisos.movidas(r.movidas) : ""));
     }
   } else if (r.estado === "no-ubicada") {
     new Notice(STRINGS.avisos.noUbicada, 8000);
@@ -472,6 +479,213 @@ export function eliminarTarea(
   );
 }
 
+// --------------------------------------- fecha y recurrencia (§5.2, §11)
+
+/** El texto de la línea de esta tarea, tal como el store lo tiene. */
+function textoDe(store: StoreDeTareas, ctx: Contexto): string | null {
+  const t = store.buscar(ctx.archivo, ctx.clave);
+  if (!t) return null;
+  return store.documento(ctx.archivo)?.lineas[t.linea]?.texto ?? null;
+}
+
+/**
+ * Fijar —o sacar— la fecha de vencimiento. **Una sola línea.**
+ *
+ * El aviso dice **qué forma escribió**, y eso no es adorno: `due` guarda una
+ * fecha en una tarea normal y un día del mes en una cíclica (§11), el token
+ * está oculto, y sin el cartel no hay forma de saber cuál de las dos quedó.
+ * Quién decide la forma es `dueParaLaLinea`, la misma función que usa el plan:
+ * si el cartel lo decidiera por su cuenta, mentiría el día que una cambie.
+ */
+export function fijarFecha(
+  app: App,
+  store: StoreDeTareas,
+  ctx: Contexto,
+  due: string | null,
+): void {
+  const texto = textoDe(store, ctx);
+  if (texto === null) {
+    new Notice(STRINGS.avisos.sinTarea);
+    return;
+  }
+  const escrito = dueParaLaLinea(texto, due);
+
+  void aplicar(
+    app,
+    store,
+    ctx.archivo,
+    planDeFecha(store.documento(ctx.archivo)!, store.tareasDe(ctx.archivo), ctx.clave, due),
+    () =>
+      escrito === null
+        ? STRINGS.avisos.fechaSacada
+        : formaDeDue(escrito) === "dia"
+          ? STRINGS.avisos.fechaPuestaEnCiclica(escrito)
+          : STRINGS.avisos.fechaPuesta(escrito),
+  );
+}
+
+/**
+ * Etiquetar —o desetiquetar— una tarea cíclica. **Una sola línea** (§11).
+ *
+ * Los dos avisos de más son la parte que importa, y los dos hablan del `due`:
+ *
+ * - Al **poner** `rec` sobre una tarea con fecha absoluta, la fecha se convierte
+ *   en el día del mes y se pierden el año y el mes. Es lo correcto —la §11 dice
+ *   que una cíclica guarda el día— pero es una pérdida, y una pérdida en
+ *   silencio es la que no se puede revisar.
+ * - Al **sacarlo** de una que tenía `due=10`, el `10` se queda y ahora significa
+ *   otra cosa que antes: sigue resolviéndose contra el reloj, pero ya no adentro
+ *   de un ciclo. Convertirlo al revés tendría que inventar un mes.
+ *
+ * Se lee de la línea y no del índice por lo mismo que `planDeRecurrencia`: es la
+ * fuente más fresca, y la que decide tiene que ser la que se reescribe.
+ */
+export function fijarRecurrencia(
+  app: App,
+  store: StoreDeTareas,
+  ctx: Contexto,
+  rec: string | null,
+): void {
+  const texto = textoDe(store, ctx);
+  if (texto === null) {
+    new Notice(STRINGS.avisos.sinTarea);
+    return;
+  }
+  const a = parseTaskToken(texto);
+  if (a.estado === "ilegible") {
+    new Notice(STRINGS.avisos.tokenIlegible, 8000);
+    return;
+  }
+  const dueAntes = a.meta.due;
+
+  void aplicar(
+    app,
+    store,
+    ctx.archivo,
+    planDeRecurrencia(store.documento(ctx.archivo)!, store.tareasDe(ctx.archivo), ctx.clave, rec),
+    () => {
+      if (rec === null) {
+        if (formaDeDue(dueAntes) === "dia") {
+          new Notice(STRINGS.avisos.dueQuedaEnDia(dueAntes!), 8000);
+        }
+        return STRINGS.avisos.noEsCiclica;
+      }
+      const convertido = conversionDeDue(dueAntes);
+      if (convertido !== null) {
+        new Notice(STRINGS.avisos.dueConvertido(dueAntes!, convertido), 10000);
+      }
+      return STRINGS.avisos.recurrencia(rec);
+    },
+  );
+}
+
+// ------------------------------------------- reiniciar un grupo (§11)
+
+/**
+ * Reiniciar un grupo cíclico: destildar y borrar el `done`, en **N notas**.
+ *
+ * Es la escritura más repartida del plugin, y la única que **confirma siempre**.
+ * Archivar y eliminar quedaron sin confirmación por decisión del usuario
+ * —pesaba más la fricción— y acá la razón es otra y no se puede apagar: toca
+ * varias notas a la vez, y el historial de deshacer solo existe en las que
+ * están abiertas. Con la nota cerrada `vault.process()` no pasa por el editor.
+ *
+ * **La razón no es el tamaño.** La §11 decía «23 líneas de un tirón en
+ * `tareas_MES`, medido», y eso contaba lo que *se esperaba* etiquetar: contado
+ * el 02/09/2026, un reinicio sobre el corpus de hoy tocaría a lo sumo **16
+ * líneas en todo el vault**. El número se corrigió en la spec; la confirmación
+ * se queda por lo de arriba.
+ *
+ * Lo que hace que acá vuelva a valer «o todas o ninguna» es que el paso en seco
+ * de `escribirEnVarias` corre sobre **todas** antes de escribir en ninguna, y
+ * eso lo dice el aviso: con el índice atrasado no se escribe en una sola nota.
+ */
+export function reiniciarGrupo(
+  app: App,
+  store: StoreDeTareas,
+  grupo: string,
+): void {
+  const lotes = planDeReinicioEnVarias(
+    store.cargadas().map((archivo) => ({
+      archivo,
+      doc: store.documento(archivo)!,
+      tareas: store.tareasDe(archivo),
+    })),
+    grupo,
+  );
+
+  if (lotes.length === 0) {
+    new Notice(STRINGS.avisos.sinQueReiniciar(grupo), 8000);
+    return;
+  }
+
+  const tareas = lotes.reduce((n, l) => n + l.cambios.length, 0);
+  const nombres = lotes.map((l) => nombreDeNota(l.archivo)).sort();
+  const t = STRINGS.confirmar.reiniciar;
+
+  confirmar(
+    app,
+    {
+      titulo: t.titulo,
+      detalle: [
+        t.destilda(tareas, lotes.length),
+        t.notas(nombres),
+        t.soloEtiquetadas,
+        t.noArchiva,
+        t.deshacer,
+      ],
+      aceptar: t.aceptar,
+    },
+    () => void escribirReinicio(app, store, lotes),
+  );
+}
+
+/**
+ * Escribe el reinicio y traduce el resultado en un cartel.
+ *
+ * Los cuatro finales están separados porque cada uno se arregla distinto, y el
+ * que importa es `no-ubicada`: **no se escribió en ninguna**, que es la
+ * garantía que el paso en seco sobre todas las notas compra y que el archivado
+ * —dos archivos con orden fijo— no puede dar.
+ */
+async function escribirReinicio(
+  app: App,
+  store: StoreDeTareas,
+  lotes: readonly { archivo: string; cambios: readonly CambioDeLote[] }[],
+): Promise<void> {
+  const r = await escribirEnVarias(app, lotes);
+
+  switch (r.estado) {
+    case "escrito": {
+      for (const n of r.escritas) store.absorber(n.archivo, n.contenido, "escritura");
+      const lineas = r.escritas.reduce((n, e) => n + e.lineas, 0);
+      new Notice(STRINGS.avisos.reiniciado(lineas, r.escritas.length));
+      break;
+    }
+    case "no-ubicada":
+      new Notice(STRINGS.avisos.reinicioNoUbicado(r.fallas.map((f) => nombreDeNota(f.archivo))), 10000);
+      break;
+    case "sin-cambios":
+      new Notice(STRINGS.avisos.sinCambios);
+      break;
+    case "sin-archivo":
+      new Notice(STRINGS.avisos.sinNota(r.cuales.join(", ")), 10000);
+      break;
+    case "media-operacion":
+      // El estado a medias, que acá es por nota. Aviso sin cierre automático:
+      // media operación que termina en silencio es peor que una que no ocurrió.
+      for (const n of r.escritas) store.absorber(n.archivo, n.contenido, "escritura");
+      new Notice(
+        STRINGS.avisos.reinicioAMedias(
+          r.escritas.map((e) => nombreDeNota(e.archivo)),
+          r.fallas.map(nombreDeNota),
+        ),
+        0,
+      );
+      break;
+  }
+}
+
 /**
  * Subir o bajar la prioridad de la tarea del cursor.
  *
@@ -560,6 +774,24 @@ export function comandos(dep: DependenciasDeComandos) {
       name: STRINGS.comandos.bajarPrioridad,
       editorCallback: (editor: Editor, vista: MarkdownFileInfo) =>
         moverPrioridad(dep, editor, vista, bajar),
+    },
+    {
+      // **Sin `editorCallback`**, que es el único de la lista. Un grupo de
+      // reinicio es global (§11) y puede estar entero en notas cerradas: pedir
+      // un editor con el cursor sobre una tarea lo volvería inalcanzable justo
+      // cuando hace falta, que es cuando todo el grupo está completado.
+      id: "reiniciar-grupo-ciclico",
+      name: STRINGS.comandos.reiniciar,
+      callback: () => {
+        const grupos = dep.store.gruposEnUso();
+        if (grupos.length === 0) {
+          new Notice(STRINGS.avisos.sinGrupos, 10000);
+          return;
+        }
+        elegirGrupo(dep.app, grupos, STRINGS.comandos.reiniciar, (grupo) =>
+          reiniciarGrupo(dep.app, dep.store, grupo),
+        );
+      },
     },
   ];
 }

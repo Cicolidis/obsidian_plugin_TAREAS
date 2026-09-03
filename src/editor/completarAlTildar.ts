@@ -58,6 +58,8 @@
  * orden.
  */
 import {
+  ChangeSet,
+  EditorSelection,
   EditorState,
   Transaction,
   type ChangeSpec,
@@ -88,8 +90,61 @@ export function completarAlTildar(
     // documento **ya modificado**, y sin esto `resolveTransaction` los
     // resolvería contra el original. Es la misma trampa que documenta
     // `cursorExterno.ts`, leída en `@codemirror/state` 6.5.0.
-    return [tr, { changes: cambios, sequential: true, userEvent: "input" }];
+    const selection = sostenerElCursor(tr, cambios);
+    return [tr, { changes: cambios, sequential: true, userEvent: "input", ...(selection ? { selection } : {}) }];
   });
+}
+
+/**
+ * Dónde queda el cursor después de que el filtro reescribe la línea.
+ *
+ * ## Por qué hace falta
+ *
+ * `replanificar` reemplaza la línea **entera** —`{from: linea.from, to:
+ * linea.to}`— y `ChangeSet.mapPos` de una posición adentro de un rango
+ * reemplazado devuelve el **comienzo del rango**. Sin selección explícita, el
+ * mapeo mandaba el cursor a la columna 0 en cada tildado.
+ *
+ * Es exactamente el mecanismo que `cursor.ts` documenta para los cambios
+ * externos, por otra puerta: allá lo trae `vault.process()` y acá lo produce
+ * este filtro. Reportado usando el plugin en la verificación del 6b —«tildar el
+ * checkbox de una tarea hija lleva el cursor al margen izquierdo»— y en una
+ * tarea de primer nivel pasaba igual: la columna 0 cae donde empieza el
+ * `- [ ] ` y casi no se nota. El mismo bug, menos visible.
+ *
+ * ## En qué coordenadas
+ *
+ * La selección de un spec `sequential` se interpreta **después** de los cambios
+ * de ese spec. Verificado en `mergeTransaction` de `@codemirror/state` 6.5.0, no
+ * deducido: con `sequential` es `mapForB = ChangeSet.empty(b.changes.length)`,
+ * o sea la identidad sobre el documento ya reescrito.
+ *
+ * ## Y por qué la columna, no la posición
+ *
+ * Lo que este filtro escribe es el token del final y, a lo sumo, el carácter
+ * del tilde —que mide lo mismo—. O sea que el **texto visible no se mueve** y la
+ * columna sigue valiendo. Se recorta al largo nuevo por si el cursor estaba
+ * apoyado en el borde del tramo oculto.
+ *
+ * Devuelve `null` —«que decida CodeMirror»— si la cuenta de líneas cambiara.
+ * Hoy no puede: son puros reemplazos de línea. Si algún día un plan insertara,
+ * esta cuenta dejaría de valer **en silencio**, y ese es justo el modo de falla
+ * que no se ve.
+ */
+function sostenerElCursor(tr: Transaction, cambios: readonly ChangeSpec[]) {
+  const doc = ChangeSet.of(cambios, tr.newDoc.length).apply(tr.newDoc);
+  if (doc.lines !== tr.newDoc.lines) return null;
+
+  const mover = (pos: number): number => {
+    const vieja = tr.newDoc.lineAt(pos);
+    const nueva = doc.line(vieja.number);
+    return nueva.from + Math.min(pos - vieja.from, nueva.length);
+  };
+
+  return EditorSelection.create(
+    tr.newSelection.ranges.map((r) => EditorSelection.range(mover(r.anchor), mover(r.head))),
+    tr.newSelection.mainIndex,
+  );
 }
 
 /** Una línea que cambió de tilde, y hacia dónde. */

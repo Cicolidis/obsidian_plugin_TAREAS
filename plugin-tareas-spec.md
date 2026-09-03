@@ -48,6 +48,20 @@ Medido el 22/08/2026 con `scripts/medir-tareas.mjs` sobre las siete notas. Los n
 
 **Notas que casi no tienen tareas:** `tareas_LOG` (0 tareas / 37 bullets), `tareas_CÍCLICAS` (0 / 16), `tareas_CLAUDE` (5 / 54).
 
+**Recontado el 02/09/2026, al empezar el paso 6b.** Esta tabla es una foto con
+fecha y dos de sus números ya no valen:
+
+| | 22/08 | 02/09 |
+|---|---|---|
+| Tareas totales | 386 | **390** |
+| Completadas | 29 (7,5%) | **16 (4,1%)** |
+| Fechas escritas en prosa | 25 | **24 líneas, y solo 9 sobre una tarea** |
+
+Lo de las fechas no es una corrección de cantidad sino de **qué se contaba**: el
+contador mira líneas, y de las 24 que tienen una fecha, 15 son notas de tarea,
+headings o texto libre. Ver la §5.2. Y **ningún test hardcodea estos números**:
+el corpus se sigue escribiendo.
+
 ---
 
 ## 3. Decisiones cerradas
@@ -129,6 +143,31 @@ Texto libre, tablas, imágenes embebidas, y los 11 checkboxes vacíos usados com
 | `done` | `AAAA-MM-DD` | Al completar |
 
 Prioridad normal **no escribe campo**: es el caso del 95% y no debe dejar rastro.
+
+### La detección de fechas en prosa se descarta, y este es el número
+
+**Medido el 02/09/2026, al abrir el paso 6b.** La fila de `due` dice «desde el
+menú, **o al confirmar una fecha detectada**». Lo segundo se midió antes de
+escribirlo y no entra:
+
+| | |
+|---|---|
+| Líneas del corpus con una fecha en prosa | 24 |
+| …de ellas, sobre una **línea de tarea** | **9** |
+| …de esas 9, con forma de **rango** («del N al M») | 4 |
+| …de esas 9, **sin el año escrito** | 8 |
+| Tareas con una fecha única y sin ambigüedad | **5 de 390** |
+
+Un parser de lenguaje natural serviría para **cinco tareas**, y en casi todas
+tendría que inventar el año. El resto de las señales temporales del corpus son
+**relativas** —4 tareas nombran un día de la semana, 2 dicen «antes del día N»,
+0 dicen «hoy» o «mañana»— y esas no las resuelve un parser de fechas: las
+resuelve un menú de atajos, que es lo que el paso 6b construyó.
+
+Lo que sí queda de la medición es **la forma del selector**: los atajos primero
+—hoy, mañana y los días de la semana— y el campo de fecha como salida, no al
+revés. Un `<input type="date">` suelto obligaría a traducir «el lunes» a mano
+cada vez.
 
 ### 5.3 Reescritura
 
@@ -284,6 +323,35 @@ hacia arriba, la cuenta no tiene que pasar de la base de arriba (1 y 4). Si sube
 o si aparecen avisos **sin scrollear**, es del plugin. Sin esta base tomada, el
 primer reflejo sería descartarlos como ruido de siempre — que es cómo se pierde
 una regresión.
+
+### Y la predicción lleva seis vueltas sin poder correrse
+
+**02/09/2026, al cerrar la segunda vuelta del paso 6b.** La comprobación de la
+consola se pidió en **seis** verificaciones —sesiones 4, 5 y 6, y las dos vueltas
+de la 7— y **no reprodujo la base ni una vez**. La última fue explícita: «no
+muestra nada la consola», o sea **cero**, no 1 y 4.
+
+Hay que decir lo que eso significa, porque es más incómodo que anotarlo como
+verde: **una comprobación que en seis vueltas no produjo un solo número no está
+protegiendo nada.** La predicción de arriba solo puede dispararse si la base es
+reproducible; con cero, un aumento causado por el plugin aparecería como «unos
+avisos» y no habría contra qué compararlo. Es la contracara de la regla de las
+alarmas falsas: una alarma que **nunca** suena tampoco se puede leer.
+
+De las dos explicaciones posibles —que las condiciones no se estén
+reproduciendo, o que la base haya sido un accidente de aquella tarde que no
+generaliza— **ninguna se puede elegir mirando la consola a ojo**, que es
+exactamente lo que se viene haciendo. Y hay una tercera que las cubre a las dos y
+que el método ya nombró: **antes de creerle a un cero, hay que comprobar que el
+instrumento mide lo que dice.** Seis ceros sin esa comprobación es el mismo error
+que la sonda de la sesión 6, repetido más despacio.
+
+Lo que corresponde, y queda pendiente: **un instrumento en vez de una
+indicación.** Una sonda de consola que (1) parchee el logger de CodeMirror,
+(2) **demuestre que lo parcheó** haciendo pasar un aviso sintético por ahí, y
+(3) recién entonces cuente durante un scroll guiado. Hasta que exista, esta
+comprobación **sale de las guías de verificación**: pedirla otra vez es pedir
+seis veces lo mismo y anotarlo seis veces como no concluyente.
 
 ### Lo que el paso 4a agregó a esta sección
 
@@ -846,6 +914,37 @@ se vuelve a medir antes de agregar nada.
 
 Con 406 tareas el mapa son unos pocos MB.
 
+### Descongelar tiene que releer, y no lo hacía
+
+**02/09/2026, encontrado al verificar el paso 6b.** `resincronizar()` —lo que
+corre cuando cambian los ajustes— saltea toda nota que **ya** está en el mapa:
+
+```ts
+if (this.notas.has(path)) return;
+```
+
+Como optimización es correcta y como cura no sirve: apagar «Congelar el índice»
+llamaba a `resincronizar()` y **no pasaba nada**. El índice quedaba atrasado
+para siempre, hasta que alguien tocara el archivo y llegara un `changed`.
+
+Costó tres comprobaciones de la guía. Con tres tareas completadas en disco, el
+reinicio informaba «no hay nada que reiniciar: ninguna tarea del grupo está
+completada» — un cartel que **afirma un hecho sobre el mundo** leyéndolo de un
+índice viejo. El plan puro, corrido sobre los mismos bytes, daba 3 tareas en 2
+notas.
+
+Dos cosas que quedan de eso:
+
+1. **El arreglo vive en el store, no en quien apaga el ajuste.** El store anota
+   qué notas descartó mientras estaba congelado y la próxima `resincronizar()`
+   —venga de donde venga— las relee. El bug **era** un camino de llamada que no
+   releía; una lista de llamadores que hay que acordarse de actualizar es la
+   misma trampa otra vez.
+2. **Un andamio de verificación que miente es peor que no tenerlo.** Es el §«un
+   instrumento miente antes que el código» aplicado al propio plugin: el ajuste
+   se llama «congelar» y su descripción dice «acordate de apagarlo», o sea que
+   promete que apagarlo alcanza.
+
 ---
 
 ## 8. Escritura sobre el vault
@@ -1038,9 +1137,88 @@ escribe el bloque en `tareas_LOG.md` con la fecha (§12) antes de destildar. As�
 la semanal trivial no llena el LOG y la mensual del alquiler deja rastro, sin
 decidirlo de antemano.
 
-**La confirmación es obligatoria.** Es la escritura más grande del plugin —23
-líneas de un tirón en `tareas_MES`, medido— sobre un archivo en Sync. Tiene que
-decir cuántas tareas va a reiniciar y en qué nota.
+**La confirmación es obligatoria**, y **la razón no es el tamaño.**
+
+La versión anterior de esta frase decía «la escritura más grande del plugin —23
+líneas de un tirón en `tareas_MES`, medido—». Ese número contaba lo que *se
+esperaba* etiquetar, no lo que un reinicio tocaría. **Contado el 02/09/2026**,
+con `planDeReinicio` —que salta las tareas ya pendientes y sin `done`—:
+
+| | tareas | completadas = techo del reinicio |
+|---|---|---|
+| `tareas_COLE` | 292 | 3 |
+| `tareas_VIDA` | 37 | 1 |
+| `tareas_MES` | 31 | **9** |
+| `tareas_ACADEMIA` | 25 | 3 |
+| `tareas_CLAUDE` | 5 | 0 |
+| **todo el vault** | 390 | **16** |
+
+O sea que hoy el reinicio más grande posible son 16 líneas repartidas en cuatro
+notas, no 23 en una. La confirmación se queda igual, por lo que sí es verdad:
+**toca varias notas a la vez**, y el historial de deshacer solo existe en las
+que están abiertas —con la nota cerrada `vault.process()` no pasa por el editor
+y no hay nada que lo deshaga—. Un rescate que depende de qué notas estaban
+abiertas no es un rescate. Tiene que decir cuántas tareas y en cuántas notas.
+
+### Lo que el paso 6b decidió y midió
+
+**02/09/2026.**
+
+**1. `due` guarda dos cosas y cuál depende de `rec`, así que hay una conversión
+que la spec no cubría.** Ponerle `rec` a una tarea que ya tiene `due=2026-09-10`
+deja un dato que significa otra cosa que antes. Decisión del usuario, tomada
+antes de escribir nada: **se convierte, y el aviso lo dice**. `due=2026-09-10` +
+`rec=mensual` pasa a `due=10` en el **mismo** cambio de línea, y se pierden el
+año y el mes — que es exactamente lo que esta sección dice que no hay que
+guardar en una cíclica. Al revés no se convierte nada: sacarle el `rec` a una
+con `due=10` deja el `10`, que sigue resolviéndose contra el reloj, y también se
+avisa. La conversión inversa tendría que inventar un mes.
+
+Quién decide es una sola función pura, `conversionDeDue`, y la usan **el plan y
+el cartel**: si el aviso lo decidiera por su cuenta, mentiría el día que una de
+las dos reglas cambie.
+
+**2. `rec` se escribe en una sola línea, y eso es la condición de seguridad del
+reinicio.** No es una analogía con la prioridad. Si `rec` bajara por el
+subárbol, en `tareas_MES` los hijos sin etiqueta que llevan el monto de cada mes
+quedarían etiquetados, y el primer reinicio los convertiría en tareas
+pendientes: el desastre que esta sección nombra, habilitado desde el otro lado.
+
+La consecuencia queda dicha en vez de tapada: una cíclica **con hijos** se
+reinicia con la madre destildada y los hijos todavía en `[x]`, porque tildar sí
+baja por el subárbol (§9). Es lo correcto para `tareas_MES` y puede no serlo
+para una semanal con subtareas. Se decide con uso.
+
+**3. Reiniciar toca N notas, y ahí vuelve a valer «o todas o ninguna».** Un
+grupo es global, así que el reinicio son N lotes, uno por nota.
+`escribirEnVarias` corre el **paso en seco sobre todas antes de escribir en
+ninguna** —un `process` que devuelve `data` intacto, que está medido que no
+dispara `modify` ni `changed`—, así que la regla completa de la §8 se recupera:
+la falla realista se ataja entera antes de tocar el disco. Es la diferencia con
+`escribirArchivado`, que maneja dos archivos con un orden elegido y su paso en
+seco corre sobre uno solo.
+
+Lo que queda de ventana —entre el seco de la última nota y la escritura de la
+primera— no puede corromper nada: `aplicarLote` vuelve a verificar adentro de
+`process`, así que una nota que se movió se niega. El modo de falla es
+`media-operacion`, nunca «escribió en la línea de al lado». El orden de
+escritura es **alfabético por ruta**, para que una media operación sea
+reproducible y el aviso diga siempre las mismas notas.
+
+**4. `resolverDue` es gratis, medido antes de que se note.** Las pestañas Agenda
+y Buscar lo van a llamar por tarea en cada dibujo, y no se puede cachear por
+contenido —es una función del reloj, ese es el punto de guardar el día del mes—.
+Medido con calentamiento descartado y 50 muestras, en el peor caso («todas
+cíclicas», porque hoy hay 0 `due` escritos): **0,065 ms para las 292 tareas de
+`tareas_COLE`**. Es el 10% de lo que cuesta decorar la nota entera (0,65 ms) y
+el 0,4% de un cuadro. No hay nada que optimizar ni que cachear.
+
+Y una advertencia sobre cómo se lee esa salida: **con pocas tareas la columna de
+µs por tarea está dominada por el reloj**, no por la función. `tareas_CLAUDE` (5
+tareas) informa 0,57 µs por tarea y `tareas_COLE` (292) informa 0,22; no es que
+la nota chica sea más cara, es que a esa escala lo que se mide son las dos
+llamadas a `performance.now()`. El único número que significa algo es el de la
+nota grande.
 
 La razón **cambió** con lo que midió la primera verificación del paso 4b (§5.5
 punto 15). La versión anterior decía «`vault.process()` no pasa por el editor,
@@ -1354,6 +1532,127 @@ depende del tema. Dos: `reubicarCursor` identificaba la línea por su texto
 columna 0 y Live Preview desarmaba el `- [ ] `. No se había visto porque la
 verificación de la sesión 5 probó el ★, que solo toca el token.
 
+### Lo que el paso 6b agregó al frente principal
+
+**02/09/2026.** El ⋯ queda con **los seis ítems** que esta sección lista: fecha,
+prioridad, recurrencia, completar y descartar, completar y archivar, eliminar.
+Los dos que faltaban entraron con la capa 1 y 2 detrás, que es la regla con la
+que el paso 4b los dejó afuera.
+
+**1. Los dos abren un `Menu` propio, no un submenú.** Es la misma decisión que
+puso los tres niveles de prioridad planos: `setSubmenu` no está en las
+tipificaciones públicas de Obsidian, y apoyarse en API que no está prometida es
+gratis hasta el día que no lo es. Se posicionan con el mismo `MouseEvent`, como
+el → con su popover.
+
+**2. La fecha resuelta va en la etiqueta del atajo:** «Lunes · 7 sep», no
+«Lunes». Contesta dos preguntas que el menú no podía contestar de otra manera:
+«el lunes» sobre un lunes es ambiguo —la regla es que hoy cuenta como hoy, igual
+que `resolverDue` con el día del mes, y eso no se adivina—, y **cuál de las dos
+formas de `due` va a escribir**, que en la nota no se ve porque el token está
+oculto. El modal hace lo mismo con una línea de «va a escribir».
+
+**3. Y dos ítems del menú se iban a pisar, lo que salió de mirar la salida.** La
+primera versión ofrecía hoy, mañana y los siete días: un miércoles eso mostraba
+«Hoy · 2 sep» y «Miércoles · 2 sep», que escriben exactamente lo mismo. Además
+de ser ruido, rompía el tilde del menú — `setChecked(valor === actual)` marcaba
+los dos a la vez, así que la pantalla decía que la tarea tenía dos
+vencimientos. Ningún test lo miraba: apareció imprimiendo las etiquetas y
+leyéndolas. Ahora los dos días que «hoy» y «mañana» ya cubren no se repiten, y
+la lista tiene siete ítems todos los días.
+
+**4. El reinicio por grupo es un comando de paleta, no un ítem del ⋯.** El botón
+por grupo vive en la vista (§11) y la pestaña es del paso 5. Un comando anda sin
+vista **y sin cursor sobre una tarea**, que es lo que importa: un grupo entero
+puede estar completado y colapsado en cinco notas cerradas. Ponerlo también en
+el ⋯ dejaría un menú de siete ítems que solo a veces tiene siete, y un menú cuyo
+largo cambia según la tarea es el que esta sección dice que no se puede
+aprender.
+
+**5. El modal de «Workbench nuevo…» y el de «Grupo nuevo…» son el mismo.** No
+por ahorrar líneas: los dos nombres viven en el mismo token con la misma
+gramática —`NOMBRE_RE` es literalmente la misma para `wb` y para `rec`— y dos
+clases con el mismo saneo divergirían justo en si aceptan un `;`, que deja la
+línea ilegible para siempre (§5.3).
+
+**6. Y una debilidad del pipeline que este paso encontró.** `humo.mjs` exige que
+ciertas marcas estén en el bundle, y el build de producción **no minifica**, así
+que los comentarios de `src/` viajan enteros: cualquier marca que además
+aparezca en un comentario era un guardia falso. Se encontró poniendo
+`resolverDue` en la lista —una función que **todavía no llama nadie**— y viendo
+que pasaba, por una línea de documentación que la nombra. Ahora las marcas se
+buscan contra el bundle **sin comentarios**, y el barrido es conservador a
+propósito: una alarma falsa que se repite es una alarma que se ignora.
+
+### Lo que la verificación del paso 6b encontró, usando el plugin
+
+**02/09/2026, primera vuelta: 44 de 48 en verde.** Las tres fallas estaban todas
+en la sección del índice congelado y **dos de las tres eran errores de la guía**,
+no del plugin. Vale escribirlas porque las dos son reglas, no anécdotas.
+
+**1. Un `gutter()` de CodeMirror existe en todos los editores, y cobra ancho
+aunque esté vacío.** Reportado mirando, no por un test: «al activar el plugin se
+corre el margen de las notas que no son de tareas». La columna de botones se
+registra con `registerEditorExtension`, así que vive en **cada** editor
+markdown; `lineMarker` devuelve `null` fuera de las notas de la lista —y con eso
+no dibuja ningún marcador— pero el `padding` del margen corría el texto de todas
+las notas del vault unos 22px.
+
+Y el comentario de `styles.css` afirmaba exactamente lo contrario: «con
+`renderEmptyElements: false` una nota sin tareas no ocupa nada». Es una
+afirmación escrita sin medirla, en el archivo que menos se puede comprobar
+leyéndolo.
+
+El arreglo es una clase que pone `EditorView.editorAttributes` sobre el
+`.cm-editor` —tiene que ser **por editor** y no en `body`, porque una nota de
+tareas y otra que no lo es pueden estar abiertas al lado—, y una regla nueva en
+`humo.mjs` que se niega a desplegar un `styles.css` donde algo le dé ancho al
+margen sin nombrarla. Se descartó `:has(.cm-gutterElement)`, que sería una
+línea: el margen solo tiene elementos para las líneas **visibles**, así que
+scrollear hasta una zona sin tareas lo vaciaría y el texto saltaría — cambiar un
+corrimiento fijo por uno que se mueve al scrollear es peor.
+
+**2. El cursor a la columna 0, por segunda puerta.** «Tildar el checkbox de una
+tarea hija lleva el cursor al margen izquierdo, a la altura de la madre.» Es el
+mecanismo que la §5.5 ya tenía escrito —`ChangeSet.mapPos` de una posición
+adentro de un rango reemplazado devuelve el comienzo del rango— pero por un
+camino que `cursor.ts` no cubre: allá lo trae `vault.process()` como cambio
+externo y acá lo produce el propio `transactionFilter`, que reescribía la línea
+entera y devolvía sus cambios **sin selección**.
+
+Y el test lo mostró más general que el reporte: **pasaba en toda tarea**, no
+solo en una hija. En una de primer nivel la columna 0 cae donde empieza el
+`- [ ] ` y casi no se nota; la sangría de una hija lo vuelve visible. El arreglo
+es una selección explícita, en las coordenadas posteriores a los cambios —
+verificado en `mergeTransaction` de `@codemirror/state` 6.5.0, donde con
+`sequential` el mapeo de la selección del segundo spec es la identidad.
+
+**3. Y dos errores de la guía, que son la misma regla.** «Con el índice
+congelado el reinicio se niega» pedía algo que no puede pasar: congelado, el
+plan sale **vacío** —el store no vio las tareas completarse— y un plan vacío
+nunca llega al paso en seco que la comprobación quería probar. Y «con el índice
+congelado, ponerle fecha a una tarea que se corrió se niega» era directamente
+falso: si el texto aparece **una sola vez**, `ubicar.ts` la encuentra y escribe,
+avisando. Negarse necesita cero o dos apariciones, no un número de línea viejo.
+
+> **Una guía de verificación es un instrumento, y un instrumento que pide un
+> estado imposible no prueba nada.** Las dos comprobaciones pasaron por
+> «falla» sin que hubiera nada roto, y la garantía que iban a verificar —«o
+> todas o ninguna» sobre N notas— quedó sin mirar una vuelta entera.
+
+### La segunda vuelta del 6b: 27 de 28
+
+**02/09/2026.** Los cinco arreglos quedaron verificados en vivo: el margen ya no
+cobra ancho fuera de las notas de tareas —comprobado también con las dos abiertas
+lado a lado, que es lo que una clase en `body` no podía hacer—, el cursor se
+queda en su lugar al tildar, y la §C confirmó lo que la primera vuelta no había
+podido mirar: **con una nota que no se puede ubicar, el reinicio no escribe en
+ninguna de las dos**, y al descongelar el índice se pone al día sin tocar los
+archivos.
+
+La única sin verde es la de la consola, y es la de la §5.5: no es una falla del
+plugin, es una comprobación que hay que reemplazar por un instrumento.
+
 ### 13.1 Pestaña Workbenches
 
 La principal. Selector de workbench arriba; uno o varios en columnas. Colapso según §9. Recurrentes agrupadas aparte. Editar, completar, descartar y sacar del workbench, todo desde acá.
@@ -1482,7 +1781,12 @@ equivocada es peor que no medir.
 
 Tres capas y una prohibición.
 
-1. **Lógica pura** — parser, token, outline, recurrencia, archivado, filtros. Sin Obsidian, sin DOM. Testeable offline. Es el §5 de las notas de método.
+1. **Lógica pura** — parser, token, outline, recurrencia, archivado, filtros,
+   **fechas**. Sin Obsidian, sin DOM. Testeable offline. Es el §5 de las notas
+   de método. `fechas.ts` es capa 1 y **toda su aritmética va en UTC**, por lo
+   mismo que `enMes`: sumarle un día a una fecha local da 23 o 25 horas en los
+   dos domingos del año en que cambia la hora, y ahí «mañana» cae en hoy o en
+   pasado mañana. Está probado con `process.env.TZ` puesto a tres zonas.
 2. **Escritura sobre el vault** — sin DOM. Sujeta a §8.
 3. **Vistas** — extensiones de CodeMirror y las tres pestañas, con un punto de entrada por plataforma.
 
@@ -1513,7 +1817,12 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
 2. **`setTaskToken` es idempotente**, y con patch vacío no modifica el archivo.
 3. **Reescribir una tarea nunca modifica sus bullets sin checkbox.**
 4. **Ninguna operación reescribe un archivo entero.**
-5. **Reiniciar un grupo cíclico dos veces seguidas da el mismo archivo**, y no toca una sola línea que no lleve la etiqueta de ese grupo.
+5. **Reiniciar un grupo cíclico dos veces seguidas da el mismo archivo**, y no
+   toca una sola línea que no lleve la etiqueta de ese grupo. Desde el paso 6b
+   vale sobre **N notas**: un grupo es global, así que la propiedad se comprueba
+   con el grupo repartido entre varias. Y una tercera que sale de ahí: **la
+   cuenta que dice la confirmación es la que se escribe** — una nota sin nada
+   que cambiar no se cuenta ni se abre.
 6. **Archivar y volver a leer recupera lo archivado**: texto, fecha, nota y proyecto. Y archivar N bloques en el mismo camino crea el camino una sola vez.
 7. **Un token que no parsea deja la línea intacta.**
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
@@ -1560,7 +1869,8 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 4b | ~~**La fila de botones** de la §13.0: ★ ◐ → ⋯~~ | Hecho. Código sin precedente: Anotaciones no tiene botones sobre la línea, tiene una barra global y gutters |
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |
 | 6a | ~~**Completar y archivar** al LOG (§12) y **eliminar** con confirmación~~ | Hecho. Resuelve el hallazgo del 7,5% |
-| 6b | **Fecha** y **recurrencia** en el ⋯, más el botón de reinicio por grupo (§11) | Necesita controles de entrada y `resolverDue` contra el reloj |
+| 6b | ~~**Fecha** y **recurrencia** en el ⋯, más **reiniciar un grupo**~~ | Hecho. Cierra la §5.2: los seis campos del token se escriben |
+| 6c | **«Archivar y reiniciar»** (§11) y el botón por grupo en la vista | Es el archivado de 6a multiplicado por N, y su lugar es la pestaña del paso 5 |
 | 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |
 | 8 | Migración (§19) | Al final: reescribe notas reales, y conviene que el parser esté probado |
 | 9 | Layout de paneles | Alcance chico, entra en cualquier hueco |

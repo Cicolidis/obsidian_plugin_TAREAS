@@ -336,3 +336,21 @@ function enMes(anio: number, mes: number, dia: number): string {
   const d = Math.min(dia, ultimo);
   return `${anio}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+
+/**
+ * Cuál de las dos formas de `due` está escrita, o `null` si no hay ninguna.
+ *
+ * Existe para que la capa 3 pueda **decir** qué va a escribir sin repetir la
+ * gramática. `FECHA_RE` y `DIA_RE` se quedan privadas acá: una gramática
+ * repetida en dos archivos diverge (CLAUDE.md), y esta decidiría si una fecha
+ * se escribe como `2026-09-10` o como `10`, que son cosas distintas.
+ *
+ * Un `due` que no cumple ninguna de las dos no puede existir en un token que
+ * parsea —`parseCampos` lo rechaza— así que `null` acá significa «no hay `due`»
+ * y no «hay uno raro».
+ */
+export function formaDeDue(due: string | null): "fecha" | "dia" | null {
+  if (due === null) return null;
+  if (FECHA_RE.test(due)) return "fecha";
+  return DIA_RE.test(due) ? "dia" : null;
+}

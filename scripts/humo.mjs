@@ -67,8 +67,32 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   los seis ids            un comando que se cae del bundle no da error: no aparece
 //   escribirArchivado       la escritura en dos archivos (§12, paso 6a)
 //   tareas-confirmar        el modal; sin él, archivar y eliminar no preguntan nada
+//   reiniciar-grupo-ciclico la única puerta del reinicio hasta que exista la pestaña
+//   escribirEnVarias        el paso en seco sobre las N: «o todas o ninguna» (§11)
 //
 // El id del plugin no se busca acá: vive en el manifiesto y se valida abajo.
+/**
+ * El bundle **sin comentarios**, que es contra lo que se buscan las marcas.
+ *
+ * El build de producción no minifica, así que los comentarios de `src/` viajan
+ * enteros al bundle — y eso volvía falsa cualquier marca que además apareciera
+ * en un comentario. Encontrado en la sesión 7: `resolverDue` estaba en la lista
+ * y **no lo llama nadie todavía**; la marca pasaba por una línea de
+ * documentación que lo nombra. Un guardia que un comentario puede satisfacer no
+ * es un guardia.
+ *
+ * El barrido es deliberadamente conservador —bloques `/* … *\/`, líneas que
+ * arrancan con `//` y las continuaciones `*` de un JSDoc— porque una alarma
+ * falsa que se repite es una alarma que se ignora. Si alguna vez deja pasar un
+ * comentario raro, el guardia queda tan flojo como antes; nunca más estricto de
+ * lo que corresponde.
+ */
+const codigo = src
+  .replace(/\/\*[\s\S]*?\*\//g, " ")
+  .split("\n")
+  .filter((l) => !/^\s*(\/\/|\*)/.test(l))
+  .join("\n");
+
 for (const marca of [
   "transactionFilter",
   "unirLimpio",
@@ -108,8 +132,15 @@ for (const marca of [
   "completarAlTildar",
   "task-list-item-checkbox",
   "scrollDOM",
+  // Paso 6b: fecha, recurrencia y reinicio (§5.2, §11). Los tres se caen en
+  // silencio: un ítem que no está en el ⋯ y un comando que no aparece en la
+  // paleta no dan error, y `escribirEnVarias` es lo que hace que el reinicio
+  // sea «o todas o ninguna» — sin él se escribiría nota por nota.
+  "reiniciar-grupo-ciclico",
+  "escribirEnVarias",
+  "FuzzySuggestModal",
 ]) {
-  if (!src.includes(marca)) fallas.push(`falta "${marca}" en el bundle`);
+  if (!codigo.includes(marca)) fallas.push(`falta "${marca}" en el código del bundle`);
 }
 
 // 4b) el CSS que el bundle no lleva: se copia aparte y se cae aparte.
@@ -149,6 +180,7 @@ try {
     "tareas-fila-izquierda",
     "tareas-fila-columna",
     "tareas-margen",
+    "tareas-con-margen",
     "tareas-hover",
     "tareas-estilo-barra-completa",
   ]) {
@@ -186,6 +218,36 @@ try {
         `regla de visibilidad de la fila sin decir a cuál de las dos: "${selector.trim()}"`,
       );
     }
+  }
+
+  // 4d) **El ancho del margen solo se le puede cobrar a quien lo usa.**
+  //
+  // Un `gutter()` de CodeMirror es una extensión registrada en **todos** los
+  // editores: no se prende por nota. `lineMarker` puede devolver `null` fuera de
+  // las notas de tareas —y lo hace— pero la columna existe igual, así que
+  // cualquier `padding` o `margin` que se le ponga corre el texto de **todas**
+  // las notas del vault.
+  //
+  // Pasó: la verificación del 6b lo reportó como «se corre el margen de las
+  // notas que no son de tareas», ~22px, y el comentario de `styles.css` afirmaba
+  // exactamente lo contrario sin haberlo medido. No lo agarró ningún test porque
+  // una cascada de CSS no se resuelve sin un navegador; esto sí. La clase
+  // `tareas-con-margen` la pone `EditorView.editorAttributes` solo donde el
+  // margen está activo, así que toda regla que dé ancho tiene que nombrarla.
+  for (const bloque of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = bloque[1];
+    const cuerpo = bloque[2];
+    if (!/\.tareas-margen\b/.test(selector)) continue;
+    if (!/(^|[;\s])(padding|margin|width|min-width)(-[a-z-]+)?\s*:/.test(cuerpo)) continue;
+    // Solo cuando la regla apunta al **margen mismo**: sobre un descendiente
+    // —`.cm-gutterElement`, `.tareas-fila`— el ancho lo da el contenido, y sin
+    // marcadores no hay contenido.
+    const ultimo = selector.trim().split(/\s+/).at(-1) ?? "";
+    if (!/\.tareas-margen\b/.test(ultimo)) continue;
+    if (/\.tareas-con-margen\b/.test(selector)) continue;
+    fallas.push(
+      `regla que le da ancho al margen sin acotarla a .tareas-con-margen: "${selector.trim()}"`,
+    );
   }
 
 } catch {

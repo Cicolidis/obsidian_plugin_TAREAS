@@ -523,6 +523,32 @@ body.tareas-fila-izquierda .markdown-source-view.mod-cm6 .tareas-fila {
 	         --tareas-margen-antesala: -3px;
 	       }
 	*/
+}
+
+/* **El ancho solo en las notas que usan el margen**, y esto no es prolijidad.
+
+   La versión anterior ponía el `padding` en la regla de arriba y su comentario
+   afirmaba: «con `renderEmptyElements: false` una nota sin tareas no ocupa
+   nada». **Es falso, y se descubrió usando el plugin, no leyéndolo**: un
+   `gutter()` es una extensión registrada en *todos* los editores, así que la
+   columna existe en cada nota del vault y su `padding` corría el texto ~22px
+   aunque no hubiera un solo marcador. Reportado en la verificación del 6b:
+   «se corre el margen de las notas que no son de tareas».
+
+   La clase la pone `EditorView.editorAttributes` sobre el `.cm-editor` —ver
+   `CLASE_CON_MARGEN` en `botones.ts`, que es el único lugar donde se escribe—.
+   Tiene que ser por editor y no en `body`: una nota de tareas y otra que no lo
+   es pueden estar abiertas al lado. Va sobre el `.cm-editor`, que está
+   **adentro** del `.markdown-source-view` — verificado en el `app.css` del asar
+   1.13.7 instalado, que trae `.markdown-source-view > .cm-editor > .cm-scroller`,
+   no deducido.
+
+   Y **no** se usa `:has(.cm-gutterElement)`, que sería una línea: el margen
+   solo tiene elementos para las líneas de tarea **visibles**, así que scrollear
+   hasta una zona sin tareas lo vaciaría y el texto saltaría de lugar. Se
+   cambiaría un corrimiento fijo por uno que se mueve al scrollear, que es peor.
+*/
+.markdown-source-view.mod-cm6 .cm-editor.tareas-con-margen .cm-gutter.tareas-margen {
 	padding-inline-end: var(--tareas-margen-hueco, 1.4rem);
 	margin-inline-start: var(--tareas-margen-antesala, -3px);
 }

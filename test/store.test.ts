@@ -166,7 +166,38 @@ describe("resincronizar — la lista cambió en ajustes", () => {
     expect(s.cargadas().sort()).toEqual([NOTA, OTRA]);
   });
 
-  it("no vuelve a leer las que ya tenía", async () => {
+  /**
+   * El bug de la §E de la sesión 7, escrito antes de arreglarlo.
+   *
+   * Apagar «Congelar el índice» llamaba a `resincronizar()` y no pasaba nada:
+   * la nota ya estaba en el mapa, así que no se volvía a leer y el índice
+   * quedaba atrasado **para siempre**, hasta que alguien tocara el archivo. El
+   * andamio de verificación mentía sobre su propio estado, y arrastró tres
+   * comprobaciones de la guía: el reinicio decía «no hay nada que reiniciar»
+   * con tres tareas completadas en disco.
+   */
+  it("después de descongelar, resincronizar relee lo que se perdió", async () => {
+    const { s, puerto } = await store();
+    s.congelado = true;
+    puerto.emitir(NOTA, "- [x] completada mientras estaba congelado");
+    expect(s.tareas().map((t) => t.texto)).toEqual(["una", "hija", "hecha"]);
+
+    // Apagar el congelado **sin** ningún evento nuevo: es lo que pasa cuando
+    // uno toca el ajuste y no vuelve a escribir en la nota.
+    s.congelado = false;
+    await s.resincronizar();
+    expect(s.tareas().map((t) => t.texto)).toEqual(["completada mientras estaba congelado"]);
+  });
+
+  it("congelado, resincronizar tampoco absorbe: para eso está el ajuste", async () => {
+    const { s, puerto } = await store();
+    s.congelado = true;
+    puerto.emitir(NOTA, "- [ ] otra cosa");
+    await s.resincronizar();
+    expect(s.tareas().map((t) => t.texto)).toEqual(["una", "hija", "hecha"]);
+  });
+
+  it("no vuelve a leer las que ya tenía **y no se perdió nada de ellas**", async () => {
     const { s, puerto } = await store();
     const lecturas = puerto.lecturas;
     await s.resincronizar();

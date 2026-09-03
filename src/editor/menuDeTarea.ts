@@ -7,11 +7,15 @@ import {
   completarTarea,
   elegirEnLinea,
   eliminarTarea,
+  fijarFecha,
   fijarPrioridad,
+  fijarRecurrencia,
   hoy,
   nivelVisible,
   type Contexto,
 } from "../comandos.js";
+import { atajosDeDiaDelMes, atajosDeFecha } from "../fechas.js";
+import { elegirFecha } from "../ui/elegirFecha.js";
 import { sanearWorkbenchOpcional } from "../settingsData.js";
 import { STRINGS } from "../strings.js";
 import { parseTaskToken, type Prioridad } from "../token.js";
@@ -35,18 +39,24 @@ import type { AlClicEnFila } from "./filaDeBotones.js";
  * cinco líneas tecleadas arriba escribiría impecablemente en la tarea de al
  * lado.
  *
- * ## Qué **no** está en el ⋯, y por qué
+ * ## El ⋯ está completo desde el paso 6b
  *
- * La §13.0 lista seis cosas en el menú. Con el paso 6a entraron «completar y
- * archivar» y «eliminar», así que quedan dos afuera:
+ * La §13.0 lista seis cosas —fecha, prioridad, recurrencia, completar y
+ * descartar, completar y archivar, eliminar— y **están las seis**. Las dos
+ * últimas en llegar son fecha y recurrencia, que hasta acá no aparecían ni
+ * grises: `setTaskToken` sabía escribir `due` y `rec` desde el paso 2, pero no
+ * había con qué elegir una fecha ni cómo reiniciar un grupo, y un ítem gris
+ * ocupa el mismo lugar que uno que anda y no hace nada. Es la misma decisión
+ * que deja al ◐ sin dibujar cuando no tiene workbench.
  *
- * | Del menú | Por qué no |
- * |---|---|
- * | Fecha | `setTaskToken` sabe escribir `due`, pero no hay con qué elegir una |
- * | Recurrencia | Ídem con `rec`, y el botón por grupo es de la §11 |
+ * **Lo que queda afuera y no es del ⋯:** el botón de reinicio por grupo, que la
+ * §11 pone en la vista y por ahora vive en un comando de paleta, y «archivar y
+ * reiniciar», que es el archivado multiplicado por N y va con la pestaña.
  *
- * Un ítem gris ocupa el mismo lugar que uno que anda y no hace nada: es la
- * misma decisión que dejó al ◐ sin dibujar cuando no tiene workbench.
+ * El orden **no** es el de la §13.0. Prioridad va primera porque ya estaba, y
+ * mover el primer ítem de un menú que se usa todos los días cuesta más de lo
+ * que ordena. Fecha y recurrencia entran detrás, antes de los dos verbos de
+ * terminar.
  */
 export interface DependenciasDeMenu {
   app: App;
@@ -136,7 +146,7 @@ export function manejarClicEnFila(dep: DependenciasDeMenu): AlClicEnFila {
         abrirPopover(dep, ctx, clic.evento);
         break;
       case "menu":
-        abrirMenu(dep, ctx, clic.evento, fecha);
+        abrirMenu(dep, ctx, clic.evento, fecha, clic.texto);
         break;
       case "eliminar":
         // El mismo camino que el ítem del ⋯: son la misma acción por dos
@@ -177,6 +187,7 @@ function abrirMenu(
   ctx: Contexto,
   evento: MouseEvent,
   fecha: () => string,
+  texto: string,
 ): void {
   const menu = new Menu();
   const actual = nivelVisible(dep.store, ctx);
@@ -190,6 +201,24 @@ function abrirMenu(
         .onClick(() => fijarPrioridad(dep.app, dep.store, ctx, n as Prioridad)),
     );
   }
+
+  menu.addSeparator();
+  // Los dos abren **su propio `Menu`**, no un submenú: `setSubmenu` no está en
+  // las tipificaciones públicas de Obsidian, que es la misma razón por la que
+  // los tres niveles de prioridad van planos. Se posicionan con el mismo
+  // `MouseEvent`, como hace el → con su popover.
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.fecha)
+      .setIcon("calendar")
+      .onClick(() => abrirSubmenuDeFecha(dep, ctx, evento, fecha, texto)),
+  );
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.recurrencia)
+      .setIcon("repeat")
+      .onClick(() => abrirSubmenuDeRecurrencia(dep, ctx, evento, texto)),
+  );
 
   menu.addSeparator();
   menu.addItem((i) =>
@@ -214,6 +243,132 @@ function abrirMenu(
       .setIcon("trash-2")
       .setWarning(true)
       .onClick(() => eliminarTarea(dep.app, dep.store, ctx, dep.confirmarAlEliminar())),
+  );
+
+  menu.showAtMouseEvent(evento);
+}
+
+/**
+ * El submenú de fecha: atajos primero, el campo como salida.
+ *
+ * **Los atajos dependen de si la tarea es cíclica**, y eso se lee del **texto
+ * de ahora**, no del store: `due` guarda una fecha en una tarea normal y el día
+ * del mes en una cíclica (§11), y entre que el ⋯ se dibujó y que se hizo clic
+ * pudo entrar una tecla. Es la misma regla con la que `manejarClicEnFila`
+ * decide si la línea es legible.
+ *
+ * **La fecha resuelta va en la etiqueta.** «El lunes» sobre un lunes es
+ * ambiguo, y la regla que lo resuelve —hoy cuenta como hoy, igual que
+ * `resolverDue` con el día del mes— no se puede adivinar desde un menú.
+ * Mostrarla lo contesta sin que haya nada que aprender, y de paso deja ver cuál
+ * de las dos formas va a escribir, que en la nota no se ve porque el token está
+ * oculto.
+ */
+function abrirSubmenuDeFecha(
+  dep: DependenciasDeMenu,
+  ctx: Contexto,
+  evento: MouseEvent,
+  fecha: () => string,
+  texto: string,
+): void {
+  const a = parseTaskToken(texto);
+  const ciclica = a.estado === "ok" && a.meta.rec !== null;
+  const actual = a.estado === "ok" ? a.meta.due : null;
+  const menu = new Menu().setUseNativeMenu(false);
+  const poner = (due: string | null) => fijarFecha(dep.app, dep.store, ctx, due);
+
+  if (ciclica) {
+    for (const { clave, valor } of atajosDeDiaDelMes(fecha())) {
+      menu.addItem((i) =>
+        i
+          .setTitle(
+            STRINGS.menu.atajo(
+              STRINGS.menu.atajosDeDiaDelMes[clave],
+              STRINGS.menu.diaDelMes(valor),
+            ),
+          )
+          .setChecked(valor === actual)
+          .onClick(() => poner(valor)),
+      );
+    }
+  } else {
+    for (const { clave, valor } of atajosDeFecha(fecha())) {
+      menu.addItem((i) =>
+        i
+          .setTitle(
+            STRINGS.menu.atajo(STRINGS.menu.atajosDeFecha[clave], STRINGS.menu.fechaCorta(valor)),
+          )
+          .setChecked(valor === actual)
+          .onClick(() => poner(valor)),
+      );
+    }
+  }
+
+  menu.addSeparator();
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.otraFecha)
+      .setIcon("calendar-days")
+      .onClick(() => elegirFecha(dep.app, { ciclica, actual }, poner)),
+  );
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.sinFecha)
+      .setChecked(actual === null)
+      .onClick(() => poner(null)),
+  );
+
+  menu.showAtMouseEvent(evento);
+}
+
+/**
+ * El submenú de recurrencia: los grupos que ya existen, y uno nuevo.
+ *
+ * Mismo esqueleto que el → (§11: los grupos «se crean escribiéndolos, como los
+ * workbenches»), con dos diferencias que salen de que un grupo **no** es un
+ * workbench: no hay atajo numérico —no es la acción más frecuente del plugin, y
+ * el 1-9 del → existe porque aquella sí lo es— y hay un ítem para sacarlo, que
+ * el → resuelve con el toggle sobre el mismo nombre.
+ *
+ * Los grupos son **globales**: salen de `gruposEnUso()`, que mira todas las
+ * notas. Un grupo de reinicio no es de una nota — el botón de la §11 lo barre
+ * entero.
+ */
+function abrirSubmenuDeRecurrencia(
+  dep: DependenciasDeMenu,
+  ctx: Contexto,
+  evento: MouseEvent,
+  texto: string,
+): void {
+  const a = parseTaskToken(texto);
+  const actual = a.estado === "ok" ? a.meta.rec : null;
+  const menu = new Menu().setUseNativeMenu(false);
+  const etiquetar = (rec: string | null) => fijarRecurrencia(dep.app, dep.store, ctx, rec);
+
+  const grupos = dep.store.gruposEnUso();
+  for (const g of grupos) {
+    menu.addItem((i) =>
+      i
+        .setTitle(g)
+        .setChecked(g === actual)
+        .onClick(() => etiquetar(g)),
+    );
+  }
+  if (grupos.length) menu.addSeparator();
+
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.grupoNuevo)
+      .setIcon("plus")
+      .onClick(() =>
+        new NombreNuevoModal(dep.app, STRINGS.menu.nuevoGrupo, etiquetar).open(),
+      ),
+  );
+  menu.addItem((i) =>
+    i
+      .setTitle(STRINGS.menu.noEsCiclica)
+      .setChecked(actual === null)
+      .onClick(() => etiquetar(null)),
   );
 
   menu.showAtMouseEvent(evento);
@@ -251,7 +406,7 @@ function abrirPopover(dep: DependenciasDeMenu, ctx: Contexto, evento: MouseEvent
     it
       .setTitle(STRINGS.menu.workbenchNuevo)
       .setIcon("plus")
-      .onClick(() => new WorkbenchNuevoModal(dep.app, mandar).open()),
+      .onClick(() => new NombreNuevoModal(dep.app, STRINGS.menu.nuevoWorkbench, mandar).open()),
   );
 
   // El atajo numérico. En captura, para llegar antes que la navegación propia
@@ -273,27 +428,39 @@ function abrirPopover(dep: DependenciasDeMenu, ctx: Contexto, evento: MouseEvent
 }
 
 /**
- * «Workbench nuevo…»: un nombre y listo.
+ * «Workbench nuevo…» y «Grupo nuevo…»: un nombre y listo.
  *
- * La §10: los workbenches «se crean escribiendo un nombre. No hay panel de
- * administración». Sin esto el popover no pasaría nunca de los dos de ajustes,
- * porque un workbench solo existe si alguna tarea lo tiene escrito.
+ * **Un solo modal para los dos**, y no por ahorrar líneas: los workbenches
+ * (§10) y los grupos de reinicio (§11) «se crean escribiendo un nombre, sin
+ * panel de administración», y los dos viven en el mismo token con la misma
+ * gramática —`NOMBRE_RE` en `token.ts` es literalmente la misma para `wb` y
+ * para `rec`—. Dos clases con el mismo saneo divergirían justo en si aceptan un
+ * `;`, y un `;` deja la línea ilegible para siempre (§5.3).
  *
- * El nombre se sanea con `sanearWorkbenchOpcional`, que es el mismo criterio
- * que el token: `;`, `,` y `%` romperían el `%%t:…%%` y dejarían la línea
- * ilegible — y una línea ilegible no se vuelve a escribir nunca (§5.3). Vale
- * más negarse que dejar que un campo de texto corrompa tareas.
+ * El nombre se sanea con `sanearWorkbenchOpcional`, **reusado**: `;`, `,` y `%`
+ * romperían el `%%t:…%%`. Vale más negarse que dejar que un campo de texto
+ * corrompa tareas.
  */
-class WorkbenchNuevoModal extends Modal {
+interface TextosDeNombre {
+  titulo: string;
+  descripcion: string;
+  marcador: string;
+  aceptar: string;
+  cancelar: string;
+  invalido: string;
+}
+
+class NombreNuevoModal extends Modal {
   constructor(
     app: App,
+    private readonly t: TextosDeNombre,
     private readonly alAceptar: (nombre: string) => void,
   ) {
     super(app);
   }
 
   override onOpen(): void {
-    const t = STRINGS.menu.nuevoWorkbench;
+    const t = this.t;
     this.setTitle(t.titulo);
     this.contentEl.createEl("p", { text: t.descripcion, cls: "setting-item-description" });
 

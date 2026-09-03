@@ -588,3 +588,65 @@ describe("borrar un subárbol: dos implementaciones que se controlan", () => {
     );
   });
 });
+
+/**
+ * El reinicio de un grupo toca N notas, y cada una recibe su propio lote.
+ *
+ * Lo que Obsidian aporta es la **secuencia** —paso en seco sobre las N antes de
+ * escribir en ninguna, que es lo que devuelve la regla «o todas o ninguna» de
+ * la §8— y eso vive en `escribirEnVarias` y se verifica en vivo: el paquete
+ * `obsidian` es solo tipos, así que la capa 2 no se puede importar offline.
+ *
+ * Lo que sí se prueba acá es lo que decide el resultado de cada nota: que el
+ * lote de una nota se aplique entero o no se aplique, y que **una nota que se
+ * niega no cambie un byte**. Si eso vale por nota, la secuencia solo tiene que
+ * ordenar; si no valiera, ninguna secuencia lo arreglaría.
+ */
+describe("un lote por nota, sobre varias notas (§11, el reinicio)", () => {
+  const R = (linea: number, antes: string, despues: string): CambioDeLote => ({
+    tipo: "reemplazo",
+    linea,
+    antes,
+    despues,
+  });
+
+  it("cada nota se resuelve contra su propio texto", () => {
+    const notas = [
+      { texto: "- [x] uno %%t:rec=lunes;done=2026-08-24%%", cambios: [R(0, "- [x] uno %%t:rec=lunes;done=2026-08-24%%", "- [ ] uno %%t:rec=lunes%%")] },
+      { texto: "# h\n- [x] dos %%t:rec=lunes;done=2026-08-24%%", cambios: [R(1, "- [x] dos %%t:rec=lunes;done=2026-08-24%%", "- [ ] dos %%t:rec=lunes%%")] },
+    ];
+    const salida = notas.map((n) => aplicarLote(n.texto, n.cambios));
+    expect(salida.every((s) => s.resultado.estado === "ok")).toBe(true);
+    expect(salida[0]!.texto).toBe("- [ ] uno %%t:rec=lunes%%");
+    expect(salida[1]!.texto).toBe("# h\n- [ ] dos %%t:rec=lunes%%");
+  });
+
+  it("la nota que no se puede ubicar no cambia un byte, y las otras tampoco dependen de ella", () => {
+    // Es la mitad de la garantía que se prueba offline. La otra mitad —que
+    // tampoco se escriba en las que **sí** se podían— es la secuencia, y esa la
+    // hace `escribirEnVarias` con el paso en seco sobre todas.
+    const buena = "- [x] uno %%t:rec=lunes;done=2026-08-24%%";
+    const repetida = "- [x] dos %%t:rec=lunes%%\n- [x] dos %%t:rec=lunes%%";
+    const a = aplicarLote(buena, [R(0, buena, "- [ ] uno %%t:rec=lunes%%")]);
+    const b = aplicarLote(repetida, [R(5, "- [x] dos %%t:rec=lunes%%", "- [ ] dos %%t:rec=lunes%%")]);
+    expect(a.resultado.estado).toBe("ok");
+    expect(b.resultado.estado).toBe("no-ubicada");
+    // Y el motivo es el que importa: aparece dos veces, no que falte.
+    if (b.resultado.estado === "no-ubicada") {
+      expect(b.resultado.fallas[0]!.ubicacion.estado).toBe("ambigua");
+    }
+    expect(b.texto).toBe(repetida);
+  });
+
+  it("con el índice atrasado, un lote de varias líneas se niega entero", () => {
+    // El reinicio de un grupo son N líneas de una nota. Si una se corrió y su
+    // texto aparece dos veces, no se escribe ninguna de las N.
+    const texto = "- [x] a %%t:rec=lunes%%\n- [x] b %%t:rec=lunes%%\n- [x] b %%t:rec=lunes%%";
+    const r = aplicarLote(texto, [
+      R(0, "- [x] a %%t:rec=lunes%%", "- [ ] a %%t:rec=lunes%%"),
+      R(9, "- [x] b %%t:rec=lunes%%", "- [ ] b %%t:rec=lunes%%"),
+    ]);
+    expect(r.resultado.estado).toBe("no-ubicada");
+    expect(r.texto).toBe(texto);
+  });
+});

@@ -3,11 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarPlan,
   claveEnLinea,
+  conversionDeDue,
+  dueParaLaLinea,
   elegirTarea,
   planDeArchivarEnLaNota,
   planDeCompletar,
   planDeEliminar,
+  planDeFecha,
   planDePrioridad,
+  planDeRecurrencia,
+  planDeReinicioEnVarias,
   planDeWorkbench,
   yaEstaCompleta,
 } from "../src/acciones.js";
@@ -261,6 +266,191 @@ describe("planDePrioridad — la línea de la tarea, no el subárbol (§14)", ()
   it("una clave que no está no produce plan", () => {
     const { doc, tareas } = armar("- [ ] x");
     expect(planDePrioridad(doc, tareas, claveDe(A, 9), 1)).toEqual([]);
+  });
+});
+
+const conFecha = (raw: string, linea: number, due: string | null) => {
+  const { doc, tareas } = armar(raw);
+  const plan = planDeFecha(doc, tareas, claveDe(A, linea), due);
+  return { plan, texto: renderDocumento(aplicarPlan(doc, plan)) };
+};
+
+const conRec = (raw: string, linea: number, rec: string | null) => {
+  const { doc, tareas } = armar(raw);
+  const plan = planDeRecurrencia(doc, tareas, claveDe(A, linea), rec);
+  return { plan, texto: renderDocumento(aplicarPlan(doc, plan)) };
+};
+
+describe("planDeFecha — el vencimiento, una sola línea (§5.2)", () => {
+  it("escribe la fecha absoluta en una tarea normal", () => {
+    expect(conFecha("- [ ] pagar", 0, "2026-09-10").texto).toBe(
+      "- [ ] pagar %%t:due=2026-09-10%%",
+    );
+  });
+
+  it("en una cíclica escribe el día del mes, no la fecha (§11)", () => {
+    // Guardar `2026-09-10` obligaría a que algo le corriera el mes en octubre,
+    // que es la escritura automática que la §8 prohíbe.
+    expect(conFecha("- [ ] pagar %%t:rec=mensual%%", 0, "2026-09-10").texto).toBe(
+      "- [ ] pagar %%t:due=10;rec=mensual%%",
+    );
+  });
+
+  it("un día del mes en una tarea normal se escribe tal cual", () => {
+    // El menú no lo ofrece, pero el plan no puede inventarle un mes.
+    expect(conFecha("- [ ] pagar", 0, "10").texto).toBe("- [ ] pagar %%t:due=10%%");
+  });
+
+  it("«sin fecha» borra el campo", () => {
+    expect(conFecha("- [ ] pagar %%t:wb=foco;due=2026-09-10%%", 0, null).texto).toBe(
+      "- [ ] pagar %%t:wb=foco%%",
+    );
+  });
+
+  it("y si el due era lo único, borra el token entero", () => {
+    // Es lo mismo que `prioridad: 0` ya hacía, y sale de `renderTaskToken`:
+    // sin campos no hay token.
+    expect(conFecha("- [ ] pagar %%t:due=2026-09-10%%", 0, null).texto).toBe("- [ ] pagar");
+  });
+
+  it("no toca el subárbol: un plazo es de una tarea", () => {
+    const { plan } = conFecha("- [ ] madre\n\t- [ ] hija", 0, "2026-09-10");
+    expect(plan.map((c) => c.linea)).toEqual([0]);
+  });
+
+  it("no toca una línea con el token ilegible (invariante 7)", () => {
+    const raw = "- [ ] rota %%t:zz=1%%";
+    expect(conFecha(raw, 0, "2026-09-10")).toEqual({ plan: [], texto: raw });
+  });
+
+  it("fijar la fecha que ya estaba no produce ningún cambio", () => {
+    expect(conFecha("- [ ] pagar %%t:due=2026-09-10%%", 0, "2026-09-10").plan).toEqual([]);
+  });
+});
+
+describe("planDeRecurrencia — la etiqueta, una sola línea (§11)", () => {
+  it("escribe el grupo", () => {
+    expect(conRec("- [ ] sacar la basura", 0, "lunes").texto).toBe(
+      "- [ ] sacar la basura %%t:rec=lunes%%",
+    );
+  });
+
+  it("convierte el due absoluto en día del mes, en el MISMO cambio", () => {
+    // Decisión de la sesión 7: se pierden año y mes, que es justo lo que la
+    // §11 dice que no hay que guardar en una cíclica. Y va en un solo cambio
+    // para no dejar una ventana en que el token diga algo que ya no es verdad.
+    const { plan, texto } = conRec("- [ ] pagar %%t:due=2026-09-10%%", 0, "mensual");
+    expect(plan).toHaveLength(1);
+    expect(texto).toBe("- [ ] pagar %%t:due=10;rec=mensual%%");
+  });
+
+  it("un due que ya era día del mes no se toca", () => {
+    expect(conRec("- [ ] pagar %%t:due=10%%", 0, "mensual").texto).toBe(
+      "- [ ] pagar %%t:due=10;rec=mensual%%",
+    );
+  });
+
+  it("sacar el rec deja el due como está: la conversión inversa inventaría un mes", () => {
+    expect(conRec("- [ ] pagar %%t:due=10;rec=mensual%%", 0, null).texto).toBe(
+      "- [ ] pagar %%t:due=10%%",
+    );
+  });
+
+  it("«no es cíclica» borra el campo, y el token si era lo único", () => {
+    expect(conRec("- [ ] pagar %%t:rec=mensual%%", 0, null).texto).toBe("- [ ] pagar");
+  });
+
+  it("NO baja por el subárbol, que es la condición de seguridad del reinicio", () => {
+    // Si `rec` bajara, en `tareas_MES` los hijos sin etiqueta que llevan el
+    // monto de cada mes quedarían etiquetados, y el primer reinicio los
+    // convertiría en tareas pendientes perdiendo el dato (§11).
+    const raw = "- [ ] transferir\n\t- [x] junio: 205111\n\t- [x] mayo: 198000";
+    const { plan, texto } = conRec(raw, 0, "mensual");
+    expect(plan.map((c) => c.linea)).toEqual([0]);
+    expect(texto.split("\n").slice(1)).toEqual(raw.split("\n").slice(1));
+  });
+
+  it("conserva workbench, prioridad y done", () => {
+    expect(conRec("- [x] pagar %%t:id=a3f2;wb=foco;p=2;done=2026-08-09%%", 0, "mensual").texto).toBe(
+      "- [x] pagar %%t:id=a3f2;wb=foco;rec=mensual;p=2;done=2026-08-09%%",
+    );
+  });
+
+  it("no toca una línea con el token ilegible (invariante 7)", () => {
+    const raw = "- [ ] rota %%t:zz=1%%";
+    expect(conRec(raw, 0, "lunes")).toEqual({ plan: [], texto: raw });
+  });
+});
+
+describe("dueParaLaLinea y conversionDeDue — una sola decisión, dos usos", () => {
+  it("la forma sale de la línea, que es la fuente más fresca", () => {
+    expect(dueParaLaLinea("- [ ] a", "2026-09-10")).toBe("2026-09-10");
+    expect(dueParaLaLinea("- [ ] a %%t:rec=mensual%%", "2026-09-10")).toBe("10");
+  });
+
+  it("sobre una línea ilegible devuelve lo que le dieron: nadie va a escribirla", () => {
+    expect(dueParaLaLinea("- [ ] a %%t:zz=1%%", "2026-09-10")).toBe("2026-09-10");
+  });
+
+  it("«sin fecha» no se convierte en nada", () => {
+    expect(dueParaLaLinea("- [ ] a %%t:rec=mensual%%", null)).toBeNull();
+    expect(conversionDeDue(null)).toBeNull();
+  });
+
+  it("conversionDeDue solo dice que sí cuando hay una fecha absoluta", () => {
+    expect(conversionDeDue("2026-09-10")).toBe("10");
+    expect(conversionDeDue("10")).toBeNull();
+  });
+
+  it("el aviso y el plan no pueden divergir: los dos leen de acá", () => {
+    // Si el comando decidiera por su cuenta si hubo conversión, el cartel
+    // mentiría el día que una de las dos reglas cambie.
+    const raw = "- [ ] pagar %%t:due=2026-09-10%%";
+    const { texto } = conRec(raw, 0, "mensual");
+    expect(texto).toContain(`due=${conversionDeDue("2026-09-10")};`);
+  });
+});
+
+describe("planDeReinicioEnVarias — un grupo es global (§11)", () => {
+  const nota = (archivo: string, raw: string) => {
+    const doc = parseDocumento(raw);
+    return { archivo, doc, tareas: indexar(doc, archivo) };
+  };
+
+  it("reparte el plan por nota", () => {
+    const lotes = planDeReinicioEnVarias(
+      [
+        nota("a.md", "- [x] uno %%t:rec=lunes;done=2026-08-24%%"),
+        nota("b.md", "- [x] dos %%t:rec=lunes;done=2026-08-24%%\n- [x] tres %%t:rec=lunes%%"),
+      ],
+      "lunes",
+    );
+    expect(lotes.map((l) => l.archivo)).toEqual(["a.md", "b.md"]);
+    expect(lotes.map((l) => l.cambios.length)).toEqual([1, 2]);
+  });
+
+  it("una nota sin nada que cambiar NO aparece", () => {
+    // Contarla haría que la confirmación mintiera sobre en cuántas notas
+    // escribe, y abriría un archivo para nada.
+    const lotes = planDeReinicioEnVarias(
+      [
+        nota("a.md", "- [x] uno %%t:rec=lunes;done=2026-08-24%%"),
+        nota("b.md", "- [ ] dos %%t:rec=lunes%%"),
+        nota("c.md", "- [x] tres %%t:rec=mensual;done=2026-08-01%%"),
+      ],
+      "lunes",
+    );
+    expect(lotes.map((l) => l.archivo)).toEqual(["a.md"]);
+  });
+
+  it("un grupo que no existe da el lote vacío", () => {
+    expect(
+      planDeReinicioEnVarias([nota("a.md", "- [x] uno %%t:rec=lunes%%")], "martes"),
+    ).toEqual([]);
+  });
+
+  it("sin notas no hay nada que hacer", () => {
+    expect(planDeReinicioEnVarias([], "lunes")).toEqual([]);
   });
 });
 

@@ -252,3 +252,127 @@ async function volcarEditores(app: App, archivo: string): Promise<void> {
     }),
   );
 }
+
+// ------------------------------------------ reiniciar: N archivos (§11)
+
+/** Lo que quedó escrito en una nota. */
+export interface NotaEscrita {
+  archivo: string;
+  /** El contenido que quedó, para el store. */
+  contenido: string;
+  movidas: number;
+  lineas: number;
+}
+
+export type ResultadoDeVarias =
+  | { estado: "escrito"; escritas: NotaEscrita[] }
+  /** No había nada que escribir en ninguna. */
+  | { estado: "sin-cambios" }
+  /** El paso en seco dijo que no. **No se escribió nada, en ninguna nota.** */
+  | { estado: "no-ubicada"; fallas: { archivo: string; lote: ResultadoDeLote }[] }
+  | { estado: "sin-archivo"; cuales: string[] }
+  /** Algunas sí y otras no. La mitad que se puede quedar a medias. */
+  | { estado: "media-operacion"; escritas: NotaEscrita[]; fallas: string[] };
+
+/**
+ * Aplica un lote por nota sobre N notas, o no escribe en ninguna.
+ *
+ * Es `escribirArchivado` generalizado, y con una diferencia que cambia la
+ * garantía. Aquel maneja **dos** archivos con un orden fijo y elegido —primero
+ * el LOG, porque una entrada de historial de una tarea pendiente se ve y una
+ * tarea completada sin registro no—, y su paso en seco corre sobre uno solo,
+ * así que la ventana de media operación existe por diseño.
+ *
+ * Acá no hay orden privilegiado: las N notas valen lo mismo. Y como el paso en
+ * seco corre sobre **todas antes de escribir en ninguna**, vuelve a valer la
+ * regla completa de la §8: **o todas o ninguna**. La falla realista
+ * —`no-ubicada`: una línea se corrió, o el bloque aparece repetido— se ataja
+ * entera antes de tocar el disco.
+ *
+ * ## Lo que queda de ventana, y por qué no puede corromper nada
+ *
+ * Entre el paso en seco de la última nota y la escritura de la primera pasan
+ * microsegundos, y en ese hueco Sync podría mover una línea. **Eso no escribe
+ * nada mal**: `aplicarLote` vuelve a verificar adentro de `process`, sobre los
+ * bytes de ese momento, así que la nota que se movió se niega. El modo de falla
+ * es `media-operacion` —unas escritas y otras no— y nunca «escribió en la línea
+ * de al lado», que es el error que el invariante 10 existe para impedir.
+ *
+ * ## Y el orden de escritura es alfabético, a propósito
+ *
+ * No porque una nota valga más que otra, sino porque una media operación tiene
+ * que ser **reproducible**: con un orden estable, el aviso dice siempre las
+ * mismas notas y volver a intentar retoma desde el mismo lugar. Con el orden
+ * en que vinieron los lotes —que sale del `Map` del store— la misma falla
+ * contaría una historia distinta cada vez.
+ */
+export async function escribirEnVarias(
+  app: App,
+  lotes: readonly { archivo: string; cambios: readonly CambioDeLote[] }[],
+): Promise<ResultadoDeVarias> {
+  const conCambios = lotes.filter((l) => l.cambios.length > 0);
+  if (conCambios.length === 0) return { estado: "sin-cambios" };
+
+  // Dos lotes sobre el mismo archivo se calcularon por separado, así que el
+  // segundo no vio lo que hizo el primero: aplicarlos en fila lo corrompe. No
+  // puede pasar desde el store —una nota es una entrada— pero esta es la capa
+  // donde el daño se para.
+  const rutas = new Set(conCambios.map((l) => l.archivo));
+  if (rutas.size !== conCambios.length) return { estado: "sin-archivo", cuales: [...rutas] };
+
+  const orden = [...conCambios].sort((a, b) => a.archivo.localeCompare(b.archivo));
+
+  const archivos = new Map<string, TFile>();
+  const faltan: string[] = [];
+  for (const l of orden) {
+    const f = app.vault.getFileByPath(l.archivo);
+    if (f instanceof TFile) archivos.set(l.archivo, f);
+    else faltan.push(l.archivo);
+  }
+  if (faltan.length) return { estado: "sin-archivo", cuales: faltan };
+
+  await Promise.all(orden.map((l) => volcarEditores(app, l.archivo)));
+
+  // El paso en seco, sobre **todas**. `process` devolviendo `data` intacto no
+  // dispara `modify` ni `changed` y deja el `mtime` igual: está medido, y es lo
+  // que lo hace legítimo sobre un vault en Sync.
+  const fallas: { archivo: string; lote: ResultadoDeLote }[] = [];
+  for (const l of orden) {
+    const seco: { lote?: ResultadoDeLote } = {};
+    await app.vault.process(archivos.get(l.archivo)!, (data) => {
+      seco.lote = ubicarLote(data.split("\n"), l.cambios);
+      return data;
+    });
+    const lote = seco.lote ?? { estado: "no-ubicada" as const, fallas: [] };
+    if (lote.estado !== "ok") fallas.push({ archivo: l.archivo, lote });
+  }
+  // Se recorren todas aunque la primera falle: «no se pudieron ubicar 3 de 5»
+  // es más útil que «no se pudo una», y son archivos de 400 líneas.
+  if (fallas.length) return { estado: "no-ubicada", fallas };
+
+  const escritas: NotaEscrita[] = [];
+  const seCayeron: string[] = [];
+  for (const l of orden) {
+    const salida: { lote?: ResultadoDeLote } = {};
+    const contenido = await app.vault.process(archivos.get(l.archivo)!, (data) => {
+      const r = aplicarLote(data, l.cambios);
+      salida.lote = r.resultado;
+      return r.texto;
+    });
+    const lote = salida.lote;
+    if (lote === undefined || lote.estado !== "ok") {
+      seCayeron.push(l.archivo);
+      continue;
+    }
+    escritas.push({
+      archivo: l.archivo,
+      contenido,
+      movidas: lote.movidas,
+      lineas: lote.ubicados.length,
+    });
+  }
+
+  return seCayeron.length
+    ? { estado: "media-operacion", escritas, fallas: seCayeron }
+    : { estado: "escrito", escritas };
+}

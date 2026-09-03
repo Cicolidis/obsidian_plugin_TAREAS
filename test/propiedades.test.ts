@@ -20,7 +20,7 @@ import {
   reemplazarLinea,
   renderDocumento,
 } from "../src/documento.js";
-import { aplicarPlan, planDeReinicio } from "../src/acciones.js";
+import { aplicarPlan, planDeReinicio, planDeReinicioEnVarias } from "../src/acciones.js";
 import { indexar } from "../src/tareas.js";
 import {
   nuevoId,
@@ -446,6 +446,120 @@ describe("reinicio de un grupo cíclico", () => {
           aplicarPlan(doc, planDeReinicio(doc, indexar(doc, "n.md"), grupo)),
         );
         expect(renderDocumento(parseDocumento(texto))).toBe(texto);
+      }),
+      corridas,
+    );
+  });
+});
+
+/**
+ * El invariante 5, estirado a N notas.
+ *
+ * Un grupo de reinicio es **global** (§11): `rec=lunes` puede estar escrito en
+ * cinco notas y el botón las barre todas. Las propiedades de más arriba lo
+ * fijan sobre una nota; estas lo fijan sobre el reparto, que es lo que la
+ * sesión 7 agregó y donde el error posible es distinto — no «reinicia mal» sino
+ * «reinicia unas y otras no, o cuenta mal cuántas».
+ */
+describe("invariante 5 sobre varias notas", () => {
+  /** Un conjunto de notas, cada una con tareas de dos grupos y sin etiqueta. */
+  const variasNotas = fc
+    .array(
+      fc.array(
+        fc.tuple(
+          fc.constantFrom("[ ] ", "[x] "),
+          textoLibre,
+          fc.constantFrom<string | null>("lunes", "mensual", null),
+          fc.option(fc.constantFrom("2026-08-24"), { nil: null }),
+        ),
+        { minLength: 1, maxLength: 6 },
+      ),
+      { minLength: 1, maxLength: 4 },
+    )
+    .map((notas) =>
+      notas.map((filas, i) => ({
+        archivo: `n${i}.md`,
+        raw: filas
+          .map(([cb, t, rec, done]) => {
+            const meta: Partial<TaskMeta> = {};
+            if (rec !== null) meta.rec = rec;
+            if (done !== null && cb === "[x] ") meta.done = done;
+            return setTaskToken(`- ${cb}${t}`, meta);
+          })
+          .join("\n"),
+      })),
+    );
+
+  const cargar = (notas: readonly { archivo: string; raw: string }[]) =>
+    notas.map(({ archivo, raw }) => {
+      const doc = parseDocumento(raw);
+      return { archivo, doc, tareas: indexar(doc, archivo) };
+    });
+
+  it("reiniciar dos veces seguidas da los mismos archivos", () => {
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const cargadas = cargar(notas);
+        const lotes = planDeReinicioEnVarias(cargadas, grupo);
+        const porArchivo = new Map(lotes.map((l) => [l.archivo, l.cambios]));
+
+        const una = cargadas.map(({ archivo, doc }) => ({
+          archivo,
+          raw: renderDocumento(aplicarPlan(doc, porArchivo.get(archivo) ?? [])),
+        }));
+        // La segunda vuelta no produce ningún lote: no queda nada que reiniciar.
+        expect(planDeReinicioEnVarias(cargar(una), grupo)).toEqual([]);
+      }),
+      corridas,
+    );
+  });
+
+  it("no toca una sola línea que no lleve la etiqueta de ese grupo", () => {
+    fc.assert(
+      fc.property(
+        variasNotas,
+        fc.constantFrom("lunes", "mensual", "inexistente"),
+        (notas, grupo) => {
+          const cargadas = cargar(notas);
+          const porArchivo = new Map(
+            planDeReinicioEnVarias(cargadas, grupo).map((l) => [l.archivo, l.cambios]),
+          );
+          for (const { archivo, doc, tareas } of cargadas) {
+            const cambios = porArchivo.get(archivo) ?? [];
+            const tocadas = new Set(cambios.map((c) => c.linea));
+            const despues = aplicarPlan(doc, cambios);
+            for (const l of doc.lineas) {
+              if (tocadas.has(l.n)) continue;
+              expect(despues.lineas[l.n]!.texto, `${archivo}:${l.n}`).toBe(l.texto);
+            }
+            for (const n of tocadas) {
+              expect(tareas.find((t) => t.linea === n)!.rec, `${archivo}:${n}`).toBe(grupo);
+            }
+          }
+        },
+      ),
+      corridas,
+    );
+  });
+
+  it("la cuenta que va en la confirmación es la que se escribe", () => {
+    // «N tareas en M notas» sale del plan, así que tiene que coincidir con lo
+    // que efectivamente cambia. Una nota sin cambios no puede contarse.
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const cargadas = cargar(notas);
+        const lotes = planDeReinicioEnVarias(cargadas, grupo);
+        expect(lotes.every((l) => l.cambios.length > 0)).toBe(true);
+
+        let lineasQueCambian = 0;
+        for (const l of lotes) {
+          const { doc } = cargadas.find((c) => c.archivo === l.archivo)!;
+          const despues = aplicarPlan(doc, l.cambios);
+          lineasQueCambian += doc.lineas.filter(
+            (x) => despues.lineas[x.n]!.texto !== x.texto,
+          ).length;
+        }
+        expect(lineasQueCambian).toBe(lotes.reduce((n, l) => n + l.cambios.length, 0));
       }),
       corridas,
     );

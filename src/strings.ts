@@ -179,6 +179,50 @@ export const STRINGS = {
     prioridad: "Prioridad",
     /** Los tres niveles como ítems de menú. `prioridades` los dice en prosa. */
     niveles: ["Normal", "Alta", "Muy alta"] as const,
+    fecha: "Fecha…",
+    recurrencia: "Recurrencia…",
+    /**
+     * Los atajos del selector de fecha, y **la fecha resuelta va en la
+     * etiqueta**.
+     *
+     * «El lunes» sobre un lunes es ambiguo —¿hoy o el que viene?— y la regla
+     * que lo resuelve (hoy cuenta como hoy, igual que `resolverDue` con el día
+     * del mes) no se puede adivinar desde el menú. Mostrar la fecha resuelta lo
+     * contesta sin que haya que aprender nada: es el §«mirar la salida» del
+     * método aplicado a un control.
+     */
+    atajosDeFecha: {
+      hoy: "Hoy",
+      manana: "Mañana",
+      lunes: "Lunes",
+      martes: "Martes",
+      miercoles: "Miércoles",
+      jueves: "Jueves",
+      viernes: "Viernes",
+      sabado: "Sábado",
+      domingo: "Domingo",
+    },
+    /** `2026-09-07` → «7 sep». Va acá porque los meses son texto de interfaz. */
+    fechaCorta: (valor: string) => {
+      const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+      return `${Number(valor.slice(8, 10))} ${meses[Number(valor.slice(5, 7)) - 1]}`;
+    },
+    /** Un ítem del submenú: «Lunes · 7 sep». */
+    atajo: (etiqueta: string, detalle: string) => `${etiqueta} · ${detalle}`,
+    /**
+     * Los de una cíclica. Son días del mes, no fechas (§11), y **son dos porque
+     * los dos se derivan**: una lista de días «típicos» sería inventada.
+     */
+    atajosDeDiaDelMes: {
+      mismoDiaQueHoy: "Como hoy",
+      finDeMes: "Fin de mes",
+    },
+    /** `10` → «día 10». Para que se vea que lo que escribe no es una fecha. */
+    diaDelMes: (valor: string) => `día ${valor}`,
+    otraFecha: "Otra fecha…",
+    sinFecha: "Sin fecha",
+    grupoNuevo: "Grupo nuevo…",
+    noEsCiclica: "No es cíclica",
     completarYDescartar: "Completar y descartar",
     completarYArchivar: "Completar y archivar",
     eliminar: "Eliminar…",
@@ -196,6 +240,47 @@ export const STRINGS = {
         "Un nombre de workbench no puede llevar «;», «,» ni «%»: son los tres " +
         "caracteres que rompen el token y dejan la línea ilegible para siempre.",
     },
+    /**
+     * «Grupo nuevo…», hermano del de workbench.
+     *
+     * Los grupos de reinicio «se crean escribiéndolos, como los workbenches»
+     * (§11) y comparten el saneo, porque comparten la forma en el token: `;`,
+     * `,` y `%` lo rompen igual.
+     */
+    nuevoGrupo: {
+      titulo: "Grupo de reinicio nuevo",
+      descripcion:
+        "Un grupo de reinicio es una etiqueta, no un motor: el plugin no crea instancias ni " +
+        "corre fechas solo. Un botón destilda todas las tareas del grupo cuando vos lo " +
+        "apretás. «lunes», «mensual», «mudanza».",
+      marcador: "mensual",
+      aceptar: "Etiquetar la tarea",
+      cancelar: "Cancelar",
+      invalido:
+        "Un nombre de grupo no puede llevar «;», «,» ni «%»: son los tres " +
+        "caracteres que rompen el token y dejan la línea ilegible para siempre.",
+    },
+    /**
+     * El selector de fecha. **Dos títulos, no uno**: una tarea cíclica guarda
+     * el día del mes y una normal la fecha entera (§11), y cuál de las dos
+     * escribió tiene que verse antes de aceptar, no después en la nota.
+     */
+    elegirFecha: {
+      titulo: "Fecha de vencimiento",
+      tituloCiclica: "Vencimiento adentro del período",
+      descripcion: "Se escribe como AAAA-MM-DD en el token, y no se ve en la nota.",
+      descripcionCiclica:
+        "Esta tarea es cíclica, así que se guarda el día del mes y no la fecha: «10» es «el " +
+        "10 del mes en curso», y se resuelve contra el reloj sin que nadie reescriba nada " +
+        "cuando cambia el mes. Un día que no existe se recorta al último: 31 en febrero es el 28.",
+      marcadorDia: "1 a 31",
+      aceptar: "Poner la fecha",
+      cancelar: "Cancelar",
+      /** Lo que va a quedar escrito, mostrado antes de aceptar. */
+      vaAEscribir: (valor: string) => `Va a escribir: ${valor}`,
+      invalida: "Esa fecha no existe.",
+      diaInvalido: "El día del mes va de 1 a 31.",
+    },
   },
   comandos: {
     completar: "Completar la tarea del cursor",
@@ -203,6 +288,7 @@ export const STRINGS = {
     eliminar: "Eliminar la tarea del cursor",
     workbench: "Asignar la tarea del cursor al workbench favorito",
     subirPrioridad: "Subir la prioridad de la tarea del cursor",
+    reiniciar: "Reiniciar un grupo cíclico…",
     bajarPrioridad: "Bajar la prioridad de la tarea del cursor",
   },
   /**
@@ -254,6 +340,37 @@ export const STRINGS = {
         "con la nota cerrada, no hay nada que lo deshaga.",
       aceptar: "Eliminar",
     },
+    /**
+     * El tercer modal, y el único que **no se puede apagar**.
+     *
+     * Archivar y eliminar quedaron sin confirmación por decisión del usuario
+     * (§13.0 punto 3): la fricción pesaba más. El reinicio es distinto y la §11
+     * lo pide, con una razón que **no es el tamaño** —medido el 02/09/2026, un
+     * reinicio sobre el corpus de hoy tocaría a lo sumo 16 líneas en todo el
+     * vault, no las 23 de una nota que decía esa sección—. Es que toca **varias
+     * notas a la vez**, y el historial de deshacer solo existe en las que están
+     * abiertas: con la nota cerrada `vault.process()` no pasa por el editor y no
+     * hay nada que lo deshaga. Un rescate que depende de qué notas estaban
+     * abiertas no es un rescate.
+     */
+    reiniciar: {
+      titulo: "Reiniciar un grupo cíclico",
+      destilda: (tareas: number, notas: number) =>
+        `Se ${tareas === 1 ? "destilda 1 tarea" : `destildan ${tareas} tareas`} y se les borra la ` +
+        `fecha de completado, en ${notas === 1 ? "1 nota" : `${notas} notas`}.`,
+      /** Cuáles, si son pocas. Con muchas la lista deja de ser información. */
+      notas: (nombres: readonly string[]) => `En: ${nombres.join(", ")}.`,
+      soloEtiquetadas:
+        "No se toca ninguna tarea que no lleve la etiqueta de este grupo, ni los workbenches, " +
+        "ni el vencimiento.",
+      noArchiva:
+        "No se escribe nada en el historial. «Archivar y reiniciar» todavía no existe: si " +
+        "querés dejar rastro, archivá antes.",
+      deshacer:
+        "En las notas que tengas abiertas, Ctrl-Z lo deshace. En las cerradas no hay nada que " +
+        "lo deshaga.",
+      aceptar: "Reiniciar",
+    },
   },
   /** Los tres niveles de la §14, para decirlos en los avisos. */
   prioridades: ["normal", "alta", "muy alta"] as const,
@@ -286,6 +403,14 @@ export const STRINGS = {
     saleDelWorkbench: (n: number, wb: string) =>
       `${n === 1 ? "1 tarea" : `${n} tareas`} fuera de «${wb}».`,
     sinCambios: "No había nada que cambiar.",
+    /**
+     * La coletilla de las escrituras que tuvieron que buscar la línea.
+     *
+     * Estaba escrita a mano en `comandos.ts` y siempre en plural: con una sola
+     * decía «1 se habían corrido». Los textos van todos acá desde el primer día
+     * justamente para que un plural no se decida en el sitio de la llamada.
+     */
+    movidas: (n: number) => (n === 1 ? " (1 se había corrido)" : ` (${n} se habían corrido)`),
     archivado: (n: number, camino: string) =>
       `Archivada: ${n === 1 ? "1 línea" : `${n} líneas`} al historial, bajo «${camino}».`,
     eliminado: (n: number) =>
@@ -314,6 +439,50 @@ export const STRINGS = {
       "No se escribió nada: alguna línea ya no está donde estaba, o aparece repetida. " +
       "No se adivina cuál era. Volvé a intentar.",
     prioridad: (nombre: string) => `Prioridad ${nombre}.`,
+    /** Dice **qué forma** escribió, que es lo que la §11 hace ambiguo. */
+    fechaPuesta: (valor: string) => `Vencimiento: ${valor}.`,
+    fechaPuestaEnCiclica: (valor: string) =>
+      `Vencimiento: día ${valor} de cada mes. Es cíclica, así que guarda el día y no la fecha.`,
+    fechaSacada: "Sin fecha de vencimiento.",
+    recurrencia: (grupo: string) => `Ahora es cíclica, en el grupo «${grupo}».`,
+    /**
+     * La conversión de la decisión de la sesión 7, dicha.
+     *
+     * Poner `rec` sobre una tarea con fecha absoluta convierte el `due` en el
+     * día del mes, y se pierden el año y el mes. Es lo correcto —la §11 dice que
+     * una cíclica guarda el día— pero es una pérdida, y una pérdida en silencio
+     * es la que no se puede revisar.
+     */
+    dueConvertido: (antes: string, dia: string) =>
+      `El vencimiento ${antes} pasó a ser «día ${dia} de cada mes»: una tarea cíclica guarda ` +
+      "el día del mes, no la fecha. Si no era eso, volvé a ponerle la fecha sacándole el grupo.",
+    noEsCiclica: "Ya no es cíclica.",
+    /** Al sacar el `rec` de una tarea con `due=10`, que ahora significa otra cosa. */
+    dueQuedaEnDia: (dia: string) =>
+      `Le quedó el vencimiento «día ${dia}», que se sigue resolviendo contra el reloj. Si ` +
+      "querés una fecha concreta, ponésela desde el ⋯.",
+    reiniciado: (tareas: number, notas: number) =>
+      `${tareas === 1 ? "1 tarea reiniciada" : `${tareas} tareas reiniciadas`} en ` +
+      `${notas === 1 ? "1 nota" : `${notas} notas`}.`,
+    sinGrupos:
+      "No hay ningún grupo de reinicio todavía. Se crean desde el ⋯ de una tarea, en " +
+      "«Recurrencia…»: son una etiqueta con nombre libre, como los workbenches.",
+    sinQueReiniciar: (grupo: string) =>
+      `No hay nada que reiniciar en «${grupo}»: ninguna tarea del grupo está completada.`,
+    /**
+     * El reinicio no se pudo ubicar. **Dice que no se escribió en NINGUNA**,
+     * que es la garantía que el paso en seco sobre todas las notas compra y que
+     * el archivado no puede dar.
+     */
+    reinicioNoUbicado: (notas: readonly string[]) =>
+      `No se escribió nada, en ninguna nota. En ${notas.join(", ")} alguna línea ya no está ` +
+      "donde estaba, o aparece repetida. No se adivina cuál era. Volvé a intentar; si tenés " +
+      "el índice congelado, apagalo.",
+    /** Y el estado a medias, que acá es por nota y no por mitad de una acción. */
+    reinicioAMedias: (hechas: readonly string[], faltan: readonly string[]) =>
+      `Se reinició ${hechas.join(", ")}, pero en ${faltan.join(", ")} NO: alguna línea se ` +
+      "movió entre la comprobación y la escritura. Volvé a correr el reinicio; lo que ya está " +
+      "destildado no se vuelve a tocar.",
     /**
      * `subir` y `bajar` topan en vez de dar la vuelta, así que hay un caso en
      * que no pasa nada. Decirlo evita que parezca que el comando no anda.

@@ -23,7 +23,7 @@
  * al que ya está guardado **no se reparsea ni se notifica**. Sin eso, cada
  * escritura propia provocaría dos redibujos: uno correcto y uno de regalo.
  */
-import { indexar, porClave, type Clave, type Task } from "./tareas.js";
+import { gruposDeReinicio, indexar, porClave, type Clave, type Task } from "./tareas.js";
 import { parseDocumento, type Documento } from "./documento.js";
 
 /** Deshacer una suscripción. */
@@ -91,6 +91,22 @@ export class StoreDeTareas {
    */
   congelado = false;
 
+  /**
+   * Las notas que llegaron mientras el store estaba congelado y se descartaron.
+   *
+   * Existe por un bug de la sesión 7 que costó tres comprobaciones de la guía:
+   * apagar el congelado llamaba a `resincronizar()` y **no pasaba nada**,
+   * porque aquel solo lee las notas que todavía no tiene. El índice quedaba
+   * atrasado para siempre hasta que alguien tocara el archivo, y el reinicio
+   * informaba «no hay nada que reiniciar» con tres tareas completadas en disco.
+   *
+   * Vive **acá y no en quien apaga el ajuste** a propósito: el bug era
+   * exactamente un camino de llamada que no releía, y una lista de llamadores
+   * que hay que acordarse de actualizar es la misma trampa una vez más. Así, la
+   * próxima `resincronizar()` —venga de donde venga— cura el desfasaje sola.
+   */
+  private readonly perdidas = new Set<string>();
+
   constructor(private readonly puerto: PuertoDeNotas) {}
 
   /** Parsea las notas y se suscribe. Va en `workspace.onLayoutReady`. */
@@ -121,10 +137,22 @@ export class StoreDeTareas {
     const quiero = new Set(this.puerto.notas());
     for (const path of [...this.notas.keys()]) if (!quiero.has(path)) this.notas.delete(path);
 
+    // Congelado no se resincroniza nada: para eso está el ajuste, y curarlo acá
+    // lo volvería un interruptor que a veces no hace nada.
+    if (this.congelado) return;
+
+    // Lo que se perdió mientras estaba congelado se relee aunque ya esté en el
+    // mapa. Se vacía **antes** de leer: si algo vuelve a fallar, la próxima
+    // vuelta lo intenta de nuevo por el camino del evento, no por este.
+    const perdidas = new Set(this.perdidas);
+    this.perdidas.clear();
+
     await Promise.all(
       [...quiero].map(async (path) => {
-        if (this.notas.has(path)) return;
+        if (this.notas.has(path) && !perdidas.has(path)) return;
         const raw = await this.puerto.leer(path);
+        // `absorber` sale solo si el contenido es idéntico al guardado, así que
+        // releer una nota que no cambió no reparsea ni redibuja nada.
         if (raw !== null) this.absorber(path, raw, origen);
       }),
     );
@@ -141,7 +169,10 @@ export class StoreDeTareas {
    * propia escritura, y reparsearlo sería un segundo redibujo por cada acción.
    */
   absorber(path: string, contenido: string, origen: OrigenDeCambio = "escritura"): boolean {
-    if (this.congelado) return false;
+    if (this.congelado) {
+      this.perdidas.add(path);
+      return false;
+    }
     if (this.notas.get(path)?.raw === contenido) return false;
 
     const t0 = ahora();
@@ -231,6 +262,23 @@ export class StoreDeTareas {
     for (const e of this.notas.values())
       for (const t of e.tareas) for (const wb of t.workbenches) nombres.add(wb);
     return [...nombres].sort();
+  }
+
+  /**
+   * Todos los grupos de reinicio escritos, en **todas** las notas, ordenados.
+   *
+   * Tercer hermano de `idsEnUso` y `workbenchesEnUso`, y global por la misma
+   * razón de forma: un grupo de reinicio no es de una nota, es una etiqueta que
+   * el botón de la §11 barre por el store entero. `gruposDeReinicio` hace la
+   * misma pregunta sobre **una** lista de tareas; acá se junta lo de todas.
+   *
+   * Lo consumen dos: el submenú de recurrencia, para ofrecer los que ya
+   * existen —que es lo único que hace que la lista crezca, porque los grupos
+   * «se crean escribiéndolos» como los workbenches (§11)— y el comando de
+   * reinicio, para saber qué se puede reiniciar.
+   */
+  gruposEnUso(): string[] {
+    return gruposDeReinicio(this.tareas());
   }
 
   /** Las notas que el store tiene parseadas ahora mismo. */

@@ -210,6 +210,22 @@ export const CLASES_DE_REVELACION: readonly string[] = ["hover", "siempre", "swi
 );
 
 /**
+ * La clase del `.cm-editor` de una nota que **usa** el margen de botones.
+ *
+ * No va en `body` como las de arriba, y esa es toda la razón por la que existe:
+ * un `gutter()` de CodeMirror es una extensión registrada en **todos** los
+ * editores, no algo que se prenda por nota, así que su columna ocupa ancho
+ * aunque no tenga un solo marcador. Con la clase en `body` no alcanza —una nota
+ * de tareas y otra que no lo es pueden estar abiertas al mismo tiempo, una al
+ * lado de la otra— y hace falta que la decida cada editor.
+ *
+ * Vive acá y no en `styles.css` ni en `main.ts` porque la escriben los dos: el
+ * atributo del editor y la hoja de estilos. Una clase repetida en dos archivos
+ * diverge, y esta decide el ancho del margen de **todas** las notas del vault.
+ */
+export const CLASE_CON_MARGEN = "tareas-con-margen";
+
+/**
  * La clase de `body` de cada estilo de fila.
  *
  * Mismo mecanismo que el modo de revelación y que el estilo de prioridad: el

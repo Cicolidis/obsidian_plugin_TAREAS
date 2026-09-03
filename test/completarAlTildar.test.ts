@@ -29,6 +29,70 @@ const tildar = (st: EditorState, n: number, estadoNuevo = "x") => {
   }).state.doc.toString();
 };
 
+/**
+ * Igual que `tildar`, pero devuelve el **estado** y pone el cursor donde iría
+ * un clic: adentro de la línea que se tilda.
+ */
+const tildarConCursor = (st: EditorState, n: number, columna: number, estadoNuevo = "x") => {
+  const linea = st.doc.line(n);
+  const i = linea.text.indexOf("[");
+  return st.update({
+    changes: { from: linea.from + i + 1, to: linea.from + i + 2, insert: estadoNuevo },
+    selection: { anchor: linea.from + columna },
+    userEvent: "input",
+  }).state;
+};
+
+/** La posición del cursor como línea 1-based y columna. */
+const donde = (st: EditorState) => {
+  const pos = st.selection.main.head;
+  const l = st.doc.lineAt(pos);
+  return { linea: l.number, columna: pos - l.from };
+};
+
+/**
+ * El cursor no se puede ir al comienzo de la línea al tildar.
+ *
+ * **Reportado usando el plugin, en la verificación del 6b:** «tildar y destildar
+ * el checkbox de una tarea hija lleva el cursor al espacio a la izquierda del
+ * checkbox, sobre el margen izquierdo, a la misma altura de la tarea madre».
+ *
+ * El mecanismo es el que `cursor.ts` ya tenía documentado, por otra puerta:
+ * `replanificar` reemplaza la línea **entera** —`{from: linea.from, to:
+ * linea.to}`— y `ChangeSet.mapPos` de una posición adentro de un rango
+ * reemplazado devuelve el **comienzo del rango**. El filtro devolvía sus
+ * cambios sin selección, así que mandaba el cursor a la columna 0.
+ *
+ * En una tarea de primer nivel la columna 0 es donde empieza el `- [ ]` y casi
+ * no se nota; en una hija indentada queda a la izquierda de la sangría, que es
+ * dónde él lo vio. El mismo bug, más visible.
+ */
+describe("el cursor al tildar", () => {
+  it("se queda en su línea y su columna, en una tarea suelta", () => {
+    const st = estado("- [ ] mandar el formulario");
+    expect(donde(tildarConCursor(st, 1, 12))).toEqual({ linea: 1, columna: 12 });
+  });
+
+  it("se queda en su lugar en una hija indentada — el caso reportado", () => {
+    const st = estado("- [ ] madre\n\t- [ ] hija con texto");
+    expect(donde(tildarConCursor(st, 2, 12))).toEqual({ linea: 2, columna: 12 });
+  });
+
+  it("también al destildar", () => {
+    const st = estado(`- [x] madre %%t:done=${HOY}%%\n\t- [x] hija %%t:done=${HOY}%%`);
+    expect(donde(tildarConCursor(st, 2, 9, " "))).toEqual({ linea: 2, columna: 9 });
+  });
+
+  it("con un token largo, el cursor no se mete adentro del tramo oculto", () => {
+    // El token crece al escribir `done=`, y la columna se mide sobre el texto
+    // visible: si el cursor estaba al final del texto, ahí tiene que quedar.
+    const st = estado("\t- [ ] Clase %%t:due=5;rec=lunes%%");
+    const despues = tildarConCursor(st, 1, 12);
+    expect(donde(despues).linea).toBe(1);
+    expect(donde(despues).columna).toBe(12);
+  });
+});
+
 describe("completarAlTildar — el hecho, no el gesto", () => {
   it("tildar escribe la fecha de completado", () => {
     const st = estado("- [ ] mandar el formulario");

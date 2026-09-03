@@ -43,12 +43,14 @@ import {
   type Task,
 } from "./tareas.js";
 import {
+  formaDeDue,
   nuevoId,
   parseTaskToken,
   setTaskToken,
   type Prioridad,
   type TaskMeta,
 } from "./token.js";
+import { diaDelMesDe } from "./fechas.js";
 
 /**
  * Un cambio sobre una línea, o nada si esa línea no hay que tocarla.
@@ -386,6 +388,128 @@ export function planDePrioridad(
   return x ? [x] : [];
 }
 
+// ------------------------------------------ fecha y recurrencia (§5.2, §11)
+
+/**
+ * El `due` que hay que escribir **en esta línea**, con la forma que le toca.
+ *
+ * `due` guarda dos cosas distintas y cuál depende de `rec` (§11): en una tarea
+ * normal es `AAAA-MM-DD` y en una cíclica es el **día del mes**, que es lo que
+ * `resolverDue` resuelve contra el reloj sin que nadie reescriba nada cuando
+ * cambia el mes.
+ *
+ * La forma se decide mirando **el texto de la línea**, no el store: entre que
+ * el menú se dibujó y que se hizo clic pudo entrar una tecla, y es la misma
+ * razón por la que `menuDeTarea.ts` pregunta por el texto de ahora. Si el store
+ * estuviera atrasado y la tarea ya fuera cíclica, escribir la fecha absoluta
+ * que el menú ofreció dejaría un vencimiento que no avanza nunca.
+ *
+ * Es pura y exportada porque **la usan dos**: el plan, para escribir, y el
+ * comando, para decir en el aviso cuál de las dos formas escribió. Dos copias
+ * de esa decisión harían que el cartel mintiera el día que una cambie.
+ */
+export function dueParaLaLinea(texto: string, due: string | null): string | null {
+  const a = parseTaskToken(texto);
+  if (a.estado === "ilegible" || a.meta.rec === null) return due;
+  return formaDeDue(due) === "fecha" ? diaDelMesDe(due!) : due;
+}
+
+/**
+ * El `due` que le queda a una tarea que **pasa a ser cíclica**, o `null` si no
+ * hay nada que convertir.
+ *
+ * Decisión de la sesión 7, tomada porque la spec no la cubría: ponerle `rec` a
+ * una tarea que ya tiene un `due` absoluto **convierte** la fecha en el día del
+ * mes, en el mismo cambio de línea, y el aviso lo dice. Se pierden el año y el
+ * mes, que es exactamente lo que la §11 dice que no hay que guardar en una
+ * cíclica —guardar `2026-09-10` obligaría a que algo le corriera el mes en
+ * octubre, que es la escritura automática por la puerta de atrás—.
+ *
+ * Al revés no se convierte nada: sacarle el `rec` a una tarea con `due=10` deja
+ * el `10`, que sigue resolviendo contra el reloj. La conversión inversa
+ * tendría que inventar un mes.
+ *
+ * Exportada por lo mismo que `dueParaLaLinea`: la usan el plan y el aviso.
+ */
+export function conversionDeDue(due: string | null): string | null {
+  return formaDeDue(due) === "fecha" ? diaDelMesDe(due!) : null;
+}
+
+/**
+ * Qué líneas cambia fijar —o sacar— la fecha de vencimiento: **una sola**.
+ *
+ * Es la misma forma que `planDePrioridad` y por la misma clase de razón: un
+ * plazo es de una tarea, no de su árbol. Las hijas de una tarea con fecha
+ * tienen sus propios plazos, y escribirles el de la madre haría imposible
+ * distinguir una fecha heredada de una que el usuario puso.
+ *
+ * **«Sin fecha» no escribe campo**, y de eso se encarga `setTaskToken`: con
+ * `due: null` el campo desaparece del token, y si era lo único que tenía,
+ * desaparece el token entero. Es lo mismo que ya hacía `prioridad: 0`.
+ */
+export function planDeFecha(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+  due: string | null,
+): CambioDeLinea[] {
+  const t = porClave(tareas).get(clave);
+  if (!t) return [];
+  const texto = doc.lineas[t.linea]?.texto;
+  if (texto === undefined) return [];
+  if (parseTaskToken(texto).estado === "ilegible") return []; // invariante 7
+  const x = cambio(doc, t.linea, setTaskToken(texto, { due: dueParaLaLinea(texto, due) }));
+  return x ? [x] : [];
+}
+
+/**
+ * Qué líneas cambia etiquetar —o desetiquetar— una tarea cíclica: **una sola**.
+ *
+ * Que sea una sola línea y no el subárbol **no es una analogía con la
+ * prioridad: es la condición de seguridad del reinicio.** La §11 dice que el
+ * botón «solo toca las tareas etiquetadas», y la razón está medida: en
+ * `tareas_MES` el registro por mes son hijos **sin** etiqueta, con el monto de
+ * cada mes. Si `rec` bajara por el subárbol, esos hijos quedarían etiquetados y
+ * el primer reinicio los convertiría en tareas pendientes, perdiendo el dato —
+ * que es exactamente el desastre que la §11 nombra y que `planDeReinicio` está
+ * escrito para evitar. Etiquetar en cascada lo habilitaría desde el otro lado.
+ *
+ * La consecuencia que esto deja, dicha en vez de tapada: una cíclica **con
+ * hijos** se reinicia con la madre destildada y los hijos todavía en `[x]`,
+ * porque tildar sí baja por el subárbol (§9). Es lo correcto para `tareas_MES`
+ * y puede no serlo para una semanal con subtareas; se decide con uso, no de
+ * antemano.
+ *
+ * Y convierte el `due` si hacía falta (ver `conversionDeDue`), en el **mismo**
+ * cambio: dos escrituras sobre la misma línea serían dos entradas en el
+ * historial del editor y una ventana en la que el token dice una cosa que ya no
+ * es verdad.
+ */
+export function planDeRecurrencia(
+  doc: Documento,
+  tareas: readonly Task[],
+  clave: Clave,
+  rec: string | null,
+): CambioDeLinea[] {
+  const t = porClave(tareas).get(clave);
+  if (!t) return [];
+  const texto = doc.lineas[t.linea]?.texto;
+  if (texto === undefined) return [];
+  const a = parseTaskToken(texto);
+  if (a.estado === "ilegible") return []; // invariante 7
+
+  const patch: Partial<TaskMeta> = { rec };
+  // Se lee de la línea y no del índice: es la fuente más fresca, y la que
+  // decide qué se convierte tiene que ser la misma que se va a reescribir.
+  if (rec !== null) {
+    const convertido = conversionDeDue(a.meta.due);
+    if (convertido !== null) patch.due = convertido;
+  }
+
+  const x = cambio(doc, t.linea, setTaskToken(texto, patch));
+  return x ? [x] : [];
+}
+
 // ------------------------------------------- reinicio de un grupo (§11)
 
 /**
@@ -423,6 +547,43 @@ export function planDeReinicio(
     if (x) cambios.push(x);
   }
   return cambios;
+}
+
+/** Lo que una nota recibe de una acción que toca varias. */
+export interface LoteDeNota {
+  archivo: string;
+  cambios: CambioDeLinea[];
+}
+
+/**
+ * El reinicio de un grupo, repartido por nota.
+ *
+ * Un grupo de reinicio es **global** —la §11 pide «un botón por grupo» sobre el
+ * store entero, y `rec=lunes` puede estar escrito en cinco notas— pero
+ * `planDeReinicio` recibe **un** documento, porque escribir se escribe por
+ * archivo. Esto es el doblez, y es puro a propósito: la cuenta que la
+ * confirmación tiene que decir —«N tareas en M notas»— se prueba offline en vez
+ * de vivir adentro de un modal.
+ *
+ * **Las notas sin nada que cambiar no aparecen.** Contarlas haría que la
+ * confirmación mintiera sobre en cuántas notas va a escribir, que es lo mismo
+ * que `planDeReinicio` ya evita con las tareas que ya están pendientes. Y de
+ * paso ninguna se abre para nada: un `process` sobre un archivo que no cambia
+ * es una lectura de disco sin motivo.
+ *
+ * El orden es el de la lista que entra. Quién lo vuelve determinista es
+ * `escribirEnVarias`, que ordena por ruta antes de escribir.
+ */
+export function planDeReinicioEnVarias(
+  notas: readonly { archivo: string; doc: Documento; tareas: readonly Task[] }[],
+  grupo: string,
+): LoteDeNota[] {
+  const salida: LoteDeNota[] = [];
+  for (const { archivo, doc, tareas } of notas) {
+    const cambios = planDeReinicio(doc, tareas, grupo);
+    if (cambios.length) salida.push({ archivo, cambios });
+  }
+  return salida;
 }
 
 // ---------------------------------------------------- aplicar, en memoria

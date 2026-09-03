@@ -9,10 +9,11 @@ import {
   editorLivePreviewField,
   setIcon,
 } from "obsidian";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import {
+  CLASE_CON_MARGEN,
   CLASES_DE_FILA,
   CLASES_DE_REVELACION,
   claseDeFila,
@@ -151,6 +152,22 @@ export default class TareasPlugin extends Plugin {
       // extensión». Los dos no pueden estar encendidos a la vez, y de eso se
       // encargan `filaActiva` y `filaEnMargenActiva`.
       Prec.lowest(filaEnElMargen((state) => this.filaEnMargenActiva(state), this.opcionesDeFila())),
+      // **El margen existe en todos los editores, aunque esté vacío.** Un
+      // `gutter()` es una extensión registrada, no algo que se prenda por nota:
+      // `lineMarker` devuelve `null` fuera de las notas de tareas y con eso no
+      // se dibuja ningún marcador — pero la **columna** sigue ahí, y su
+      // `padding` corría el texto de todas las notas del vault unos 22px.
+      // Reportado en la verificación del 6b, y el comentario de `styles.css`
+      // afirmaba lo contrario sin haberlo medido.
+      //
+      // La clase va en el `.cm-editor`, que es ancestro del `.cm-gutter`, así
+      // que la hoja de estilos puede acotar el ancho a las notas que lo usan.
+      // Se recalcula en cada actualización de la vista, y `redibujar()` despacha
+      // una transacción vacía al guardar los ajustes, así que cambiar el estilo
+      // de fila tiene efecto sin recargar.
+      EditorView.editorAttributes.of((vista) =>
+        this.filaEnMargenActiva(vista.state) ? { class: CLASE_CON_MARGEN } : null,
+      ),
       // Quién tiene el mouse encima. Solo hace falta para el margen: adentro de
       // la línea el `:hover` del CSS alcanza, y acá no, porque el margen es
       // hermano de `.cm-line` y no su descendiente.
