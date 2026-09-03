@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarArchivado,
   archivarEnElLog,
+  cuentaDeArchivado,
   archivarPideConfirmacion,
   archivarPorDefecto,
   bloqueParaElLog,
@@ -300,28 +301,30 @@ describe("archivarEnElLog — lo que corre adentro de `vault.process()`", () => 
   const LOG = "# EJEMPLO\n\n- algo viejo";
 
   it("devuelve el LOG entero, con el bloque puesto", () => {
-    const { texto } = archivarEnElLog(LOG, ["tareas_X"], ["- lo nuevo [✓ 2026-08-24]"]);
+    const { texto } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- lo nuevo [✓ 2026-08-24]"] },
+    ]);
     expect(texto).toBe(
       "# EJEMPLO\n\n- algo viejo\n\n# tareas_X\n\n- lo nuevo [✓ 2026-08-24]",
     );
   });
 
   it("no toca una sola línea de las que ya estaban", () => {
-    const { texto } = archivarEnElLog(LOG, ["tareas_X"], ["- lo nuevo"]);
+    const { texto } = archivarEnElLog(LOG, [{ camino: ["tareas_X"], bloque: ["- lo nuevo"] }]);
     expect(texto.startsWith(LOG)).toBe(true);
   });
 
   it("el resultado se vuelve a leer byte por byte (invariante 9)", () => {
-    const { texto } = archivarEnElLog(LOG, ["tareas_X", "p_Y"], ["- a", "\t- b"]);
+    const { texto } = archivarEnElLog(LOG, [{ camino: ["tareas_X", "p_Y"], bloque: ["- a", "\t- b"] }]);
     expect(renderDocumento(parseDocumento(texto))).toBe(texto);
   });
 
   it("dice cuántos headings creó, que es lo que el cartel necesita", () => {
-    const uno = archivarEnElLog(LOG, ["tareas_X"], ["- a"]);
-    expect(uno.plan.headingsNuevos).toEqual([{ nivel: 1, texto: "tareas_X" }]);
+    const uno = archivarEnElLog(LOG, [{ camino: ["tareas_X"], bloque: ["- a"] }]);
+    expect(uno.planes[0]!.headingsNuevos).toEqual([{ nivel: 1, texto: "tareas_X" }]);
     // Y archivar de nuevo en el mismo camino no crea ninguno (invariante 6).
-    const dos = archivarEnElLog(uno.texto, ["tareas_X"], ["- b"]);
-    expect(dos.plan.headingsNuevos).toEqual([]);
+    const dos = archivarEnElLog(uno.texto, [{ camino: ["tareas_X"], bloque: ["- b"] }]);
+    expect(dos.planes[0]!.headingsNuevos).toEqual([]);
   });
 
   it("recalcular es lo que evita duplicar un heading que apareció en el medio", () => {
@@ -329,16 +332,16 @@ describe("archivarEnElLog — lo que corre adentro de `vault.process()`", () => 
     // arma sobre una foto y, para cuando se escribe, otro dispositivo creó la
     // sección por Sync. Como se recalcula sobre los bytes frescos, engancha.
     const foto = LOG;
-    const conLaSeccion = archivarEnElLog(foto, ["tareas_X"], ["- de otra máquina"]).texto;
-    const r = archivarEnElLog(conLaSeccion, ["tareas_X"], ["- lo mío"]);
-    expect(r.plan.headingsNuevos).toEqual([]);
+    const conLaSeccion = archivarEnElLog(foto, [{ camino: ["tareas_X"], bloque: ["- de otra máquina"] }]).texto;
+    const r = archivarEnElLog(conLaSeccion, [{ camino: ["tareas_X"], bloque: ["- lo mío"] }]);
+    expect(r.planes[0]!.headingsNuevos).toEqual([]);
     expect(r.texto.match(/^# tareas_X$/gm)).toHaveLength(1);
   });
 
   it("archivar N bloques en el mismo camino crea el camino una sola vez (inv. 6)", () => {
     let texto = LOG;
     for (let i = 0; i < 5; i++) {
-      texto = archivarEnElLog(texto, ["tareas_X", "p_Y"], [`- tarea ${i}`]).texto;
+      texto = archivarEnElLog(texto, [{ camino: ["tareas_X", "p_Y"], bloque: [`- tarea ${i}`] }]).texto;
     }
     expect(texto.match(/^# tareas_X$/gm)).toHaveLength(1);
     expect(texto.match(/^## p_Y$/gm)).toHaveLength(1);
@@ -413,7 +416,90 @@ describe("yaEstaEnElLog — la repetida (reportado el 01/09/2026)", () => {
     const bloque = ["- una tarea [✓ 2026-09-01]"];
     const vacio = "# historial";
     expect(yaEstaEnElLog(doc(vacio), ["tareas_X"], bloque)).toBe(false);
-    const { texto } = archivarEnElLog(vacio, ["tareas_X"], bloque);
+    const { texto } = archivarEnElLog(vacio, [{ camino: ["tareas_X"], bloque: bloque }]);
     expect(yaEstaEnElLog(doc(texto), ["tareas_X"], bloque)).toBe(true);
+  });
+});
+
+/**
+ * `archivarEnElLog` con **N entradas**, que es lo que «archivar y reiniciar»
+ * necesita (paso 6c).
+ *
+ * Un grupo cíclico repartido en M notas produce M caminos distintos, y los M
+ * tienen que entrar en **un solo** `process`: en dos llamadas, la segunda
+ * recalcularía su posición sobre bytes que la primera ya cambió.
+ */
+describe("archivarEnElLog con N entradas (paso 6c)", () => {
+  const LOG = "# EJEMPLO\n\n- algo viejo";
+
+  it("dos entradas del mismo camino crean el heading una sola vez (inv. 6)", () => {
+    const { texto, planes } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- una"] },
+      { camino: ["tareas_X"], bloque: ["- otra"] },
+    ]);
+    expect(texto.match(/^# tareas_X$/gm)).toHaveLength(1);
+    expect(planes[0]!.headingsNuevos).toHaveLength(1);
+    expect(planes[1]!.headingsNuevos).toHaveLength(0);
+  });
+
+  it("y quedan contiguas, en el orden en que entraron", () => {
+    const { texto } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- una"] },
+      { camino: ["tareas_X"], bloque: ["- otra"] },
+    ]);
+    expect(texto.endsWith("- una\n- otra")).toBe(true);
+  });
+
+  it("caminos distintos crean cada uno el suyo, y ninguno se pisa", () => {
+    const { texto, planes } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- de X"] },
+      { camino: ["tareas_Y", "p_Z"], bloque: ["- de Y"] },
+      { camino: ["tareas_X", "p_W"], bloque: ["- de X bajo W"] },
+    ]);
+    expect(texto.match(/^# tareas_X$/gm)).toHaveLength(1);
+    expect(texto.match(/^# tareas_Y$/gm)).toHaveLength(1);
+    expect(texto.match(/^## p_Z$/gm)).toHaveLength(1);
+    expect(texto.match(/^## p_W$/gm)).toHaveLength(1);
+    expect(planes.map((p) => p.headingsNuevos.length)).toEqual([1, 2, 1]);
+    for (const t of ["- de X", "- de Y", "- de X bajo W"]) expect(texto).toContain(t);
+  });
+
+  it("el tercer bloque engancha bajo el heading que creó el primero", () => {
+    // Lo que una sola llamada compra sobre dos: la tercera entrada ve el
+    // `# tareas_X` que puso la primera, aunque en el medio pasó otra rama.
+    const { texto } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- primera"] },
+      { camino: ["tareas_Y"], bloque: ["- del medio"] },
+      { camino: ["tareas_X"], bloque: ["- tercera"] },
+    ]);
+    const lineas = texto.split("\n");
+    const x = lineas.indexOf("# tareas_X");
+    const y = lineas.indexOf("# tareas_Y");
+    expect(lineas.indexOf("- tercera")).toBeGreaterThan(x);
+    expect(lineas.indexOf("- tercera")).toBeLessThan(y);
+  });
+
+  it("sin entradas devuelve el LOG intacto", () => {
+    const { texto, planes } = archivarEnElLog(LOG, []);
+    expect(texto).toBe(LOG);
+    expect(planes).toEqual([]);
+  });
+
+  it("`cuentaDeArchivado` suma lo que el cartel tiene que decir", () => {
+    const { planes } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- una"] },
+      { camino: ["tareas_Y", "p_Z"], bloque: ["- otra", "\t- su nota"] },
+    ]);
+    const c = cuentaDeArchivado(planes);
+    expect(c.headingsNuevos).toBe(3); // tareas_X, tareas_Y, p_Z
+    expect(c.lineas).toBe(planes[0]!.lineas.length + planes[1]!.lineas.length);
+  });
+
+  it("lo que escribe se vuelve a leer byte por byte (invariante 9)", () => {
+    const { texto } = archivarEnElLog(LOG, [
+      { camino: ["tareas_X"], bloque: ["- una"] },
+      { camino: ["tareas_Y", "p_Z"], bloque: ["- otra", "\t- su nota"] },
+    ]);
+    expect(renderDocumento(parseDocumento(texto))).toBe(texto);
   });
 });

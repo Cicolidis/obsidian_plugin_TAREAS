@@ -9,7 +9,14 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
-import { filaDe, type Boton, type Favoritos, type Fila } from "../botones.js";
+import {
+  claveDeFila,
+  filaDe,
+  type Boton,
+  type ContextoDeFila,
+  type Favoritos,
+  type Fila,
+} from "../botones.js";
 
 /**
  * La fila de botones sobre cada línea de tarea (§13.0, paso 4b).
@@ -94,6 +101,13 @@ export interface OpcionesDeFila {
   favoritos: () => Favoritos;
   /** ¿Va el quinto botón, el 🗑? Se lee en el momento: el ajuste cambia solo. */
   conEliminar: () => boolean;
+  /** Los dos indicadores del paso 6c, cada uno con su interruptor. */
+  indicadores: () => { fecha: boolean; recurrencia: boolean };
+  /**
+   * Hoy, en `AAAA-MM-DD`. Se inyecta por lo mismo que `dibujarIcono`: `botones.ts`
+   * es capa 1 y no lee el reloj, y así el test se puede parar en cualquier día.
+   */
+  hoy: () => string;
   alClic: AlClicEnFila;
   /**
    * Cómo se dibuja un ícono. Se inyecta porque `setIcon` viene de `obsidian`,
@@ -101,6 +115,22 @@ export interface OpcionesDeFila {
    * en un test. Es el mismo patrón que `activo` en `decoraciones.ts`.
    */
   dibujarIcono: (el: HTMLElement, icono: string) => void;
+}
+
+/**
+ * Lo que `filaDe` necesita, leído **en el momento**.
+ *
+ * Se arma una vez por construcción del set y no por línea: `hoy()` formatea una
+ * fecha y las dos lecturas de ajustes son cierres. Sobre una ventana de 103
+ * líneas —el viewport real, medido— eso es la diferencia entre uno y ciento tres.
+ */
+function contextoDe(opciones: OpcionesDeFila): ContextoDeFila {
+  return {
+    favoritos: opciones.favoritos(),
+    conEliminar: opciones.conEliminar(),
+    indicadores: opciones.indicadores(),
+    hoy: opciones.hoy(),
+  };
 }
 
 /**
@@ -127,10 +157,7 @@ export class FilaWidget extends WidgetType {
     private readonly opciones: OpcionesDeFila,
   ) {
     super();
-    this.clave =
-      fila.botones
-        .map((b) => `${b.accion}:${b.workbench ?? ""}:${b.activo ? "1" : "0"}`)
-        .join("|") + (fila.ilegible ? "|roto" : "");
+    this.clave = claveDeFila(fila);
   }
 
   override eq(otro: FilaWidget): boolean {
@@ -344,8 +371,7 @@ export function decoracionesDeFila(
   rangos: readonly { from: number; to: number }[],
   opciones: OpcionesDeFila,
 ): DecorationSet {
-  const favoritos = opciones.favoritos();
-  const conEliminar = opciones.conEliminar();
+  const ctx = contextoDe(opciones);
   const salida: Range<Decoration>[] = [];
 
   for (const { from, to } of rangos) {
@@ -353,7 +379,7 @@ export function decoracionesDeFila(
     const ultima = state.doc.lineAt(to).number;
     for (; n <= ultima; n++) {
       const linea = state.doc.line(n);
-      const fila = filaDe(linea.text, favoritos, conEliminar);
+      const fila = filaDe(linea.text, ctx);
       if (fila === null) continue;
       salida.push(
         Decoration.widget({ widget: new FilaWidget(fila, opciones), side: -1 }).range(linea.from),
@@ -462,10 +488,7 @@ export class FilaMarker extends GutterMarker {
     private readonly opciones: OpcionesDeFila,
   ) {
     super();
-    this.clave =
-      fila.botones
-        .map((b) => `${b.accion}:${b.workbench ?? ""}:${b.activo ? "1" : "0"}`)
-        .join("|") + (fila.ilegible ? "|roto" : "");
+    this.clave = claveDeFila(fila);
   }
 
   override eq(otro: FilaMarker): boolean {
@@ -542,16 +565,14 @@ export function filaEnElMargen(
     lineMarker(view, linea) {
       if (!activo(view.state)) return null;
       const l = view.state.doc.lineAt(linea.from);
-      const fila = filaDe(l.text, opciones.favoritos(), opciones.conEliminar());
+      const fila = filaDe(l.text, contextoDe(opciones));
       if (fila === null) return null;
 
       // La misma caché que `decoracionesDeFila` no tiene porque allá cada widget
       // lleva su cierre; acá el marcador es puro dibujo, así que dos tareas en
       // el mismo estado pueden compartir uno solo. Son cuatro o cinco objetos
       // en toda la vida del plugin.
-      const clave =
-        fila.botones.map((b) => `${b.accion}:${b.workbench ?? ""}:${b.activo ? "1" : "0"}`).join("|") +
-        (fila.ilegible ? "|roto" : "");
+      const clave = claveDeFila(fila);
       let m = marcadores.get(clave);
       if (!m) {
         m = new FilaMarker(fila, opciones);
@@ -580,7 +601,7 @@ export function filaEnElMargen(
         // La línea llega **fresca** del `BlockInfo` del evento: es la posición
         // de ahora, no la que tenía el marcador cuando se construyó.
         const l = view.state.doc.lineAt(linea.from);
-        const fila = filaDe(l.text, opciones.favoritos(), opciones.conEliminar());
+        const fila = filaDe(l.text, contextoDe(opciones));
         const boton = fila?.botones.find((b) => b.accion === accion);
         if (!fila || !boton) return false;
 

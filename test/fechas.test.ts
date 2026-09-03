@@ -4,8 +4,12 @@ import {
   atajosDeDiaDelMes,
   atajosDeFecha,
   diaDelMesDe,
+  diasDelMes,
   esDiaDelMes,
   esFechaReal,
+  grillaDelMes,
+  mesVecino,
+  ORDENES_DE_ATAJO,
   proximoDiaDeSemana,
   sumarDias,
 } from "../src/fechas.js";
@@ -216,4 +220,207 @@ describe("esDiaDelMes y diaDelMesDe", () => {
     expect(esDiaDelMes("32")).toBe(false);
     expect(esDiaDelMes("2026-09-10")).toBe(false);
   });
+});
+
+// ------------------------------------------------- los tres órdenes (6c)
+
+/**
+ * Las dos reglas que valen para los tres órdenes, y las dos son un bug pagado.
+ *
+ * 1. **Ningún atajo repite el valor de otro.** Un miércoles, la primera versión
+ *    del menú mostraba «Hoy · 2 sep» y «Miércoles · 2 sep», que escriben lo
+ *    mismo; y `setChecked(valor === actual)` marcaba los dos, o sea que la
+ *    pantalla decía que la tarea tenía dos vencimientos. Apareció **mirando la
+ *    salida**, no con un test: ahora es un test.
+ * 2. **La cantidad no cambia según el día.** Un menú cuyo largo se mueve no se
+ *    puede aprender (§13.0).
+ *
+ * Se comprueban sobre **400 días consecutivos**, que cubre todos los días de la
+ * semana, los doce meses, los dos bordes de año y un 29 de febrero.
+ */
+describe("los tres órdenes de atajos", () => {
+  const dias = Array.from({ length: 400 }, (_, i) => sumarDias("2027-11-20", i));
+
+  for (const orden of ORDENES_DE_ATAJO) {
+    it(`«${orden}»: ningún atajo escribe lo mismo que otro`, () => {
+      for (const hoy of dias) {
+        const valores = atajosDeFecha(hoy, orden).map((a) => a.valor);
+        expect(new Set(valores).size, `${orden} el ${hoy}: ${valores.join(" ")}`).toBe(
+          valores.length,
+        );
+      }
+    });
+
+    it(`«${orden}»: la lista mide siempre lo mismo`, () => {
+      const largos = new Set(dias.map((hoy) => atajosDeFecha(hoy, orden).length));
+      expect(largos.size).toBe(1);
+    });
+
+    it(`«${orden}»: ningún atajo cae en el pasado`, () => {
+      for (const hoy of dias) {
+        for (const a of atajosDeFecha(hoy, orden)) expect(a.valor >= hoy).toBe(true);
+      }
+    });
+
+    it(`«${orden}»: todos escriben una fecha que existe`, () => {
+      for (const hoy of dias.slice(0, 40)) {
+        for (const a of atajosDeFecha(hoy, orden)) expect(esFechaReal(a.valor)).toBe(true);
+      }
+    });
+  }
+
+  it("sin orden se comporta como el que ya estaba", () => {
+    expect(atajosDeFecha("2026-09-03")).toEqual(atajosDeFecha("2026-09-03", "semana"));
+  });
+
+  it("«cronologico» va en orden de fecha y arranca en hoy", () => {
+    const a = atajosDeFecha("2026-09-03", "cronologico"); // un jueves
+    expect(a.map((x) => x.valor)).toEqual([
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+      "2026-09-06",
+      "2026-09-07",
+      "2026-09-08",
+      "2026-09-09",
+    ]);
+    // La etiqueta de los que no son «hoy» ni «mañana» es el nombre del día.
+    expect(a.map((x) => x.clave)).toEqual([
+      "hoy",
+      "manana",
+      "sabado",
+      "domingo",
+      "lunes",
+      "martes",
+      "miercoles",
+    ]);
+  });
+
+  it("«discontinuo» son seis desplazamientos fijos", () => {
+    const a = atajosDeFecha("2026-09-03", "discontinuo");
+    expect(a).toEqual([
+      { clave: "hoy", valor: "2026-09-03" },
+      { clave: "manana", valor: "2026-09-04" },
+      { clave: "pasadoManana", valor: "2026-09-05" },
+      { clave: "enUnaSemana", valor: "2026-09-10" },
+      { clave: "enDosSemanas", valor: "2026-09-17" },
+      { clave: "enTreintaDias", valor: "2026-10-03" },
+    ]);
+  });
+
+  it("«semana» sigue sacando los dos días que hoy y mañana ya cubren", () => {
+    const a = atajosDeFecha("2026-09-03", "semana");
+    expect(a).toHaveLength(7);
+    expect(a.filter((x) => x.valor === "2026-09-03")).toHaveLength(1);
+    expect(a.filter((x) => x.valor === "2026-09-04")).toHaveLength(1);
+  });
+});
+
+// ------------------------------------------------- la grilla del mes (6c)
+
+describe("grillaDelMes", () => {
+  it("son seis semanas de siete, siempre", () => {
+    for (const ancla of ["2026-01-15", "2026-02-01", "2026-08-31", "2028-02-29"]) {
+      const g = grillaDelMes(ancla);
+      expect(g.semanas).toHaveLength(6);
+      for (const s of g.semanas) expect(s).toHaveLength(7);
+    }
+  });
+
+  it("empieza en lunes, como los atajos", () => {
+    // Septiembre de 2026 arranca un martes: la primera celda es un hueco.
+    const g = grillaDelMes("2026-09-15");
+    expect(g.semanas[0]![0]).toBeNull();
+    expect(g.semanas[0]![1]).toBe("2026-09-01");
+  });
+
+  it("cada día del mes aparece exactamente una vez, y ninguno de otro mes", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 2020, max: 2040 }),
+        fc.integer({ min: 1, max: 12 }),
+        (anio, mes) => {
+          const p = String(mes).padStart(2, "0");
+          const g = grillaDelMes(`${anio}-${p}-01`);
+          const celdas = g.semanas.flat().filter((c): c is string => c !== null);
+          const ultimo = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+          expect(celdas).toHaveLength(ultimo);
+          expect(new Set(celdas).size).toBe(ultimo);
+          for (const c of celdas) expect(c.slice(0, 7)).toBe(`${anio}-${p}`);
+        },
+      ),
+    );
+  });
+
+  it("los huecos están solo en los bordes", () => {
+    const celdas = grillaDelMes("2026-09-15").semanas.flat();
+    const primera = celdas.findIndex((c) => c !== null);
+    const ultima = celdas.length - 1 - [...celdas].reverse().findIndex((c) => c !== null);
+    for (let i = primera; i <= ultima; i++) expect(celdas[i]).not.toBeNull();
+  });
+
+  it("mesVecino cruza el año y no arrastra el día", () => {
+    expect(mesVecino("2026-12-31", 1)).toBe("2027-01-01");
+    expect(mesVecino("2026-01-31", -1)).toBe("2025-12-01");
+    // El 31 de enero no se convierte en un 31 de febrero que no existe: se
+    // devuelve el primero, porque la grilla solo mira el año y el mes.
+    expect(mesVecino("2026-01-31", 1)).toBe("2026-02-01");
+  });
+
+  it("ir y volver un mes deja la grilla en el mismo mes", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 2020, max: 2040 }),
+        fc.integer({ min: 1, max: 12 }),
+        (anio, mes) => {
+          const ancla = `${anio}-${String(mes).padStart(2, "0")}-01`;
+          expect(mesVecino(mesVecino(ancla, 1), -1)).toBe(ancla);
+        },
+      ),
+    );
+  });
+
+  it("diasDelMes son los 31, todos escribibles", () => {
+    const d = diasDelMes();
+    expect(d).toHaveLength(31);
+    for (const x of d) expect(esDiaDelMes(x)).toBe(true);
+  });
+});
+
+/**
+ * Y la zona horaria tampoco mueve la grilla ni los órdenes nuevos.
+ *
+ * Es el mismo caso que `sumarDias`: `grillaDelMes` pregunta qué día de la semana
+ * cae el primero, y `diaIso` sale de `getUTCDay`. Con una implementación local,
+ * en Nueva York el primero de marzo caería en la celda de al lado.
+ */
+describe("la zona horaria no mueve la grilla", () => {
+  const original = process.env.TZ;
+  afterAll(() => {
+    process.env.TZ = original;
+  });
+
+  for (const tz of ["America/New_York", "America/Argentina/Buenos_Aires", "Pacific/Kiritimati"]) {
+    it(`en ${tz}`, () => {
+      process.env.TZ = tz;
+      expect(grillaDelMes("2026-03-15").semanas[0]).toEqual([
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "2026-03-01",
+      ]);
+      expect(atajosDeFecha("2026-03-08", "discontinuo").map((a) => a.valor)).toEqual([
+        "2026-03-08",
+        "2026-03-09",
+        "2026-03-10",
+        "2026-03-15",
+        "2026-03-22",
+        "2026-04-07",
+      ]);
+      expect(mesVecino("2026-03-08", 1)).toBe("2026-04-01");
+    });
+  }
 });

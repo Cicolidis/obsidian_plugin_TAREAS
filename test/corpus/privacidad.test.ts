@@ -64,6 +64,22 @@ describe.skipIf(!VAULT)("nada del vault entra al repositorio", () => {
     };
     recorrer("src");
     recorrer("test");
+    recorrer("scripts");
+
+    // **Y los `.md` de la raíz**, agregados en el paso 6c. La primera versión
+    // miraba solo el código, y el código no es donde más se escribe: la spec,
+    // las guías de verificación y los handoff son texto largo sobre las notas
+    // reales, y la regla dura de CLAUDE.md no distingue —«ni en el código, ni
+    // en los tests, ni en los mensajes de commit»—.
+    //
+    // Corrido por primera vez, encontró un rótulo de semana copiado del vault
+    // en la §12 de la spec, puesto en la sesión 6a. Un guardia que estrena
+    // encontrando algo es un guardia que hacía falta.
+    for (const e of readdirSync(".", { withFileTypes: true })) {
+      if (e.isFile() && e.name.endsWith(".md")) {
+        salida.push({ ruta: e.name, texto: readFileSync(e.name, "utf8") });
+      }
+    }
     return salida;
   };
 
@@ -80,7 +96,7 @@ describe.skipIf(!VAULT)("nada del vault entra al repositorio", () => {
     expect(golpes.length, "el testigo tiene que aparecer en algún archivo").toBeGreaterThan(0);
   });
 
-  it("ningún título de heading real aparece en src/ ni en test/", () => {
+  it("ningún título de heading real aparece en el repositorio", () => {
     const titulos = titulosReales();
     const archivos = archivosDelRepo();
     console.log(

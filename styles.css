@@ -777,3 +777,104 @@ body:not(.tareas-fila-columna) .markdown-source-view.mod-cm6 .cm-gutter.tareas-m
 .tareas-boton-eliminar:hover {
   color: var(--text-error);
 }
+
+/* --- los dos indicadores del paso 6c ------------------------------------- *
+ *
+ * Se dibujan siempre, encendidos o apagados, y quien los esconde es la misma
+ * regla que esconde los workbenches donde la tarea no está: `opacity` sobre el
+ * botón, nunca `display`. Dos razones, las dos medidas: si algo sale del flujo
+ * el ★ se mueve justo cuando el mouse va hacia él (§13.0), y un `gutter()` se
+ * dimensiona por su elemento **renderizado** más ancho, así que una fila que
+ * creciera solo en las tareas con fecha ensancharía el margen al scrollear hasta
+ * una y el texto saltaría — que es por lo que en el 6b se descartó
+ * `:has(.cm-gutterElement)`.
+ * -------------------------------------------------------------------------- */
+
+/* Encendidos van en `--text-muted` y no en el acento del ★: aquel es un toggle
+   —«lo puse yo»— y estos son un dato de la tarea. Que se lean distinto es lo que
+   evita que parezcan cinco botones del mismo tipo. */
+.markdown-source-view.mod-cm6 .tareas-boton-fecha.is-activo,
+.markdown-source-view.mod-cm6 .tareas-boton-recurrencia.is-activo {
+  color: var(--text-muted);
+}
+
+/* Y **sin relleno**: `fill: currentColor` sobre un `calendar` o un `repeat` los
+   deja como manchas sólidas, porque esos dos glifos de Lucide son puro contorno.
+   El relleno es del ★ y el ◐, donde «lleno» significa «la tarea está adentro». */
+.markdown-source-view.mod-cm6 .tareas-boton-fecha.is-activo .svg-icon,
+.markdown-source-view.mod-cm6 .tareas-boton-recurrencia.is-activo .svg-icon {
+  fill: none;
+}
+
+/* --- la grilla del calendario (paso 6c) ---------------------------------- *
+ *
+ * Vive en un modal, o sea afuera del editor: acá no hace falta `all: unset` ni
+ * pelearle a `.cm-line`. Es la alternativa al selector nativo del navegador, y
+ * la única forma de elegir en una tarea cíclica — ahí el campo es un número del
+ * 1 al 31 y el navegador no ofrece nada.
+ * -------------------------------------------------------------------------- */
+
+.tareas-calendario {
+  margin: var(--size-4-2) 0;
+}
+
+.tareas-calendario-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+  margin-bottom: var(--size-4-1);
+}
+
+.tareas-calendario-titulo {
+  font-weight: var(--font-medium);
+}
+
+.tareas-calendario-mover {
+  padding: 0 var(--size-4-2);
+  cursor: pointer;
+}
+
+.tareas-calendario-dias,
+.tareas-calendario-grilla {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.tareas-calendario-dias {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  text-align: center;
+}
+
+/* La grilla de una cíclica no tiene semanas: son 31 días sueltos. Se dibuja más
+   angosta a propósito, para que no se lea como un calendario. */
+.tareas-calendario-grilla.is-dias {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.tareas-calendario-celda {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8em;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+
+.tareas-calendario-celda:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Hoy se marca con un borde y no con un fondo: el fondo es del elegido, y dos
+   fondos distintos en la misma grilla no se distinguen de un vistazo. */
+.tareas-calendario-celda.is-hoy {
+  box-shadow: inset 0 0 0 1px var(--text-faint);
+}
+
+.tareas-calendario-celda.is-elegido {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}

@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   aplicarArchivado,
+  archivarEnElLog,
   bloqueParaElLog,
   caminoDeArchivado,
   nodoDeTarea,
@@ -20,7 +21,13 @@ import {
   reemplazarLinea,
   renderDocumento,
 } from "../src/documento.js";
-import { aplicarPlan, planDeReinicio, planDeReinicioEnVarias } from "../src/acciones.js";
+import {
+  aplicarPlan,
+  planDeArchivarYReiniciar,
+  planDeReinicio,
+  planDeReinicioEnVarias,
+} from "../src/acciones.js";
+import { antesDe, aplicarLote } from "../src/ubicar.js";
 import { indexar } from "../src/tareas.js";
 import {
   nuevoId,
@@ -654,6 +661,280 @@ describe("invariante 6 — el archivado es idempotente", () => {
           expect(l, "checkbox en el LOG").not.toMatch(/^\s*-\s+\[.\]/);
           expect(l, "token en el LOG").not.toContain("%%t:");
         }
+      }),
+      corridas,
+    );
+  });
+});
+
+/**
+ * El invariante 6 en **una sola llamada** con N caminos (paso 6c).
+ *
+ * La propiedad de más arriba hace N llamadas a `planDeArchivado`, una por
+ * bloque, y eso es lo que hacía el paso 6a. «Archivar y reiniciar» no puede:
+ * los M caminos de un grupo repartido en M notas tienen que entrar en **un
+ * solo** `process`, porque la posición en el LOG se recalcula sobre el contenido
+ * y en dos llamadas la segunda vería bytes que la primera ya cambió.
+ */
+describe("invariante 6 — con N caminos distintos en un solo `process`", () => {
+  /**
+   * Los caminos se generan con la **forma que `caminoDeArchivado` produce**: el
+   * primer paso es siempre el nombre de una nota y el segundo, si lo hay, el de
+   * un proyecto. Los dos alfabetos son disjuntos, y eso no es una comodidad del
+   * test: un proyecto se define por el prefijo `p_` del wikilink (§4.1) y una
+   * nota, por su nombre de archivo.
+   *
+   * La primera versión mezclaba los dos en una sola lista y **falló**. No por un
+   * bug: con `["tareas_A", "p_Dos"]` archivado y después `["p_Dos"]` a secas, el
+   * segundo engancha bajo el `## p_Dos` que creó el primero — que es exactamente
+   * lo que «el prefijo más largo del camino que ya existe» quiere decir. La
+   * propiedad afirmaba algo **más fuerte que la verdad**, que es el error de la
+   * sesión 2 otra vez: cuando una propiedad falla, la primera pregunta es si la
+   * propiedad dice la verdad.
+   */
+  const nota = fc.constantFrom("tareas_A", "tareas_B", "tareas_C");
+  const proyecto = fc.constantFrom("p_Uno", "p_Dos");
+  const camino = fc
+    .tuple(nota, fc.option(proyecto, { nil: null }))
+    .map(([n, p]) => (p === null ? [n] : [n, p]));
+  const bloque = fc.array(
+    textoLibre.map((t) => `- ${t}`),
+    { minLength: 1, maxLength: 3 },
+  );
+  const entrada = fc.record({ camino, bloque });
+
+  it("cada camino se crea una sola vez, aunque aparezca en varias entradas", () => {
+    fc.assert(
+      fc.property(fc.array(entrada, { minLength: 2, maxLength: 5 }), (entradas) => {
+        const log = parseDocumento(archivarEnElLog("", entradas).texto);
+
+        // Un heading se identifica por su **camino entero**, no por su texto:
+        // `## p_Dos` bajo `# tareas_A` y bajo `# tareas_B` son dos secciones
+        // distintas y las dos son legítimas. La segunda versión de esta
+        // propiedad las contaba como una y falló; era la propiedad, no el
+        // código.
+        const pila: string[] = [];
+        const presentes: string[] = [];
+        for (const h of headingsDe(log)) {
+          pila.length = h.heading.nivel - 1;
+          pila[h.heading.nivel - 1] = h.heading.texto.trim();
+          presentes.push(pila.join("\u0000"));
+        }
+
+        // Los caminos que hay son **exactamente** los que se pidieron, cada uno
+        // una sola vez: ni de menos —el bloque quedaría colgado— ni de más, que
+        // es lo que el invariante 6 prohíbe.
+        const esperados = new Set<string>();
+        for (const e of entradas) {
+          for (let i = 0; i < e.camino.length; i++) {
+            esperados.add(e.camino.slice(0, i + 1).join("\u0000"));
+          }
+        }
+        expect(presentes.sort()).toEqual([...esperados].sort());
+      }),
+      corridas,
+    );
+  });
+
+  it("una sola llamada da lo mismo que N llamadas encadenadas", () => {
+    // Es la propiedad que hace legítimo el cambio de firma: la forma nueva no
+    // puede escribir algo distinto de la que ya estaba verificada.
+    fc.assert(
+      fc.property(fc.array(entrada, { minLength: 1, maxLength: 5 }), (entradas) => {
+        const junto = archivarEnElLog("", entradas).texto;
+        let suelto = "";
+        for (const e of entradas) suelto = archivarEnElLog(suelto, [e]).texto;
+        expect(junto).toBe(suelto);
+      }),
+      corridas,
+    );
+  });
+
+  it("todos los bloques quedan adentro, ninguno se pierde", () => {
+    fc.assert(
+      fc.property(fc.array(entrada, { minLength: 1, maxLength: 5 }), (entradas) => {
+        const { texto } = archivarEnElLog("", entradas);
+        for (const e of entradas) for (const l of e.bloque) expect(texto).toContain(l);
+      }),
+      corridas,
+    );
+  });
+
+  it("y lo que escribe se vuelve a leer byte por byte (invariante 9)", () => {
+    fc.assert(
+      fc.property(fc.array(entrada, { minLength: 1, maxLength: 5 }), (entradas) => {
+        const { texto } = archivarEnElLog("", entradas);
+        expect(renderDocumento(parseDocumento(texto))).toBe(texto);
+      }),
+      corridas,
+    );
+  });
+});
+
+/**
+ * El invariante 5 con «archivar y reiniciar» (paso 6c).
+ *
+ * El camino nuevo escribe **bloques** donde el reinicio a secas escribe líneas,
+ * y un bloque abarca el subárbol entero — o sea que pasa por encima de líneas
+ * que **no** llevan la etiqueta. La propiedad que hay que sostener es que aun
+ * así no cambie ninguna: la garantía de la §11 no se puede aflojar porque el
+ * mecanismo de escritura sea otro.
+ */
+describe("invariante 5 con archivado", () => {
+  const variasNotas = fc
+    .array(
+      fc.array(
+        fc.tuple(
+          fc.constantFrom("[ ] ", "[x] "),
+          textoLibre,
+          fc.constantFrom<string | null>("lunes", "mensual", null),
+          fc.option(fc.constantFrom("2026-08-24"), { nil: null }),
+          fc.constantFrom(0, 1), // la sangría: hijos que no llevan etiqueta
+        ),
+        { minLength: 1, maxLength: 6 },
+      ),
+      { minLength: 1, maxLength: 3 },
+    )
+    .map((notas) =>
+      notas.map((filas, i) => ({
+        archivo: `n${i}.md`,
+        raw: filas
+          .map(([cb, t, rec, done, indent]) => {
+            const meta: Partial<TaskMeta> = {};
+            if (rec !== null) meta.rec = rec;
+            if (done !== null && cb === "[x] ") meta.done = done;
+            return setTaskToken(`${"\t".repeat(indent)}- ${cb}${t}`, meta);
+          })
+          .join("\n"),
+      })),
+    );
+
+  const cargar = (notas: readonly { archivo: string; raw: string }[]) =>
+    notas.map(({ archivo, raw }) => {
+      const doc = parseDocumento(raw);
+      return { archivo, doc, tareas: indexar(doc, archivo) };
+    });
+
+  it("no cambia una sola línea que no lleve la etiqueta de ese grupo", () => {
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const cargadas = cargar(notas);
+        const { lotes } = planDeArchivarYReiniciar(cargadas, grupo, "2026-09-03");
+
+        for (const l of lotes) {
+          const { doc, tareas } = cargadas.find((c) => c.archivo === l.archivo)!;
+          const despues = aplicarPlan(doc, l.cambios);
+          const delGrupo = new Set(tareas.filter((t) => t.rec === grupo).map((t) => t.linea));
+          for (const linea of doc.lineas) {
+            if (delGrupo.has(linea.n)) continue;
+            expect(despues.lineas[linea.n]!.texto, `línea ${linea.n} de ${l.archivo}`).toBe(
+              linea.texto,
+            );
+          }
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("deja la nota exactamente igual que el reinicio a secas", () => {
+    // Los dos botones del modal tienen que hacer lo mismo con las tareas: la
+    // diferencia es el historial. Si divergieran, «archivar y reiniciar» sería
+    // otra acción y no la misma con rastro.
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const conA = cargar(notas);
+        const sinA = cargar(notas);
+        const archivando = new Map(
+          planDeArchivarYReiniciar(conA, grupo, "2026-09-03").lotes.map((l) => [
+            l.archivo,
+            l.cambios,
+          ]),
+        );
+        const aSecas = new Map(planDeReinicioEnVarias(sinA, grupo).map((l) => [l.archivo, l.cambios]));
+        expect([...archivando.keys()].sort()).toEqual([...aSecas.keys()].sort());
+        for (const [archivo, cambios] of archivando) {
+          const doc = conA.find((c) => c.archivo === archivo)!.doc;
+          expect(renderDocumento(aplicarPlan(doc, cambios))).toBe(
+            renderDocumento(aplicarPlan(doc, aSecas.get(archivo)!)),
+          );
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("ninguna tarea se archiva dos veces, ni siquiera anidada", () => {
+    // Una madre y una hija del mismo grupo: la hija viaja adentro del bloque de
+    // la madre, y una entrada aparte la duplicaría en el historial **y** haría
+    // colisionar los dos cambios en el mismo lote.
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const cargadas = cargar(notas);
+        const { lotes } = planDeArchivarYReiniciar(cargadas, grupo, "2026-09-03");
+        for (const l of lotes) {
+          const doc = cargadas.find((c) => c.archivo === l.archivo)!.doc;
+          // Los bloques no se solapan: si lo hicieran, `ubicarLote` devolvería
+          // `colisión` y no se escribiría nada.
+          const rangos = l.cambios
+            .map((c) => ({ desde: c.linea, hasta: c.linea + antesDe(c).length - 1 }))
+            .sort((a, b) => a.desde - b.desde);
+          for (let i = 1; i < rangos.length; i++) {
+            expect(rangos[i]!.desde).toBeGreaterThan(rangos[i - 1]!.hasta);
+          }
+          expect(rangos.at(-1)?.hasta ?? -1).toBeLessThan(doc.lineas.length);
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("el lote se puede aplicar de verdad: nunca da colisión", () => {
+    // La comprobación de arriba mira los rangos; esta la hace pasar por el
+    // aplicador real, que es quien decide. Un plan que no se puede aplicar es
+    // una acción que se niega sin que nada lo explique.
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const cargadas = cargar(notas);
+        const { lotes } = planDeArchivarYReiniciar(cargadas, grupo, "2026-09-03");
+        for (const l of lotes) {
+          const doc = cargadas.find((c) => c.archivo === l.archivo)!.doc;
+          const { resultado } = aplicarLote(renderDocumento(doc), l.cambios);
+          expect(resultado.estado).toBe("ok");
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("lo que va al historial no lleva checkboxes ni tokens", () => {
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const { entradas } = planDeArchivarYReiniciar(cargar(notas), grupo, "2026-09-03");
+        for (const e of entradas) {
+          for (const l of e.bloque) {
+            expect(l, "checkbox en el LOG").not.toMatch(/^\s*-\s+\[.\]/);
+            expect(l, "token en el LOG").not.toContain("%%t:");
+          }
+        }
+      }),
+      corridas,
+    );
+  });
+
+  it("archivar y reiniciar dos veces seguidas no deja nada que hacer", () => {
+    fc.assert(
+      fc.property(variasNotas, fc.constantFrom("lunes", "mensual"), (notas, grupo) => {
+        const cargadas = cargar(notas);
+        const { lotes } = planDeArchivarYReiniciar(cargadas, grupo, "2026-09-03");
+        const porArchivo = new Map(lotes.map((l) => [l.archivo, l.cambios]));
+        const una = cargadas.map(({ archivo, doc }) => ({
+          archivo,
+          raw: renderDocumento(aplicarPlan(doc, porArchivo.get(archivo) ?? [])),
+        }));
+        const segunda = planDeArchivarYReiniciar(cargar(una), grupo, "2026-09-03");
+        expect(segunda.lotes).toEqual([]);
+        expect(segunda.entradas).toEqual([]);
       }),
       corridas,
     );

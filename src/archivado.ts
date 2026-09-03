@@ -237,8 +237,14 @@ export function aplicarArchivado(log: Documento, plan: PlanDeArchivado): Documen
   return insertarLineas(log, plan.linea, plan.lineas);
 }
 
+/** Un bloque con su camino: lo que una tarea le deja al historial. */
+export interface EntradaParaElLog {
+  camino: readonly string[];
+  bloque: readonly string[];
+}
+
 /**
- * El LOG entero, con el bloque ya archivado. **Es lo que corre adentro de
+ * El LOG entero, con los bloques ya archivados. **Es lo que corre adentro de
  * `vault.process()`.**
  *
  * Acá está la decisión que separa al LOG del resto de las escrituras del
@@ -259,17 +265,50 @@ export function aplicarArchivado(log: Documento, plan: PlanDeArchivado): Documen
  * Cuesta 0,011 ms sobre el LOG de hoy (51 líneas) y 0,17 ms sobre uno veinte
  * veces más grande, medido el 01/09/2026. No hay ninguna razón para ser astuto.
  *
- * Devuelve también el plan: quien avisa necesita poder decir cuántos headings
+ * ## Y por qué recibe **N entradas** y no una
+ *
+ * «Archivar y reiniciar» (§11) archiva un grupo cíclico entero, y un grupo es
+ * global: repartido en M notas produce **M caminos distintos** —el camino es la
+ * nota de origen más el proyecto (§12, `caminoDeArchivado`)—. Los M tienen que
+ * entrar en **un solo** `process`, porque si no, el segundo recalcularía sobre
+ * bytes que el primero ya cambió.
+ *
+ * Se pliega: cada entrada calcula su plan sobre el documento **ya actualizado**
+ * por la anterior. De esa forma el **invariante 6** sale del recorrido y no de
+ * una comprobación aparte —cuando la segunda entrada trae el mismo camino, el
+ * heading ya está y lo engancha— y dos bloques del mismo camino quedan
+ * contiguos, porque `finDeSeccion` los manda al mismo lugar.
+ *
+ * Es **una sola función**, no dos: archivar un bloque es `archivarEnElLog(texto,
+ * [entrada])`. Dos versiones de esta decisión divergirían justo en si crean el
+ * heading, que es el invariante que esta función existe para sostener.
+ *
+ * Devuelve también los planes: quien avisa necesita poder decir cuántos headings
  * se crearon, y eso solo se sabe acá adentro.
  */
 export function archivarEnElLog(
   texto: string,
-  camino: readonly string[],
-  bloque: readonly string[],
-): { texto: string; plan: PlanDeArchivado } {
-  const log = parseDocumento(texto);
-  const plan = planDeArchivado(log, camino, bloque);
-  return { texto: renderDocumento(aplicarArchivado(log, plan)), plan };
+  entradas: readonly EntradaParaElLog[],
+): { texto: string; planes: PlanDeArchivado[] } {
+  let log = parseDocumento(texto);
+  const planes: PlanDeArchivado[] = [];
+  for (const { camino, bloque } of entradas) {
+    const plan = planDeArchivado(log, camino, bloque);
+    planes.push(plan);
+    log = aplicarArchivado(log, plan);
+  }
+  return { texto: renderDocumento(log), planes };
+}
+
+/** Cuántas líneas y cuántos headings nuevos escribieron estos planes. */
+export function cuentaDeArchivado(planes: readonly PlanDeArchivado[]): {
+  lineas: number;
+  headingsNuevos: number;
+} {
+  return {
+    lineas: planes.reduce((n, p) => n + p.lineas.length, 0),
+    headingsNuevos: planes.reduce((n, p) => n + p.headingsNuevos.length, 0),
+  };
 }
 
 /**

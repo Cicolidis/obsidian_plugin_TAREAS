@@ -51,7 +51,7 @@
  * sin esperar al `changed`, que llega después y trae lo mismo.
  */
 import { Notice, TFile, type App } from "obsidian";
-import { archivarEnElLog } from "../archivado.js";
+import { archivarEnElLog, cuentaDeArchivado, type EntradaParaElLog } from "../archivado.js";
 import type { CambioDeLote } from "../documento.js";
 import { aplicarLote, ubicarLote, type ResultadoDeLote } from "../ubicar.js";
 
@@ -193,9 +193,10 @@ export async function escribirArchivado(
 
   const alLog = { lineas: 0, headings: 0 };
   await app.vault.process(archivoDelLog, (data) => {
-    const r = archivarEnElLog(data, log.camino, log.bloque);
-    alLog.lineas = r.plan.lineas.length;
-    alLog.headings = r.plan.headingsNuevos.length;
+    const r = archivarEnElLog(data, [{ camino: log.camino, bloque: log.bloque }]);
+    const cuenta = cuentaDeArchivado(r.planes);
+    alLog.lineas = cuenta.lineas;
+    alLog.headings = cuenta.headingsNuevos;
     return r.texto;
   });
 
@@ -264,6 +265,12 @@ export interface NotaEscrita {
   lineas: number;
 }
 
+/** Un lote con destino: lo que una acción le deja a una nota. */
+export interface LoteConDestino {
+  archivo: string;
+  cambios: readonly CambioDeLote[];
+}
+
 export type ResultadoDeVarias =
   | { estado: "escrito"; escritas: NotaEscrita[] }
   /** No había nada que escribir en ninguna. */
@@ -308,8 +315,148 @@ export type ResultadoDeVarias =
  */
 export async function escribirEnVarias(
   app: App,
-  lotes: readonly { archivo: string; cambios: readonly CambioDeLote[] }[],
+  lotes: readonly LoteConDestino[],
 ): Promise<ResultadoDeVarias> {
+  const p = prepararLotes(app, lotes);
+  if (p.estado === "sin-cambios") return { estado: "sin-cambios" };
+  if (p.estado === "sin-archivo") return p;
+
+  await Promise.all(p.orden.map((l) => volcarEditores(app, l.archivo)));
+
+  const fallas = await secoSobreTodas(app, p);
+  if (fallas.length) return { estado: "no-ubicada", fallas };
+
+  const { escritas, seCayeron } = await aplicarLotes(app, p);
+  return seCayeron.length
+    ? { estado: "media-operacion", escritas, fallas: seCayeron }
+    : { estado: "escrito", escritas };
+}
+
+// ----------------------------- archivar y reiniciar: 1 + N archivos (§11)
+
+export type ResultadoDeArchivadoEnVarias =
+  | { estado: "escrito"; escritas: NotaEscrita[]; alLog: number; headingsNuevos: number }
+  /** El paso en seco dijo que no. **No se escribió nada, ni en el historial.** */
+  | { estado: "no-ubicada"; fallas: { archivo: string; lote: ResultadoDeLote }[] }
+  | { estado: "sin-cambios" }
+  | { estado: "sin-archivo"; cuales: string[] }
+  /** El LOG sí, y alguna nota no. La mitad que se puede quedar a medias. */
+  | {
+      estado: "media-operacion";
+      escritas: NotaEscrita[];
+      fallas: string[];
+      alLog: number;
+    };
+
+/**
+ * «Archivar y reiniciar» (§11): el historial **más** N notas.
+ *
+ * Es el tercer camino multi-archivo del plugin y no lo cubría ninguno de los dos
+ * que había: `escribirArchivado` son 2 archivos con un orden elegido, y
+ * `escribirEnVarias` son N sin orden privilegiado. Acá son **1 + N**, o sea las
+ * dos formas a la vez.
+ *
+ * ## El orden, y por qué el LOG va primero
+ *
+ * ```
+ * seco sobre las N  →  el LOG, en un solo `process`  →  las N, por ruta
+ * ```
+ *
+ * La §8 ya elegía el LOG primero porque una entrada de historial de una tarea
+ * pendiente **se ve y se arregla**, y una tarea completada sin registro es una
+ * pérdida que no se nota. Acá hay una razón más dura, y es la que manda: **el
+ * reinicio borra los `done` y los `[x]`**. Al revés —las notas primero y el LOG
+ * después— si el LOG fallara, la fecha de completado de ese ciclo ya no existiría
+ * en ningún lado. No es elegir entre dos daños reversibles: es que un orden
+ * destruye datos y el otro no.
+ *
+ * ## Y el seco corre sobre las N **antes de tocar el LOG**
+ *
+ * Es lo que hace verdadera la promesa que este camino tiene que dar: **si una
+ * nota no se puede ubicar, no se escribe en el historial tampoco.** La inserción
+ * en el LOG no puede entrar al seco —su posición es una función del contenido
+ * del LOG y se recalcula adentro de `process`, ver `archivarEnElLog`—, pero
+ * puede ir **después**, y con eso alcanza.
+ *
+ * Lo que queda de ventana es `media-operacion`: el historial escrito y alguna
+ * nota sin destildar. Se ve, se arregla, y no perdió nada — que es exactamente
+ * el criterio con el que se eligió el orden.
+ *
+ * ## Y las N entradas van en **un solo** `process` sobre el LOG
+ *
+ * Un grupo repartido en M notas produce M caminos distintos. En dos `process`
+ * separados, el segundo recalcularía su posición sobre bytes que el primero ya
+ * cambió, y el invariante 6 —«archivar N bloques en el mismo camino crea el
+ * camino una sola vez»— dejaría de valer. De eso se encarga `archivarEnElLog`.
+ */
+export async function escribirArchivadoEnVarias(
+  app: App,
+  log: { archivo: string; entradas: readonly EntradaParaElLog[] },
+  lotes: readonly LoteConDestino[],
+): Promise<ResultadoDeArchivadoEnVarias> {
+  // Sin nada que archivar esto sería un reinicio a secas por la puerta de al
+  // lado, y con un aviso que hablaría del historial. Que se niegue acá es la
+  // capa donde el daño se para: no puede pasar desde `reiniciarGrupo`.
+  if (log.entradas.length === 0) return { estado: "sin-cambios" };
+
+  const p = prepararLotes(app, lotes);
+  if (p.estado === "sin-cambios") return { estado: "sin-cambios" };
+  if (p.estado === "sin-archivo") return p;
+
+  // Escribir el LOG como si fuera una nota más lo corrompería: el lote de esa
+  // nota se calculó sobre bytes anteriores a la inserción. No puede pasar —el
+  // LOG no está en el store, así que no se puede elegir una tarea suya— pero un
+  // ajuste mal puesto no tiene por qué costar el historial.
+  if (p.orden.some((l) => l.archivo === log.archivo)) {
+    return { estado: "sin-archivo", cuales: [log.archivo] };
+  }
+
+  const archivoDelLog = app.vault.getFileByPath(log.archivo);
+  if (!(archivoDelLog instanceof TFile)) return { estado: "sin-archivo", cuales: [log.archivo] };
+
+  // El LOG casi nunca está abierto, pero si lo está su buffer sucio pisaría la
+  // inserción igual que el de cualquier nota.
+  await volcarEditores(app, log.archivo);
+  await Promise.all(p.orden.map((l) => volcarEditores(app, l.archivo)));
+
+  const fallas = await secoSobreTodas(app, p);
+  if (fallas.length) return { estado: "no-ubicada", fallas };
+
+  const alLog = { lineas: 0, headings: 0 };
+  await app.vault.process(archivoDelLog, (data) => {
+    const r = archivarEnElLog(data, log.entradas);
+    const cuenta = cuentaDeArchivado(r.planes);
+    alLog.lineas = cuenta.lineas;
+    alLog.headings = cuenta.headingsNuevos;
+    return r.texto;
+  });
+
+  const { escritas, seCayeron } = await aplicarLotes(app, p);
+  return seCayeron.length
+    ? { estado: "media-operacion", escritas, fallas: seCayeron, alLog: alLog.lineas }
+    : {
+        estado: "escrito",
+        escritas,
+        alLog: alLog.lineas,
+        headingsNuevos: alLog.headings,
+      };
+}
+
+// --------------------------------------- las tres piezas que los dos comparten
+//
+// Están separadas porque **la garantía vive en la secuencia**, no en cada paso:
+// «el seco corre sobre todas las notas antes de escribir en ninguna» es todo lo
+// que `escribirEnVarias` y `escribirArchivadoEnVarias` ofrecen. Dos copias de
+// esa secuencia son dos garantías que se pueden desincronizar, y la que se
+// desincronizara lo haría en silencio.
+
+type Preparacion =
+  | { estado: "listo"; orden: LoteConDestino[]; archivos: Map<string, TFile> }
+  | { estado: "sin-cambios" }
+  | { estado: "sin-archivo"; cuales: string[] };
+
+/** Los lotes con algo que hacer, sus archivos, y el orden estable. */
+function prepararLotes(app: App, lotes: readonly LoteConDestino[]): Preparacion {
   const conCambios = lotes.filter((l) => l.cambios.length > 0);
   if (conCambios.length === 0) return { estado: "sin-cambios" };
 
@@ -331,30 +478,47 @@ export async function escribirEnVarias(
   }
   if (faltan.length) return { estado: "sin-archivo", cuales: faltan };
 
-  await Promise.all(orden.map((l) => volcarEditores(app, l.archivo)));
+  return { estado: "listo", orden, archivos };
+}
 
-  // El paso en seco, sobre **todas**. `process` devolviendo `data` intacto no
-  // dispara `modify` ni `changed` y deja el `mtime` igual: está medido, y es lo
-  // que lo hace legítimo sobre un vault en Sync.
+/**
+ * El paso en seco, sobre **todas**.
+ *
+ * `process` devolviendo `data` intacto no dispara `modify` ni `changed` y deja
+ * el `mtime` igual: está medido, y es lo que lo hace legítimo sobre un vault en
+ * Sync.
+ *
+ * Se recorren todas aunque la primera falle: «no se pudieron ubicar 3 de 5» es
+ * más útil que «no se pudo una», y son archivos de 400 líneas.
+ */
+async function secoSobreTodas(
+  app: App,
+  p: Extract<Preparacion, { estado: "listo" }>,
+): Promise<{ archivo: string; lote: ResultadoDeLote }[]> {
   const fallas: { archivo: string; lote: ResultadoDeLote }[] = [];
-  for (const l of orden) {
+  for (const l of p.orden) {
     const seco: { lote?: ResultadoDeLote } = {};
-    await app.vault.process(archivos.get(l.archivo)!, (data) => {
+    await app.vault.process(p.archivos.get(l.archivo)!, (data) => {
       seco.lote = ubicarLote(data.split("\n"), l.cambios);
       return data;
     });
     const lote = seco.lote ?? { estado: "no-ubicada" as const, fallas: [] };
     if (lote.estado !== "ok") fallas.push({ archivo: l.archivo, lote });
   }
-  // Se recorren todas aunque la primera falle: «no se pudieron ubicar 3 de 5»
-  // es más útil que «no se pudo una», y son archivos de 400 líneas.
-  if (fallas.length) return { estado: "no-ubicada", fallas };
+  return fallas;
+}
 
+/** Las escrituras de verdad, en el orden estable. */
+async function aplicarLotes(
+  app: App,
+  p: Extract<Preparacion, { estado: "listo" }>,
+): Promise<{ escritas: NotaEscrita[]; seCayeron: string[] }> {
   const escritas: NotaEscrita[] = [];
   const seCayeron: string[] = [];
-  for (const l of orden) {
+
+  for (const l of p.orden) {
     const salida: { lote?: ResultadoDeLote } = {};
-    const contenido = await app.vault.process(archivos.get(l.archivo)!, (data) => {
+    const contenido = await app.vault.process(p.archivos.get(l.archivo)!, (data) => {
       const r = aplicarLote(data, l.cambios);
       salida.lote = r.resultado;
       return r.texto;
@@ -372,7 +536,5 @@ export async function escribirEnVarias(
     });
   }
 
-  return seCayeron.length
-    ? { estado: "media-operacion", escritas, fallas: seCayeron }
-    : { estado: "escrito", escritas };
+  return { escritas, seCayeron };
 }

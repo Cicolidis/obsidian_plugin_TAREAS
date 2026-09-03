@@ -33,15 +33,20 @@ import {
   planDeFecha,
   planDePrioridad,
   planDeRecurrencia,
+  planDeArchivarYReiniciar,
   planDeReinicioEnVarias,
   planDeWorkbench,
   yaEstaCompleta,
   type Eleccion,
+  type NotaParaReinicio,
+  type ReinicioConArchivado,
 } from "./acciones.js";
 import {
+  archivarEnElLog,
   archivarPideConfirmacion,
   bloqueParaElLog,
   caminoDeArchivado,
+  cuentaDeArchivado,
   nodoDeTarea,
   nombreDeNota,
   planDeArchivado,
@@ -58,7 +63,9 @@ import { elegirGrupo } from "./ui/elegirGrupo.js";
 import {
   escribir,
   escribirArchivado,
+  escribirArchivadoEnVarias,
   escribirEnVarias,
+  type LoteConDestino,
   type ResultadoDeEscritura,
 } from "./vault/escribir.js";
 
@@ -599,21 +606,39 @@ export function fijarRecurrencia(
  * Lo que hace que acá vuelva a valer «o todas o ninguna» es que el paso en seco
  * de `escribirEnVarias` corre sobre **todas** antes de escribir en ninguna, y
  * eso lo dice el aviso: con el índice atrasado no se escribe en una sola nota.
+ *
+ * ## Los dos caminos (§11, paso 6c)
+ *
+ * «La confirmación ofrece reiniciar o archivar y reiniciar; la segunda escribe
+ * el bloque en `tareas_LOG.md` con la fecha antes de destildar. Así la semanal
+ * trivial no llena el LOG y la mensual del alquiler deja rastro, **sin decidirlo
+ * de antemano**». Esa última frase es la que decide la forma: son dos botones en
+ * el mismo modal y no un ajuste, porque cuál conviene depende del grupo y del
+ * día, no de una preferencia.
+ *
+ * **El foco arranca en «Cancelar»**, decisión del usuario: ninguno de los dos
+ * puede ser el que un Enter reflejo elige, porque los dos son irreversibles de
+ * maneras distintas —uno borra fechas de completado, el otro escribe en un
+ * archivo que solo crece—.
+ *
+ * El historial se lee **fresco y solo para el cartel**, igual que en
+ * `archivarTarea`: lo que se escribe se recalcula después adentro de `process`,
+ * sobre los bytes de ese momento.
  */
-export function reiniciarGrupo(
+export async function reiniciarGrupo(
   app: App,
   store: StoreDeTareas,
   grupo: string,
-): void {
-  const lotes = planDeReinicioEnVarias(
-    store.cargadas().map((archivo) => ({
-      archivo,
-      doc: store.documento(archivo)!,
-      tareas: store.tareasDe(archivo),
-    })),
-    grupo,
-  );
+  hoyStr: string,
+  notaDeLog: string,
+): Promise<void> {
+  const notas: NotaParaReinicio[] = store.cargadas().map((archivo) => ({
+    archivo,
+    doc: store.documento(archivo)!,
+    tareas: store.tareasDe(archivo),
+  }));
 
+  const lotes = planDeReinicioEnVarias(notas, grupo);
   if (lotes.length === 0) {
     new Notice(STRINGS.avisos.sinQueReiniciar(grupo), 8000);
     return;
@@ -623,21 +648,71 @@ export function reiniciarGrupo(
   const nombres = lotes.map((l) => nombreDeNota(l.archivo)).sort();
   const t = STRINGS.confirmar.reiniciar;
 
+  // El otro camino, y su previsión sobre el historial de ahora. Si el LOG no
+  // existe, el segundo botón no se ofrece en vez de fallar al apretarlo: un
+  // control que promete lo que no puede hacer es peor que uno que no está.
+  //
+  // Es el **único** caso en que no se ofrece, y eso vale decirlo: se archiva
+  // exactamente el conjunto que el reinicio toca, así que si hay algo que
+  // reiniciar hay algo que archivar. Un «no hay nada que archivar» sería una
+  // rama que no se puede alcanzar.
+  const conArchivado = planDeArchivarYReiniciar(notas, grupo, hoyStr);
+  const previo = await previsionDelLog(app, notaDeLog, conArchivado);
+
+  const detalle = [
+    t.destilda(tareas, lotes.length),
+    t.notas(nombres),
+    t.soloEtiquetadas,
+    previo === null ? t.sinHistorial(notaDeLog) : t.alLog(previo.lineas, previo.headingsNuevos),
+    t.deshacer,
+  ];
+
   confirmar(
     app,
     {
       titulo: t.titulo,
-      detalle: [
-        t.destilda(tareas, lotes.length),
-        t.notas(nombres),
-        t.soloEtiquetadas,
-        t.noArchiva,
-        t.deshacer,
-      ],
+      detalle,
       aceptar: t.aceptar,
+      // Ninguno de los dos recibe el Enter: los dos son irreversibles, de
+      // maneras distintas, y el modal aparece de golpe.
+      focoEnCancelar: true,
+      ...(previo === null
+        ? {}
+        : {
+            segunda: {
+              texto: t.archivarYReiniciar,
+              alAceptar: () =>
+                void escribirReinicioConArchivado(app, store, notaDeLog, conArchivado),
+            },
+          }),
     },
     () => void escribirReinicio(app, store, lotes),
   );
+}
+
+/**
+ * Cuánto escribiría «archivar y reiniciar» en el historial de **ahora**, o
+ * `null` si no hay nada que archivar o el historial no existe.
+ *
+ * Se calcula sobre el LOG leído fresco y con el mismo plegado que
+ * `archivarEnElLog`: la segunda entrada tiene que ver el heading que creó la
+ * primera, o el cartel diría que crea dos secciones donde va a crear una.
+ *
+ * Entre lo que dice el cartel y lo que se escribe puede haber **una** diferencia:
+ * si otro dispositivo creó la sección en el medio, el cartel dice que la crea y
+ * resulta que no hacía falta. Es la diferencia correcta; la otra —duplicar el
+ * heading— es la que rompe el invariante 6.
+ */
+async function previsionDelLog(
+  app: App,
+  notaDeLog: string,
+  plan: ReinicioConArchivado,
+): Promise<{ lineas: number; headingsNuevos: number } | null> {
+  if (plan.entradas.length === 0) return null;
+  const archivo = app.vault.getFileByPath(notaDeLog);
+  if (!archivo) return null;
+  const { planes } = archivarEnElLog(await app.vault.cachedRead(archivo), plan.entradas);
+  return cuentaDeArchivado(planes);
 }
 
 /**
@@ -651,7 +726,7 @@ export function reiniciarGrupo(
 async function escribirReinicio(
   app: App,
   store: StoreDeTareas,
-  lotes: readonly { archivo: string; cambios: readonly CambioDeLote[] }[],
+  lotes: readonly LoteConDestino[],
 ): Promise<void> {
   const r = await escribirEnVarias(app, lotes);
 
@@ -679,6 +754,70 @@ async function escribirReinicio(
         STRINGS.avisos.reinicioAMedias(
           r.escritas.map((e) => nombreDeNota(e.archivo)),
           r.fallas.map(nombreDeNota),
+        ),
+        0,
+      );
+      break;
+  }
+}
+
+/**
+ * El otro camino: el historial primero, las notas después.
+ *
+ * El orden lo decide `escribirArchivadoEnVarias` y la razón está ahí: el
+ * reinicio **borra** los `done`, así que escribir las notas primero y perder el
+ * historial no dejaría rastro de ese ciclo en ningún lado. Acá solo se traducen
+ * los cinco finales, y el que cambia respecto del reinicio a secas es
+ * `media-operacion`: el historial ya está escrito, y el aviso tiene que decirlo
+ * para que nadie vuelva a archivar y termine con las entradas dos veces.
+ */
+async function escribirReinicioConArchivado(
+  app: App,
+  store: StoreDeTareas,
+  notaDeLog: string,
+  plan: ReinicioConArchivado,
+): Promise<void> {
+  const r = await escribirArchivadoEnVarias(
+    app,
+    { archivo: notaDeLog, entradas: plan.entradas },
+    plan.lotes,
+  );
+
+  switch (r.estado) {
+    case "escrito": {
+      for (const n of r.escritas) store.absorber(n.archivo, n.contenido, "escritura");
+      const lineas = r.escritas.reduce((n, e) => n + e.lineas, 0);
+      new Notice(
+        STRINGS.avisos.reiniciadoConArchivado(lineas, r.escritas.length, r.alLog),
+      );
+      break;
+    }
+    case "no-ubicada":
+      new Notice(
+        STRINGS.avisos.reinicioConArchivadoNoUbicado(
+          r.fallas.map((f) => nombreDeNota(f.archivo)),
+        ),
+        10000,
+      );
+      break;
+    case "sin-cambios":
+      new Notice(STRINGS.avisos.sinCambios);
+      break;
+    case "sin-archivo":
+      new Notice(
+        r.cuales.includes(notaDeLog)
+          ? STRINGS.avisos.sinLog(notaDeLog)
+          : STRINGS.avisos.sinNota(r.cuales.join(", ")),
+        10000,
+      );
+      break;
+    case "media-operacion":
+      for (const n of r.escritas) store.absorber(n.archivo, n.contenido, "escritura");
+      new Notice(
+        STRINGS.avisos.reinicioConArchivadoAMedias(
+          r.escritas.map((e) => nombreDeNota(e.archivo)),
+          r.fallas.map(nombreDeNota),
+          r.alLog,
         ),
         0,
       );
@@ -788,9 +927,9 @@ export function comandos(dep: DependenciasDeComandos) {
           new Notice(STRINGS.avisos.sinGrupos, 10000);
           return;
         }
-        elegirGrupo(dep.app, grupos, STRINGS.comandos.reiniciar, (grupo) =>
-          reiniciarGrupo(dep.app, dep.store, grupo),
-        );
+        elegirGrupo(dep.app, grupos, STRINGS.comandos.reiniciar, (grupo) => {
+          void reiniciarGrupo(dep.app, dep.store, grupo, fecha(), dep.notaDeLog());
+        });
       },
     },
   ];

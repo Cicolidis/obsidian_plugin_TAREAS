@@ -28,7 +28,13 @@ import {
   type CambioDeLinea,
   type CambioDeLote,
   type Documento,
+  type Nodo,
 } from "./documento.js";
+import {
+  bloqueParaElLog,
+  caminoDeArchivado,
+  type EntradaParaElLog,
+} from "./archivado.js";
 import { esTarea, parseBullet, renderBullet } from "./linea.js";
 import { esNotaDeTareas } from "./notas.js";
 import { aplicarLote, seEncontro, ubicarLinea } from "./ubicar.js";
@@ -549,10 +555,17 @@ export function planDeReinicio(
   return cambios;
 }
 
-/** Lo que una nota recibe de una acción que toca varias. */
+/**
+ * Lo que una nota recibe de una acción que toca varias.
+ *
+ * `CambioDeLote` y no `CambioDeLinea` desde el paso 6c: el reinicio a secas
+ * escribe líneas sueltas, y «archivar y reiniciar» escribe **bloques** —el
+ * subárbol entero, para poder verificarlo entero (§12 punto 4)—. Las dos cosas
+ * llegan a la misma capa 2 y se aplican con el mismo `aplicarLote`.
+ */
 export interface LoteDeNota {
   archivo: string;
-  cambios: CambioDeLinea[];
+  cambios: CambioDeLote[];
 }
 
 /**
@@ -575,7 +588,7 @@ export interface LoteDeNota {
  * `escribirEnVarias`, que ordena por ruta antes de escribir.
  */
 export function planDeReinicioEnVarias(
-  notas: readonly { archivo: string; doc: Documento; tareas: readonly Task[] }[],
+  notas: readonly NotaParaReinicio[],
   grupo: string,
 ): LoteDeNota[] {
   const salida: LoteDeNota[] = [];
@@ -584,6 +597,137 @@ export function planDeReinicioEnVarias(
     if (cambios.length) salida.push({ archivo, cambios });
   }
   return salida;
+}
+
+// ------------------------------ archivar y reiniciar (§11, paso 6c)
+
+/** Una nota, tal como el store se la pasa a los planes que tocan varias. */
+export interface NotaParaReinicio {
+  archivo: string;
+  doc: Documento;
+  tareas: readonly Task[];
+}
+
+/** El plan del segundo camino de la confirmación de reinicio (§11). */
+export interface ReinicioConArchivado {
+  /** Lo que va a cada nota. Bloques, no líneas: ver abajo. */
+  lotes: LoteDeNota[];
+  /** Lo que va al historial, en un orden estable. */
+  entradas: EntradaParaElLog[];
+}
+
+/**
+ * «Archivar y reiniciar»: el bloque de cada tarea va al historial **antes** de
+ * destildarla.
+ *
+ * La §11 lo pide desde que existe el botón de reinicio: «la confirmación ofrece
+ * reiniciar o archivar y reiniciar; la segunda escribe el bloque en
+ * `tareas_LOG.md` con la fecha (§12) antes de destildar. Así la semanal trivial
+ * no llena el LOG y la mensual del alquiler deja rastro, sin decidirlo de
+ * antemano».
+ *
+ * ## Qué se archiva: **exactamente lo que el reinicio va a borrar**
+ *
+ * No «las completadas» ni «las que tienen `done`»: el mismo conjunto que
+ * `planDeReinicio` toca, que es el que cumple `hecha || done !== null`. Es una
+ * regla y no dos, y la razón es el sentido entero de este camino: **nada de lo
+ * que el reinicio destruye se pierde**. El reinicio borra el `[x]` y el `done`,
+ * y el `done` es el único lugar donde vive la fecha de ese ciclo.
+ *
+ * Queda dicho el borde en vez de tapado: una tarea `[ ]` con un `done` viejo
+ * —solo alcanzable editando el token a mano, porque `planDeDestildar` lo borra—
+ * también se archiva, porque su fecha también se borra. Un segundo predicado
+ * para ese caso sería una regla más para acordarse y una diferencia entre lo que
+ * el cartel cuenta y lo que se escribe.
+ *
+ * ## Por qué la nota recibe **bloques** y no las líneas del reinicio
+ *
+ * Es la §12 punto 4, que vale acá por la misma razón que en `archivarTarea`:
+ * **lo que se copia al LOG tiene que ser lo que estaba en la nota**. El bloque
+ * incluye las notas sin checkbox del subárbol (§4.3), que ningún cambio de línea
+ * toca y que por lo tanto nadie verificaría; al viajar adentro del `antes` del
+ * bloque, si alguna cambió desde que se armó el plan, el lote entero se niega en
+ * vez de archivar texto viejo.
+ *
+ * ## Y por qué se descartan las tareas que cuelgan de otra del mismo grupo
+ *
+ * Una madre y una hija las dos con `rec=X` es raro —`rec` no baja por el
+ * subárbol (§11), hay que etiquetar las dos a mano— pero si pasa, la hija ya
+ * viaja adentro del bloque de la madre. Sin este descarte se archivaría dos
+ * veces y, peor, los dos cambios se solaparían en el mismo lote: `ubicarLote`
+ * devolvería `colisión` y la operación entera se negaría, sin que nada explique
+ * por qué. Se decide por el **rango de documento**, que es exactamente la
+ * coordenada con la que aquel detecta el solapamiento.
+ *
+ * El orden es por ruta y después por línea, y no el que traiga el store: una
+ * media operación tiene que ser reproducible, y el historial tiene que quedar
+ * igual si se repite.
+ */
+export function planDeArchivarYReiniciar(
+  notas: readonly NotaParaReinicio[],
+  grupo: string,
+  hoy: string,
+): ReinicioConArchivado {
+  const lotes: LoteDeNota[] = [];
+  const entradas: EntradaParaElLog[] = [];
+
+  for (const { archivo, doc, tareas } of [...notas].sort((a, b) =>
+    a.archivo.localeCompare(b.archivo),
+  )) {
+    const cambios = planDeReinicio(doc, tareas, grupo);
+    if (cambios.length === 0) continue;
+
+    const arbol = arbolDe(doc);
+    const porLinea = new Map(tareasDelGrupo(tareas, grupo).map((t) => [t.linea, t]));
+
+    // El rango de documento de cada línea afectada. Se calcula una vez: decide
+    // quién es raíz **y** dónde cae cada destildado.
+    const rangos = new Map<number, { desde: number; hasta: number; nodo: Nodo }>();
+    for (const c of cambios) {
+      const nodo = nodoEnLinea(arbol, c.linea);
+      if (nodo) rangos.set(c.linea, { ...rangoDelSubarbol(nodo), nodo });
+    }
+
+    const raices = [...rangos.keys()]
+      .filter((linea) =>
+        ![...rangos].some(
+          ([otra, r]) => otra !== linea && r.desde <= linea && linea <= r.hasta,
+        ),
+      )
+      .sort((a, b) => a - b);
+
+    const delLote: CambioDeLote[] = [];
+    const consumidos = new Set<number>();
+
+    for (const linea of raices) {
+      const { desde, hasta, nodo } = rangos.get(linea)!;
+      const antes = lineasDelSubarbol(doc, nodo);
+      const despues = antes.slice();
+      for (const c of cambios) {
+        if (c.linea < desde || c.linea > hasta) continue;
+        despues[c.linea - desde] = c.despues;
+        consumidos.add(c.linea);
+      }
+      delLote.push({ tipo: "bloque", linea: desde, antes, despues });
+      entradas.push({
+        camino: caminoDeArchivado(archivo, porLinea.get(linea)?.proyecto ?? null),
+        bloque: bloqueParaElLog(doc, nodo, hoy),
+      });
+    }
+
+    // No puede pasar: toda línea afectada es raíz o cuelga de una. Si alguna vez
+    // dejara de ser cierto, el reinicio escribiría **sin** destildar esa línea y
+    // eso no se ve — el mismo argumento que `planDeArchivarEnLaNota`.
+    for (const c of cambios) {
+      if (!consumidos.has(c.linea)) {
+        throw new RangeError(`el reinicio salió de todos los bloques: línea ${c.linea}`);
+      }
+    }
+
+    lotes.push({ archivo, cambios: delLote });
+  }
+
+  return { lotes, entradas };
 }
 
 // ---------------------------------------------------- aplicar, en memoria

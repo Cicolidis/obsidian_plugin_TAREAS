@@ -367,3 +367,37 @@ export function tareasDelGrupo(tareas: readonly Task[], grupo: string): Task[] {
 export function gruposDeReinicio(tareas: readonly Task[]): string[] {
   return [...new Set(tareas.map((t) => t.rec).filter((r): r is string => r !== null))].sort();
 }
+
+/**
+ * Los grupos con **cuántas tareas** llevan cada uno, del más usado al menos.
+ *
+ * Es «las más usadas» del pedido de la verificación del 6b, y la parte que
+ * importa es de dónde sale el número: **de las notas**, no de un contador que el
+ * plugin guarde. Eso no es una comodidad, es la §10 aplicada —«un workbench no
+ * tiene almacenamiento propio»—: un contador en `data.json` sería el primer
+ * estado propio del plugin, viviría por dispositivo, se desincronizaría del
+ * vault y no habría forma de notarlo. Derivado no puede mentir.
+ *
+ * Y está dimensionado antes de construirlo, que es lo que el método pide:
+ * medido el 03/09/2026, el vault tiene **0 grupos en las siete notas reales** y
+ * **2 en las de prueba**. O sea que hoy este orden ordena dos ítems. No hay
+ * ninguna urgencia que justifique estado nuevo, y derivarlo cuesta un recorrido
+ * que el store ya hace.
+ *
+ * Lo único que la derivación **no** puede dar es el orden por recencia —«el
+ * último que usaste»—, que necesitaría estado. No se pidió.
+ *
+ * El empate se rompe alfabéticamente, no por orden de aparición: con 2 grupos de
+ * 5 tareas cada uno, el orden tiene que ser el mismo en las dos notas o el menú
+ * cambia de forma según dónde esté el cursor.
+ */
+export function gruposPorUso(tareas: readonly Task[]): { grupo: string; tareas: number }[] {
+  const cuenta = new Map<string, number>();
+  for (const t of tareas) {
+    if (t.rec === null) continue;
+    cuenta.set(t.rec, (cuenta.get(t.rec) ?? 0) + 1);
+  }
+  return [...cuenta]
+    .map(([grupo, n]) => ({ grupo, tareas: n }))
+    .sort((a, b) => b.tareas - a.tareas || a.grupo.localeCompare(b.grupo));
+}

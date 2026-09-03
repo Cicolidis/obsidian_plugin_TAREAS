@@ -5,7 +5,22 @@
  * puede verificar sin abrir la aplicación. El módulo de la pantalla importa
  * `obsidian` en tiempo de ejecución y eso basta para que ningún test lo toque.
  */
+import { ORDENES_DE_ATAJO, type OrdenDeAtajo } from "./fechas.js";
 import { NOTA_DE_LOG_POR_OMISION, NOTAS_POR_OMISION } from "./notas.js";
+
+/**
+ * Las dos formas del selector de «Otra fecha…» (paso 6c).
+ *
+ * `nativo` es el `<input type="date">` que ya estaba, más el selector propio del
+ * navegador; `grilla` es un calendario dibujado por el plugin. Conviven, como los
+ * cinco estilos de fila: cuál se lee mejor solo se juzga mirándolo.
+ *
+ * Lo que paga la grilla es el **caso cíclico**: ahí el campo es un número del 1
+ * al 31 (§11) y el navegador no ofrece ningún selector, así que hoy no hay nada
+ * que abrir. Una grilla de 1 a 31 sí es un selector de día del mes.
+ */
+export const SELECTORES_DE_FECHA = ["nativo", "grilla"] as const;
+export type SelectorDeFecha = (typeof SELECTORES_DE_FECHA)[number];
 
 /** Los tres estilos de la §14. Un solo lugar: los consumen los ajustes y el CSS. */
 export const ESTILOS_DE_PRIORIDAD = [
@@ -185,6 +200,42 @@ export interface TareasSettings {
    * Queda el ajuste para volver.
    */
   confirmarAlEliminar: boolean;
+  /**
+   * Los dos indicadores de la fila (paso 6c): «tiene fecha» y «es cíclica».
+   *
+   * Encendidos por omisión: son el único lugar donde esos dos datos **se ven**,
+   * porque el token está oculto (§5.1). Con interruptor, y **dos y no uno**, por
+   * lo mismo que los dos indicadores de forma de la prioridad (§14): cada uno
+   * suma un lugar al ancho del margen, y separados dejan ver cuál de los dos, si
+   * alguno, molesta con la ventana angosta.
+   */
+  indicadorDeFecha: boolean;
+  indicadorDeRecurrencia: boolean;
+  /**
+   * En qué orden se ofrecen los atajos de fecha del ⋯ (paso 6c).
+   *
+   * Salió de usar el menú: «no me convence la selección de fechas ni el orden en
+   * que figuran». Los tres conviven y arranca en el que ya estaba, así que
+   * actualizar el plugin no cambia nada hasta que se elija otro.
+   */
+  ordenDeAtajos: OrdenDeAtajo;
+  /** Cómo se elige en «Otra fecha…». Ver `SELECTORES_DE_FECHA`. */
+  selectorDeFecha: SelectorDeFecha;
+  /**
+   * Los grupos de reinicio que el submenú ofrece **aunque no exista ninguno**.
+   *
+   * Es la mitad del pedido «recurrencia con opciones preconfiguradas». La otra
+   * mitad —«que recuerde y ofrezca las más usadas»— **no necesita ajuste ni
+   * estado**: sale de contar cuántas tareas llevan cada `rec` (`gruposPorUso`),
+   * derivado de las notas como todo lo demás (§10).
+   *
+   * Esto sí es un ajuste porque son nombres que se van a escribir en el token, y
+   * el vocabulario es del usuario. Medido el 03/09/2026: hay **0 grupos** en las
+   * siete notas reales, así que sin semilla el submenú de una nota real no
+   * ofrece nada para clickear. Cada nombre se sanea con el mismo criterio que un
+   * workbench: `NOMBRE_RE` es literalmente la misma para `wb` y para `rec`.
+   */
+  gruposSugeridos: string[];
   /** Cuándo se ve la fila. Ver `MODOS_DE_REVELACION`. */
   modoDeRevelacion: ModoDeRevelacion;
   /** Dónde y cómo se dibuja. Ver `ESTILOS_DE_FILA`. */
@@ -317,6 +368,54 @@ export function sanearEstiloDeFila(valor: unknown): EstiloDeFila {
     : "columna";
 }
 
+/** Un orden de atajos conocido, o el que ya estaba. */
+export function sanearOrdenDeAtajos(valor: unknown): OrdenDeAtajo {
+  return (ORDENES_DE_ATAJO as readonly unknown[]).includes(valor)
+    ? (valor as OrdenDeAtajo)
+    : "semana";
+}
+
+/** Un selector de fecha conocido, o el que ya estaba. */
+export function sanearSelectorDeFecha(valor: unknown): SelectorDeFecha {
+  return (SELECTORES_DE_FECHA as readonly unknown[]).includes(valor)
+    ? (valor as SelectorDeFecha)
+    : "nativo";
+}
+
+/**
+ * La semilla de grupos: nombres utilizables, sin repetidos y sin vacíos.
+ *
+ * Reusa `sanearWorkbenchOpcional` por nombre, y eso no es ahorro de líneas: los
+ * grupos y los workbenches viven en el mismo token con la misma gramática, y dos
+ * saneos con la misma intención divergirían justo en si aceptan un `;` — que
+ * deja la línea ilegible para siempre (§5.3).
+ *
+ * **Una lista vacía es válida**: significa «no me sugieras nada», que es la
+ * respuesta correcta una vez que los grupos propios existen.
+ */
+export function sanearGrupos(saved: unknown): string[] {
+  const crudos = Array.isArray(saved) ? saved : GRUPOS_POR_OMISION;
+  const vistos = new Set<string>();
+  const salida: string[] = [];
+  for (const g of crudos) {
+    const limpio = sanearWorkbenchOpcional(g);
+    if (limpio === "" || vistos.has(limpio)) continue;
+    vistos.add(limpio);
+    salida.push(limpio);
+  }
+  return salida;
+}
+
+/**
+ * Los grupos sugeridos de arranque.
+ *
+ * Son **períodos y no días de la semana**: la §11 nombra las dos formas
+ * (`rec=lunes`, `rec=mensual`) pero los días son el mecanismo de
+ * `tareas_CÍCLICAS`, que sigue fuera de la v1, y sembrar los siete dejaría un
+ * menú de nueve ítems para elegir entre dos.
+ */
+export const GRUPOS_POR_OMISION: readonly string[] = ["semanal", "mensual"];
+
 /** Un modo conocido y **ofrecido**, o `hover`. Ver `MODOS_DE_REVELACION`. */
 export function sanearRevelacion(valor: unknown): ModoDeRevelacion {
   return (MODOS_OFRECIDOS as readonly unknown[]).includes(valor)
@@ -337,6 +436,11 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   archivarConModificador: true,
   confirmarAlArchivar: false,
   confirmarAlEliminar: false,
+  indicadorDeFecha: true,
+  indicadorDeRecurrencia: true,
+  ordenDeAtajos: "semana",
+  selectorDeFecha: "nativo",
+  gruposSugeridos: [...GRUPOS_POR_OMISION],
   modoDeRevelacion: "hover",
   estiloDeFila: "columna",
   decoracionesEnLaNota: true,
@@ -395,6 +499,12 @@ export function cargarSettings(saved: unknown): TareasSettings {
       raw.archivarConModificador ?? DEFAULT_SETTINGS.archivarConModificador,
     confirmarAlArchivar: raw.confirmarAlArchivar ?? DEFAULT_SETTINGS.confirmarAlArchivar,
     confirmarAlEliminar: raw.confirmarAlEliminar ?? DEFAULT_SETTINGS.confirmarAlEliminar,
+    indicadorDeFecha: raw.indicadorDeFecha ?? DEFAULT_SETTINGS.indicadorDeFecha,
+    indicadorDeRecurrencia:
+      raw.indicadorDeRecurrencia ?? DEFAULT_SETTINGS.indicadorDeRecurrencia,
+    ordenDeAtajos: sanearOrdenDeAtajos(raw.ordenDeAtajos),
+    selectorDeFecha: sanearSelectorDeFecha(raw.selectorDeFecha),
+    gruposSugeridos: sanearGrupos(raw.gruposSugeridos),
     modoDeRevelacion: sanearRevelacion(raw.modoDeRevelacion),
     estiloDeFila: sanearEstiloDeFila(raw.estiloDeFila),
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,

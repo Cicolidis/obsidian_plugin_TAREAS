@@ -34,6 +34,28 @@ export interface Confirmacion {
    * apareció de golpe no puede borrar el subárbol de una tarea.
    */
   peligrosa?: boolean;
+  /**
+   * Un **segundo camino**, con su propio botón.
+   *
+   * Lo pide la §11 desde que existe el reinicio: «la confirmación ofrece
+   * reiniciar o archivar y reiniciar». No son dos modales encadenados ni una
+   * casilla adentro de uno: son dos acciones distintas sobre el mismo plan, y la
+   * §11 dice explícitamente que cuál conviene se decide **ahí**, no de antemano
+   * —«así la semanal trivial no llena el LOG y la mensual del alquiler deja
+   * rastro»—. Un modal que pregunta y después otro que pregunta de nuevo
+   * convertiría eso en dos decisiones.
+   */
+  segunda?: { texto: string; alAceptar: () => void };
+  /**
+   * El foco arranca en «Cancelar» aunque la acción no sea destructiva.
+   *
+   * Está separado de `peligrosa` desde el paso 6c, y hasta acá eran lo mismo por
+   * accidente: había **una sola** acción peligrosa, así que «pintar de rojo» y
+   * «no recibir un Enter reflejo» iban siempre juntas. Con dos caminos deja de
+   * ser cierto: ninguno de los dos es destructivo, y ninguno de los dos puede
+   * ser el que un Enter elige por vos.
+   */
+  focoEnCancelar?: boolean;
 }
 
 /** Pregunta, y si dicen que sí llama a `alAceptar`. Cancelar no hace nada. */
@@ -60,21 +82,36 @@ class ConfirmarModal extends Modal {
     let cancelar: ButtonComponent | null = null;
     let aceptar: ButtonComponent | null = null;
 
-    new Setting(this.contentEl)
-      .addButton((b) => {
-        cancelar = b.setButtonText(STRINGS.confirmar.cancelar).onClick(() => this.close());
-      })
-      .addButton((b) => {
-        aceptar = b.setButtonText(this.c.aceptar).onClick(() => {
-          this.close();
-          this.alAceptar();
-        });
-        if (this.c.peligrosa) marcarDestructivo(b);
-        else b.setCta();
-      });
+    const fila = new Setting(this.contentEl).addButton((b) => {
+      cancelar = b.setButtonText(STRINGS.confirmar.cancelar).onClick(() => this.close());
+    });
 
-    // El foco arranca donde no hace daño: en el destructivo, en «Cancelar».
-    window.setTimeout(() => (this.c.peligrosa ? cancelar : aceptar)?.buttonEl.focus(), 0);
+    // El segundo camino va **antes** del principal, que es el orden en que
+    // Obsidian los dibuja de izquierda a derecha: cancelar, la alternativa, y
+    // el que la acción nombra. Así el último sigue siendo el que uno espera.
+    const segunda = this.c.segunda;
+    if (segunda) {
+      fila.addButton((b) =>
+        b.setButtonText(segunda.texto).onClick(() => {
+          this.close();
+          segunda.alAceptar();
+        }),
+      );
+    }
+
+    fila.addButton((b) => {
+      aceptar = b.setButtonText(this.c.aceptar).onClick(() => {
+        this.close();
+        this.alAceptar();
+      });
+      if (this.c.peligrosa) marcarDestructivo(b);
+      else if (!this.c.focoEnCancelar) b.setCta();
+    });
+
+    // El foco arranca donde no hace daño: en el destructivo, en «Cancelar»; y
+    // con dos caminos, tampoco en ninguno de los dos.
+    const enCancelar = this.c.peligrosa || this.c.focoEnCancelar;
+    window.setTimeout(() => (enCancelar ? cancelar : aceptar)?.buttonEl.focus(), 0);
   }
 
   override onClose(): void {

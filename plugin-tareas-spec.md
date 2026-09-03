@@ -1082,7 +1082,7 @@ El diálogo tiene **texto** y **destino**.
 
 ### Tareas sin proyecto
 
-134 tareas (35%) no cuelgan de un heading semántico: viven bajo `## WORKBENCH`, `## semana 10 - 17` o `# INBOX`. **No son fleeting: son tareas cuyo proyecto está implícito.** Se distinguen tres estados:
+134 tareas (35%) no cuelgan de un heading semántico: viven bajo `## WORKBENCH`, `## semana N - M` o `# INBOX`. **No son fleeting: son tareas cuyo proyecto está implícito.** Se distinguen tres estados:
 
 | Estado | Qué es |
 |---|---|
@@ -1233,6 +1233,85 @@ grupo que toca varias notas— no hay historial ninguno. O sea: **a veces se
 deshace y a veces no**, y un rescate que depende de si la nota estaba abierta no
 es un rescate. Eso justifica la confirmación mejor que la afirmación anterior.
 
+### Lo que el paso 6c construyó: «archivar y reiniciar»
+
+**03/09/2026.** El segundo camino de la confirmación existe. Cinco decisiones,
+todas con su razón medida o leída.
+
+**1. Son 1 + N archivos, y ninguno de los dos caminos que había alcanzaba.**
+
+| | Cuántos | Cómo rompe la atomicidad |
+|---|---|---|
+| `escribirArchivado` | 2, con orden elegido | Seco sobre la nota; la nota puede quedar a medias |
+| `escribirEnVarias` | N, sin orden privilegiado | Seco sobre **todas**: o todas o ninguna |
+| `escribirArchivadoEnVarias` | **1 + N** | Seco sobre las N → el LOG → las N |
+
+El orden es **seco sobre las N notas, después el LOG, después las N**. La §8 ya
+elegía el LOG primero porque una entrada de historial de una tarea pendiente se
+ve y se arregla; acá hay una razón más dura y es la que manda: **el reinicio
+borra los `done` y los `[x]`**. Escribiendo las notas primero, si el LOG fallara,
+la fecha de completado de ese ciclo ya no existiría en ningún lado. No es elegir
+entre dos daños reversibles: un orden destruye datos y el otro no.
+
+Y el seco corre sobre las N **antes de tocar el LOG**, que es lo que hace
+verdadera la promesa que este camino tiene que dar: **si una nota no se puede
+ubicar, no se escribe en el historial tampoco.** La inserción en el LOG no puede
+entrar al seco —su posición es una función del contenido del LOG y se recalcula
+adentro de `process` (§8)— pero puede ir **después**, y con eso alcanza.
+
+Los tres comparten la secuencia en un solo lugar, y eso no es prolijidad: **la
+garantía vive en la secuencia**, no en cada paso, y dos copias son dos garantías
+que se pueden desincronizar en silencio.
+
+**2. Se archiva exactamente lo que el reinicio va a borrar.** No «las
+completadas»: el mismo conjunto que `planDeReinicio` toca, o sea `hecha || done
+!== null`. Una regla y no dos, y la razón es el sentido entero de este camino —
+nada de lo que el reinicio destruye se pierde. Queda dicho el borde en vez de
+tapado: una tarea `[ ]` con un `done` viejo —solo alcanzable editando el token a
+mano— también se archiva, porque su fecha también se borra.
+
+**3. La nota recibe bloques, no las líneas del reinicio.** Es la §12 punto 4
+valiendo acá: **lo que se copia al LOG tiene que ser lo que estaba en la nota**.
+El bloque incluye las notas sin checkbox del subárbol (§4.3), que ningún cambio
+de línea toca y que por lo tanto nadie verificaría; viajando adentro del `antes`
+del bloque, si alguna cambió, el lote entero se niega en vez de archivar texto
+viejo.
+
+Y de ahí sale una condición que no era obvia: **una tarea del grupo que cuelga
+de otra del mismo grupo no lleva entrada propia**. Ya viaja adentro del bloque de
+la madre, y una entrada aparte la duplicaría en el historial **y** haría
+solapar dos cambios en el mismo lote — `ubicarLote` devolvería `colisión` y la
+operación entera se negaría sin que nada lo explique. Es raro —`rec` no baja por
+el subárbol, hay que etiquetar las dos a mano— y hay una propiedad que lo fija.
+
+**4. La confirmación tiene dos botones y el foco en «Cancelar».** Decisión del
+usuario: ninguno de los dos puede ser el que un Enter reflejo elige, porque los
+dos son irreversibles de maneras distintas —uno borra fechas de completado, el
+otro escribe en un archivo que solo crece—. Eso obligó a separar `peligrosa` de
+`focoEnCancelar` en el modal, que hasta acá eran lo mismo **por accidente**:
+había una sola acción peligrosa, así que «pintar de rojo» y «no recibir el Enter»
+iban siempre juntas.
+
+Si no hay nada que archivar, el segundo botón **no se dibuja**. Es la misma regla
+que dejó los cuatro ítems afuera del ⋯ en el paso 4b: un control que promete lo
+que no puede hacer es peor que uno que no está.
+
+**5. Cuánto escribe: el número es construido, y hay que decirlo.** Contado el
+03/09/2026: **0 tareas con `rec` en las siete notas reales**, así que no hay
+ningún grupo cíclico que archivar y cualquier número sobre esto hay que
+fabricarlo. Lo que sí es real es el archivo contra el que se inserta:
+
+| | |
+|---|---|
+| El LOG hoy | 51 líneas · 7 headings · 1297 bytes |
+| Caso **construido** (las 15 completadas del corpus como un grupo) | 15 bloques · **50 líneas al LOG** · **3 headings nuevos** |
+| El LOG después | 101 líneas |
+
+O sea que un reinicio con archivado del tamaño de todo lo completado que hay hoy
+**duplica el historial**. No es un problema —el LOG es el único conjunto que solo
+recibe, y para eso está— pero es el orden de magnitud que la confirmación tiene
+que decir, y por eso el cartel cuenta líneas y secciones.
+
 ### tareas_CÍCLICAS: sigue fuera de la v1, pero ya no es caro
 
 Hoy son bullets sin checkbox agrupados por día de la semana: 0 tareas
@@ -1262,7 +1341,7 @@ El default se deriva del tamaño del bloque, y siempre se puede forzar el otro c
 **Revisado el 24/08/2026.** La versión anterior decía «bajo el mismo camino de
 headings que la tarea tenía en su nota» y a la vez «organizado por proyecto».
 Las dos cosas se contradicen: el camino literal arrastra al historial los
-andamios de la nota de trabajo —`WORKBENCH`, `INBOX`, `semana 24 - 28`—, que son
+andamios de la nota de trabajo —`WORKBENCH`, `INBOX`, `semana N - M`—, que son
 secciones para organizarse hoy y no categorías de lo hecho; y «por proyecto» no
 es aplicable mientras solo el wikilink defina proyecto (§4.1), porque hoy no hay
 ninguno.
@@ -1317,6 +1396,44 @@ cambio, y si alguna línea cambió, **el archivado se niega entero**. Medido: de
 los 389 subárboles del corpus, 38 (9,8%) aparecen repetidos verbatim en su nota
 y son los que se van a negar con el índice atrasado — de los de más de una
 línea, 14 de 138. Un tramo largo es **menos** ambiguo que una línea suelta.
+
+### Lo que el paso 6c le pidió al archivado
+
+**03/09/2026.** `archivarEnElLog` pasó de **un** camino y **un** bloque a N de
+cada uno, en una sola llamada, y el cambio es de forma pero la razón es del
+invariante 6.
+
+Un grupo cíclico repartido en M notas produce **M caminos distintos** —el camino
+es la nota de origen más el proyecto, `caminoDeArchivado`— y los M tienen que
+entrar en **un solo** `vault.process()`. Con dos llamadas, la segunda
+recalcularía su posición sobre bytes que la primera ya cambió, que es
+exactamente lo que la §8 dice que hay que evitar cuando la posición es una
+función del contenido.
+
+Se resuelve plegando: cada entrada calcula su plan sobre el documento **ya
+actualizado** por la anterior. Así el invariante 6 sale del recorrido y no de una
+comprobación aparte —cuando la segunda entrada trae el mismo camino, el heading
+ya está y lo engancha— y dos bloques del mismo camino quedan contiguos, porque
+`finDeSeccion` los manda al mismo lugar.
+
+Es **una** función y no dos: archivar un bloque es `archivarEnElLog(texto,
+[entrada])`. Dos versiones de esta decisión divergirían justo en si crean el
+heading, que es el invariante que la función existe para sostener. Y hay una
+propiedad que fija que una llamada con N entradas escribe **exactamente lo
+mismo** que N llamadas encadenadas, que es lo que hace legítimo el cambio de
+firma sobre algo ya verificado.
+
+**Y la propiedad del invariante 6 estaba mal escrita dos veces antes de estar
+bien.** La primera versión generaba caminos mezclando nombres de nota y de
+proyecto en una sola lista, y falló: con `["tareas_A", "p_Dos"]` archivado,
+`["p_Dos"]` a secas engancha bajo el `## p_Dos` que creó el primero — que es lo
+que «el prefijo más largo del camino que ya existe» quiere decir. Con
+`caminoDeArchivado` eso no puede pasar, porque los dos alfabetos son disjuntos.
+La segunda versión contaba los headings por `(nivel, texto)` y también falló:
+`## p_Dos` bajo `# tareas_A` y bajo `# tareas_B` son **dos secciones legítimas**.
+Un heading se identifica por su camino entero. Las dos veces la propiedad
+afirmaba algo más fuerte que la verdad, que es la regla de la sesión 2: cuando
+una propiedad falla, la primera pregunta es si la propiedad dice la verdad.
 
 ### El LOG se lee por una vista, y el archivo sigue siendo legible solo
 
@@ -1657,6 +1774,132 @@ archivos.
 La única sin verde es la de la consola, y es la de la §5.5: no es una falla del
 plugin, es una comprobación que hay que reemplazar por un instrumento.
 
+### Lo que el paso 6c agregó al frente principal
+
+**03/09/2026.** Los cuatro pedidos que salieron de **usar** el 6b, los cuatro
+encendibles y conviviendo con lo que había (patrón `designFlags.ts`). Los tres
+que tienen alternativa arrancan en **lo que ya estaba**, así que actualizar el
+plugin no cambia nada hasta que se elija otra cosa.
+
+**1. Dos indicadores en la fila: «tiene fecha» y «es cíclica».** Lo que valen es
+que son el **único lugar donde esos dos datos se ven**: el token está oculto
+(§5.1) y hasta acá había que abrir el ⋯ para saber si una tarea tenía
+vencimiento. Tres decisiones, y las tres salen de algo ya decidido:
+
+- **Son un atajo, no un toggle.** Un clic abre el submenú de fecha o el de
+  recurrencia y **nunca escribe por su cuenta**. El ★ es toggle porque asignar un
+  workbench es un clic y su inversa es el mismo clic; «tiene fecha» no tiene
+  inversa —¿qué fecha escribiría?— y un apagado que borra el vencimiento es una
+  pérdida de datos por un clic errado.
+- **La etiqueta dice el valor resuelto**, y en una cíclica dice **las dos
+  cosas**: «Vence el día 10 de cada mes: este mes, el 10 sep». Son datos
+  distintos —uno está en el token y el otro sale de `resolverDue`, que hasta acá
+  no tenía ningún llamador— y mostrar uno solo deja la mitad de la pregunta sin
+  contestar. Es la misma decisión que puso la fecha resuelta en los atajos.
+- **Ocupan su lugar aunque estén apagados**, escondidos con `opacity` y nunca con
+  `display`. Dos razones medidas: la §13.0 ya lo decidió para los cuatro botones
+  —lo que sale del flujo mueve al ★ justo cuando el mouse va hacia él— y **un
+  `gutter()` se dimensiona por su elemento renderizado más ancho**, así que una
+  fila que creciera solo en las tareas con fecha ensancharía el margen al
+  scrollear hasta la primera y el texto saltaría. Es exactamente por lo que en el
+  6b se descartó `:has(.cm-gutterElement)`.
+
+Van **últimos** en el orden canónico y por lo tanto **primeros en el margen**,
+que `ordenDelMargen` invierte: así el ★ no se corre ni un lugar de donde está, y
+lo que queda pegado al texto sigue siendo el botón que más se aprieta.
+
+**Y cuestan 0,015 ms.** Medido con `npm run test:corpus` sobre `tareas_COLE`
+saturada y ventanas de 103 líneas —el viewport real—: mediana **0,110 · 0,112 ·
+0,116 ms** en tres corridas independientes, contra los 0,097 ms de la fila de
+cinco botones. Tres muestras que coinciden es lo que hace creíble el número; una
+sola corrida de las primeras dio 0,217 y era ruido. Es el 0,7% de un cuadro de
+16,7 ms, y la sexta parte de lo que cuesta decorar la nota entera.
+
+**2. Tres órdenes de atajos de fecha, y el que había es el que no convencía.**
+El pedido fue textual: «no me convence la selección de fechas ni el orden en que
+figuran. Si queremos ofrecer los siete próximos días, hay que colocarlos en
+orden. Pero quizás es mejor ofrecer opciones discontinuas». Impreso, se ve por
+qué —un jueves, el orden fijo de lunes a domingo deja el sábado y el domingo,
+que son los más cercanos, **últimos**:
+
+```
+semana        Hoy 3 · Mañana 4 · Lunes 7 · Martes 8 · Miércoles 9 · Sábado 5 · Domingo 6
+cronologico   Hoy 3 · Mañana 4 · Sábado 5 · Domingo 6 · Lunes 7 · Martes 8 · Miércoles 9
+discontinuo   Hoy 3 · Mañana 4 · Pasado 5 · En una semana 10 · En dos 17 · En 30 días 3 oct
+```
+
+Los tres cumplen las dos reglas que la sesión 7 pagó caro, y ahora son
+propiedades sobre 400 días consecutivos: **ningún atajo repite el valor de otro**
+—el bug de «Hoy · 2 sep» y «Miércoles · 2 sep», que además marcaba el tilde en
+los dos— y **la cantidad no cambia según el día**, porque un menú cuyo largo se
+mueve no se puede aprender.
+
+Por eso `discontinuo` **no tiene «fin de mes»**, que era el candidato obvio: un
+día 17 de un mes de 31 coincide con «en dos semanas», y ahí vuelven las dos cosas
+más una tercera —el largo cambiaría—. Los seis son desplazamientos fijos, así que
+no pueden chocar ningún día del año. Para el fin de mes está el selector.
+
+**3. «Otra fecha…» con calendario, y lo que lo paga es el caso cíclico.** Se
+ofrecen las dos formas. El costo, medido antes de decidir: el nativo son **seis
+líneas** (`inputEl.showPicker()` con su guardia, porque `minAppVersion` es 1.6.0)
+y la grilla son **~30 líneas puras** en `fechas.ts` más el DOM del modal. Lo que
+inclina la balanza no es cuál se ve mejor —eso se decide mirando— sino que en una
+tarea cíclica el campo es un `<input type="number">` del 1 al 31 y el navegador
+**no ofrece ningún selector**: ahí la grilla de 31 días es lo único que hay.
+
+Un clic en la grilla **elige, no acepta**: la línea «va a escribir» existe para
+que se vea cuál de las dos formas de `due` queda antes de confirmar, y aceptar de
+un clic la saltearía justo en el caso que la necesita.
+
+**4. La recurrencia ordena por uso, y eso NO necesita estado nuevo.** El pedido
+era «que recuerde y ofrezca las más usadas». Se miró de frente antes de
+escribirlo, porque un contador en `data.json` sería el primer estado propio del
+plugin —hasta hoy todo se deriva de las notas (§10)—. Dos cosas lo decidieron:
+
+| | |
+|---|---|
+| Grupos distintos en las siete notas reales | **0** |
+| Grupos distintos en las de prueba | **2** (`lunes` ×3, `mensual` ×5) |
+
+Hoy **ordenar por uso ordena dos ítems**, así que no hay ninguna urgencia que
+justifique estado nuevo; y la cuenta se **deriva** de las notas —cuántas tareas
+llevan cada `rec`— con un recorrido que el store ya hace. Derivado no se
+desincroniza, no viaja mal por Sync y no vive por dispositivo. Lo único que la
+derivación no puede dar es el orden por **recencia**, que no se pidió.
+
+Lo que sí es un ajuste es la **semilla**: con 0 grupos escritos, el submenú de
+una nota real no ofrece nada para clickear, así que la lista lleva detrás unos
+nombres sugeridos (`semanal, mensual` por omisión). Van **después** de los que
+están en uso, no antes: la tecla `1` tiene que escribir un grupo que el vault ya
+usa, no uno que el plugin propone.
+
+Y el **atajo numérico se ve en pantalla**, como pide la §13.0 para el →. El
+mecanismo se extrajo a un solo lugar: dos listeners de teclado con la misma regla
+divergirían en cuál se saca al cerrar, que es cómo se llega a un `keydown` que
+sobrevive a su menú y le come los dígitos al editor.
+
+**5. Y la clave de una fila estaba incompleta, aunque hasta hoy no se notara.**
+Decide si dos tareas comparten el mismo DOM, y llevaba `accion:workbench:activo`.
+Eso era suficiente **solo porque ninguna etiqueta variaba por tarea**; con los
+indicadores, la etiqueta lleva la fecha, y dos tareas con fechas distintas
+habrían compartido marcador y una habría mostrado la fecha de la otra. Ahora
+lleva la etiqueta, que es literalmente lo que la clave dice ser —«todo lo que
+este widget dibuja»— y vive en **un** lugar en vez de los tres que la repetían.
+
+**6. Y dos cosas que salieron de mirar la salida, no de un test.** Una: el
+indicador mostraba `2026-09-07` crudo mientras el menú, a dos centímetros, decía
+«7 sep» — dos formatos del mismo dato en la misma pantalla. Ahora dice «7 sep
+2026», con el año porque un `due` escrito puede estar a un año y los atajos no.
+Otra: el aviso de media operación decía «Ya está en el historial 9 líneas».
+
+**7. Y una marca de `humo.mjs` que era falsa, encontrada por el propio
+pipeline.** Se puso `tareas-boton-fecha` en la lista de marcas del bundle y el
+despliegue falló: esa clase se arma como `` `tareas-boton-${accion}` `` y el
+literal no existe en el código. Las marcas que quedaron —`indicadorDeFecha`,
+`venceElDiaResuelto`— sí desaparecen si el mecanismo se cae. Es la lección del 6b
+por el otro lado: allá una marca pasaba por un comentario, acá una marca no
+existía y el guardia lo dijo.
+
 ### 13.1 Pestaña Workbenches
 
 La principal. Selector de workbench arriba; uno o varios en columnas. Colapso según §9. Recurrentes agrupadas aparte. Editar, completar, descartar y sacar del workbench, todo desde acá.
@@ -1827,7 +2070,15 @@ Estas son las propiedades que sostienen el modelo. Si alguna se rompe, el plugin
    con el grupo repartido entre varias. Y una tercera que sale de ahí: **la
    cuenta que dice la confirmación es la que se escribe** — una nota sin nada
    que cambiar no se cuenta ni se abre.
-6. **Archivar y volver a leer recupera lo archivado**: texto, fecha, nota y proyecto. Y archivar N bloques en el mismo camino crea el camino una sola vez.
+6. **Archivar y volver a leer recupera lo archivado**: texto, fecha, nota y
+   proyecto. Y archivar N bloques en el mismo camino crea el camino una sola
+   vez. Desde el paso 6c vale también con **N caminos distintos en un solo
+   `process`**, que es lo que «archivar y reiniciar» necesita: un grupo cíclico
+   repartido en M notas produce M caminos, y en dos llamadas la segunda
+   recalcularía su posición sobre bytes que la primera ya cambió. La propiedad
+   compara **caminos enteros**, no textos de heading: `## p_Dos` bajo
+   `# tareas_A` y bajo `# tareas_B` son dos secciones legítimas, y una versión
+   anterior de la propiedad las contaba como una y fallaba.
 7. **Un token que no parsea deja la línea intacta.**
 8. **Un `- [ ]` vacío nunca aparece como tarea.**
 9. **Parsear las siete notas y volver a escribirlas sin cambios no altera ningún byte.** Es la prueba diferencial más barata y la que más bugs de reescritura atrapa.
@@ -1874,7 +2125,7 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 5 | **Pestaña Workbenches**, con el componente de lista virtualizable desde el principio | La vista que más se usa |
 | 6a | ~~**Completar y archivar** al LOG (§12) y **eliminar** con confirmación~~ | Hecho. Resuelve el hallazgo del 7,5% |
 | 6b | ~~**Fecha** y **recurrencia** en el ⋯, más **reiniciar un grupo**~~ | Hecho. Cierra la §5.2: los seis campos del token se escriben |
-| 6c | **«Archivar y reiniciar»** (§11) y el botón por grupo en la vista | Es el archivado de 6a multiplicado por N, y su lugar es la pestaña del paso 5 |
+| 6c | ~~**«Archivar y reiniciar»** (§11) y los cuatro pedidos de la verificación~~ | Hecho. Es el archivado de 6a multiplicado por N. El botón por grupo **en la vista** sigue pendiente: su lugar es la pestaña del paso 5 |
 | 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |
 | 8 | Migración (§19) | Al final: reescribe notas reales, y conviene que el parser esté probado |
 | 9 | Layout de paneles | Alcance chico, entra en cualquier hueco |

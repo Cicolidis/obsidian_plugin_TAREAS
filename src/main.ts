@@ -34,16 +34,21 @@ import { decoraciones } from "./editor/decoraciones.js";
 import { protegerTramo } from "./editor/protegerTramo.js";
 import { unirLimpio } from "./editor/unirLimpio.js";
 import { esNotaDeTareas, notasDeTrabajo, NOTAS_POR_OMISION } from "./notas.js";
+import { ORDENES_DE_ATAJO } from "./fechas.js";
 import {
   cargarSettings,
   DEFAULT_SETTINGS,
   ESTILOS_DE_FILA,
   ESTILOS_DE_PRIORIDAD,
   MODOS_OFRECIDOS,
+  SELECTORES_DE_FECHA,
   sanearEstilo,
   sanearEstiloDeFila,
+  sanearGrupos,
   sanearNotas,
+  sanearOrdenDeAtajos,
   sanearRevelacion,
+  sanearSelectorDeFecha,
   sanearWorkbench,
   sanearWorkbenchOpcional,
   type TareasSettings,
@@ -284,6 +289,14 @@ export default class TareasPlugin extends Plugin {
     return {
       favoritos: () => this.favoritos(),
       conEliminar: () => this.settings.botonEliminar,
+      indicadores: () => ({
+        fecha: this.settings.indicadorDeFecha,
+        recurrencia: this.settings.indicadorDeRecurrencia,
+      }),
+      // El reloj entra por acá y no adentro de `botones.ts`, que es capa 1: es
+      // lo que le permite decir «este mes, el 10 de septiembre» sobre un
+      // `due=10`, que es el dato que la nota no muestra en ningún lado.
+      hoy: () => hoy(),
       alClic: manejarClicEnFila(this.dependenciasDeMenu()),
       dibujarIcono: (el: HTMLElement, icono: string) => setIcon(el, icono),
     };
@@ -308,6 +321,9 @@ export default class TareasPlugin extends Plugin {
       confirmarAlEliminar: () => this.settings.confirmarAlEliminar,
       archivoDe: (state: EditorState) =>
         state.field(editorInfoField, false)?.file?.path ?? null,
+      ordenDeAtajos: () => this.settings.ordenDeAtajos,
+      selectorDeFecha: () => this.settings.selectorDeFecha,
+      gruposSugeridos: () => this.settings.gruposSugeridos,
     };
   }
 
@@ -526,6 +542,73 @@ class TareasSettingTab extends PluginSettingTab {
           this.plugin.settings.botonEliminar = v;
           await this.plugin.guardar();
         }),
+      );
+
+    // Los dos indicadores del paso 6c. Van con su propia descripción y dos
+    // interruptores: hacen lo mismo y cada uno cuesta un lugar de ancho en el
+    // margen, así que separados dejan ver cuál de los dos, si alguno, molesta.
+    const indicadores = new Setting(containerEl)
+      .setName(STRINGS.ajustes.indicadores.nombre)
+      .setDesc(STRINGS.ajustes.indicadores.descripcion);
+    indicadores.addToggle((t) =>
+      t
+        .setTooltip(STRINGS.ajustes.indicadores.fecha)
+        .setValue(this.plugin.settings.indicadorDeFecha)
+        .onChange(async (v) => {
+          this.plugin.settings.indicadorDeFecha = v;
+          await this.plugin.guardar();
+        }),
+    );
+    indicadores.addToggle((t) =>
+      t
+        .setTooltip(STRINGS.ajustes.indicadores.recurrencia)
+        .setValue(this.plugin.settings.indicadorDeRecurrencia)
+        .onChange(async (v) => {
+          this.plugin.settings.indicadorDeRecurrencia = v;
+          await this.plugin.guardar();
+        }),
+    );
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.ordenDeAtajos.nombre)
+      .setDesc(STRINGS.ajustes.ordenDeAtajos.descripcion)
+      .addDropdown((d) => {
+        for (const o of ORDENES_DE_ATAJO) {
+          d.addOption(o, STRINGS.ajustes.ordenDeAtajos.opciones[o]);
+        }
+        d.setValue(this.plugin.settings.ordenDeAtajos).onChange(async (v) => {
+          this.plugin.settings.ordenDeAtajos = sanearOrdenDeAtajos(v);
+          await this.plugin.guardar();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.selectorDeFecha.nombre)
+      .setDesc(STRINGS.ajustes.selectorDeFecha.descripcion)
+      .addDropdown((d) => {
+        for (const o of SELECTORES_DE_FECHA) {
+          d.addOption(o, STRINGS.ajustes.selectorDeFecha.opciones[o]);
+        }
+        d.setValue(this.plugin.settings.selectorDeFecha).onChange(async (v) => {
+          this.plugin.settings.selectorDeFecha = sanearSelectorDeFecha(v);
+          await this.plugin.guardar();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.gruposSugeridos.nombre)
+      .setDesc(STRINGS.ajustes.gruposSugeridos.descripcion)
+      .addText((t) =>
+        t
+          .setPlaceholder(STRINGS.ajustes.gruposSugeridos.marcador)
+          .setValue(this.plugin.settings.gruposSugeridos.join(", "))
+          // Como en la lista de notas, se sanea lo guardado y **no se reescribe
+          // el campo**: normalizar mientras alguien escribe le come la coma que
+          // acaba de poner.
+          .onChange(async (v) => {
+            this.plugin.settings.gruposSugeridos = sanearGrupos(v.split(","));
+            await this.plugin.guardar();
+          }),
       );
 
     new Setting(containerEl)

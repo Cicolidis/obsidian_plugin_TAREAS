@@ -12,6 +12,7 @@ import {
   planDeFecha,
   planDePrioridad,
   planDeRecurrencia,
+  planDeArchivarYReiniciar,
   planDeReinicioEnVarias,
   planDeWorkbench,
   yaEstaCompleta,
@@ -881,5 +882,201 @@ describe("propiedades de terminar una tarea", () => {
       }),
       corridas,
     );
+  });
+});
+
+/**
+ * «Archivar y reiniciar» (§11, paso 6c): el bloque va al historial **antes** de
+ * destildar.
+ *
+ * Lo que estos tests fijan es la forma del plan, que es lo que decide si la
+ * capa 2 puede escribirlo: la nota recibe **bloques** —para que lo que se copia
+ * al LOG esté verificado entero (§12 punto 4)— y el historial recibe una entrada
+ * por raíz, con su camino.
+ */
+describe("planDeArchivarYReiniciar (§11, paso 6c)", () => {
+  const nota = (archivo: string, raw: string) => {
+    const doc = parseDocumento(archivo === "" ? "" : raw);
+    return { archivo, doc, tareas: indexar(doc, archivo) };
+  };
+
+  it("archiva lo mismo que el reinicio va a borrar, y destilda en el bloque", () => {
+    const n = nota("a.md", "- [x] regar %%t:rec=semanal;done=2026-08-20%%");
+    const r = planDeArchivarYReiniciar([n], "semanal", HOY);
+
+    expect(r.lotes).toHaveLength(1);
+    expect(r.lotes[0]!.cambios).toHaveLength(1);
+    const cambio = r.lotes[0]!.cambios[0]!;
+    expect(cambio.tipo).toBe("bloque");
+
+    // La nota queda destildada y sin `done`, igual que con el reinicio a secas.
+    expect(renderDocumento(aplicarPlan(n.doc, r.lotes[0]!.cambios))).toBe(
+      "- [ ] regar %%t:rec=semanal%%",
+    );
+
+    // Y el historial se lleva la fecha que la nota está por perder.
+    expect(r.entradas).toEqual([
+      { camino: ["a"], bloque: ["- regar [✓ 2026-08-20]"] },
+    ]);
+  });
+
+  it("el bloque se lleva las notas sin checkbox, verbatim", () => {
+    const n = nota(
+      "a.md",
+      "- [x] pagar %%t:rec=mensual;done=2026-08-20%%\n\t- cbu 123\n\t- [x] avisar %%t:done=2026-08-21%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "mensual", HOY);
+
+    // Al LOG va el subárbol entero: en el historial esas líneas son el
+    // contenido valioso (§12).
+    expect(r.entradas[0]!.bloque).toEqual([
+      "- pagar [✓ 2026-08-20]",
+      "\t- cbu 123",
+      "\t- avisar [✓ 2026-08-21]",
+    ]);
+
+    // Y el `antes` del cambio las lleva también: si alguna cambió desde que se
+    // armó el plan, el lote entero se niega en vez de archivar texto viejo.
+    const cambio = r.lotes[0]!.cambios[0]!;
+    expect(cambio.tipo === "bloque" && cambio.antes).toHaveLength(3);
+  });
+
+  it("solo destilda la línea etiquetada, aunque el bloque tenga tres", () => {
+    // El invariante 5 adentro de un bloque: `rec` no baja por el subárbol, así
+    // que la hija sin etiqueta se copia al LOG y **no** se destilda.
+    const n = nota(
+      "a.md",
+      "- [x] pagar %%t:rec=mensual;done=2026-08-20%%\n\t- cbu 123\n\t- [x] avisar %%t:done=2026-08-21%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "mensual", HOY);
+    expect(renderDocumento(aplicarPlan(n.doc, r.lotes[0]!.cambios))).toBe(
+      "- [ ] pagar %%t:rec=mensual%%\n\t- cbu 123\n\t- [x] avisar %%t:done=2026-08-21%%",
+    );
+  });
+
+  it("una madre y una hija del mismo grupo dan UN bloque, no dos", () => {
+    // Sin el descarte, la hija se archivaría dos veces y los dos cambios se
+    // solaparían: `ubicarLote` devolvería `colisión` y la operación entera se
+    // negaría sin que nada lo explique.
+    const n = nota(
+      "a.md",
+      "- [x] madre %%t:rec=lunes;done=2026-08-20%%\n\t- [x] hija %%t:rec=lunes;done=2026-08-20%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "lunes", HOY);
+
+    expect(r.lotes[0]!.cambios).toHaveLength(1);
+    expect(r.entradas).toHaveLength(1);
+    // La fecha va **en la raíz**: la hija terminó el mismo día, así que no la
+    // repite. Es lo que ya decidía `bloqueParaElLog` — un descendiente solo
+    // lleva la suya si es distinta.
+    expect(r.entradas[0]!.bloque).toEqual(["- madre [✓ 2026-08-20]", "\t- hija"]);
+    // Y las dos quedan destildadas: el destildado de la hija va plegado adentro.
+    expect(renderDocumento(aplicarPlan(n.doc, r.lotes[0]!.cambios))).toBe(
+      "- [ ] madre %%t:rec=lunes%%\n\t- [ ] hija %%t:rec=lunes%%",
+    );
+  });
+
+  it("dos tareas sueltas del mismo grupo dan dos bloques y dos entradas", () => {
+    const n = nota(
+      "a.md",
+      "- [x] una %%t:rec=lunes;done=2026-08-20%%\n- [x] otra %%t:rec=lunes;done=2026-08-20%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "lunes", HOY);
+    expect(r.lotes[0]!.cambios).toHaveLength(2);
+    expect(r.entradas).toHaveLength(2);
+  });
+
+  it("una tarea del grupo ya pendiente y sin `done` no se archiva ni se toca", () => {
+    const n = nota(
+      "a.md",
+      "- [ ] pendiente %%t:rec=lunes%%\n- [x] hecha %%t:rec=lunes;done=2026-08-20%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "lunes", HOY);
+    expect(r.entradas).toHaveLength(1);
+    expect(r.entradas[0]!.bloque[0]).toContain("hecha");
+  });
+
+  it("una tarea `[ ]` con un `done` viejo SÍ se archiva: su fecha también se borra", () => {
+    // El borde, dicho en vez de tapado. Se archiva lo mismo que el reinicio
+    // borra: una regla y no dos.
+    const n = nota("a.md", "- [ ] rara %%t:rec=lunes;done=2026-08-20%%");
+    const r = planDeArchivarYReiniciar([n], "lunes", HOY);
+    expect(r.entradas).toHaveLength(1);
+    expect(r.entradas[0]!.bloque).toEqual(["- rara [✓ 2026-08-20]"]);
+  });
+
+  it("el camino sale de la nota de origen y del proyecto (§12)", () => {
+    const n = nota(
+      "0_inbox/tareas_X.md",
+      "## [[p_Casa]]\n\n- [x] regar %%t:rec=semanal;done=2026-08-20%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "semanal", HOY);
+    expect(r.entradas[0]!.camino).toEqual(["tareas_X", "p_Casa"]);
+  });
+
+  it("las notas van por ruta y las entradas por línea: una media operación se repite igual", () => {
+    const r = planDeArchivarYReiniciar(
+      [
+        nota("z.md", "- [x] z1 %%t:rec=lunes;done=2026-08-20%%"),
+        nota("a.md", "- [x] a1 %%t:rec=lunes;done=2026-08-20%%\n- [x] a2 %%t:rec=lunes;done=2026-08-21%%"),
+      ],
+      "lunes",
+      HOY,
+    );
+    expect(r.lotes.map((l) => l.archivo)).toEqual(["a.md", "z.md"]);
+    expect(r.entradas.map((e) => e.bloque[0])).toEqual([
+      "- a1 [✓ 2026-08-20]",
+      "- a2 [✓ 2026-08-21]",
+      "- z1 [✓ 2026-08-20]",
+    ]);
+  });
+
+  it("una nota sin nada que reiniciar no aparece ni deja entrada", () => {
+    const r = planDeArchivarYReiniciar(
+      [
+        nota("a.md", "- [x] hecha %%t:rec=lunes;done=2026-08-20%%"),
+        nota("b.md", "- [ ] otra cosa\n- [x] de otro grupo %%t:rec=mensual;done=2026-08-20%%"),
+      ],
+      "lunes",
+      HOY,
+    );
+    expect(r.lotes.map((l) => l.archivo)).toEqual(["a.md"]);
+    expect(r.entradas).toHaveLength(1);
+  });
+
+  it("sin nada que reiniciar el plan sale vacío, y el segundo botón no se ofrece", () => {
+    const r = planDeArchivarYReiniciar([nota("a.md", "- [ ] nada %%t:rec=lunes%%")], "lunes", HOY);
+    expect(r.lotes).toEqual([]);
+    expect(r.entradas).toEqual([]);
+  });
+
+  it("destilda exactamente lo mismo que el reinicio a secas", () => {
+    // Los dos caminos del modal tienen que dejar la nota igual: la diferencia
+    // es el historial, no lo que pasa con las tareas.
+    const raw =
+      "- [x] madre %%t:rec=lunes;done=2026-08-20%%\n\t- cbu\n\t- [x] hija %%t:done=2026-08-21%%\n" +
+      "- [x] suelta %%t:rec=lunes;done=2026-08-22%%\n- [ ] ajena";
+    const n1 = nota("a.md", raw);
+    const n2 = nota("a.md", raw);
+    const conArchivado = planDeArchivarYReiniciar([n1], "lunes", HOY);
+    const aSecas = planDeReinicioEnVarias([n2], "lunes");
+    expect(renderDocumento(aplicarPlan(n1.doc, conArchivado.lotes[0]!.cambios))).toBe(
+      renderDocumento(aplicarPlan(n2.doc, aSecas[0]!.cambios)),
+    );
+  });
+
+  it("el bloque del LOG no lleva checkboxes ni tokens", () => {
+    // El orden de los campos del token es fijo (§5.1): `due` antes que `rec`.
+    // Con el orden al revés la línea es **ilegible** y el plan sale vacío, que
+    // es lo correcto y lo que este test aprendió al escribirlo mal.
+    const n = nota(
+      "a.md",
+      "- [x] pagar %%t:due=10;rec=mensual;done=2026-08-20%%\n\t- [x] hija %%t:id=abcd%%",
+    );
+    const r = planDeArchivarYReiniciar([n], "mensual", HOY);
+    for (const l of r.entradas[0]!.bloque) {
+      expect(l, "checkbox en el LOG").not.toMatch(/^\s*-\s+\[.\]/);
+      expect(l, "token en el LOG").not.toContain("%%t:");
+    }
   });
 });

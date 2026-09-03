@@ -23,7 +23,14 @@
  * al que ya está guardado **no se reparsea ni se notifica**. Sin eso, cada
  * escritura propia provocaría dos redibujos: uno correcto y uno de regalo.
  */
-import { gruposDeReinicio, indexar, porClave, type Clave, type Task } from "./tareas.js";
+import {
+  gruposDeReinicio,
+  gruposPorUso,
+  indexar,
+  porClave,
+  type Clave,
+  type Task,
+} from "./tareas.js";
 import { parseDocumento, type Documento } from "./documento.js";
 
 /** Deshacer una suscripción. */
@@ -279,6 +286,18 @@ export class StoreDeTareas {
    */
   gruposEnUso(): string[] {
     return gruposDeReinicio(this.tareas());
+  }
+
+  /**
+   * Lo mismo, pero **ordenado por cuántas tareas lleva cada grupo**.
+   *
+   * Es «las más usadas» del pedido de la verificación del 6b, y sale de acá y no
+   * de un contador en `data.json` porque el uso **se deriva de las notas**: es
+   * la §10 aplicada, y un contador propio sería el primer estado del plugin,
+   * viviría por dispositivo y no habría forma de notar que se desincronizó.
+   */
+  gruposPorUso(): { grupo: string; tareas: number }[] {
+    return gruposPorUso(this.tareas());
   }
 
   /** Las notas que el store tiene parseadas ahora mismo. */

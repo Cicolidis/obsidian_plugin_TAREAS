@@ -4,6 +4,7 @@ import {
   archivarEnElLog,
   bloqueParaElLog,
   caminoDeArchivado,
+  cuentaDeArchivado,
   planDeArchivado,
 } from "../../src/archivado.js";
 import { arbolDe, headingsDe, parseDocumento, recorrer, renderDocumento } from "../../src/documento.js";
@@ -138,9 +139,9 @@ describe.skipIf(!VAULT)("archivarEnElLog sobre el LOG real", () => {
     let texto = logOriginal;
     let headings = 0;
     for (const { camino, bloque } of unaDeCadaNota) {
-      const r = archivarEnElLog(texto, camino, bloque);
+      const r = archivarEnElLog(texto, [{ camino: camino, bloque: bloque }]);
       texto = r.texto;
-      headings += r.plan.headingsNuevos.length;
+      headings += r.planes[0]!.headingsNuevos.length;
     }
     return { texto, headings };
   };
@@ -174,9 +175,9 @@ describe.skipIf(!VAULT)("archivarEnElLog sobre el LOG real", () => {
     let texto = primera.texto;
     let headings = 0;
     for (const { camino, bloque } of unaDeCadaNota) {
-      const r = archivarEnElLog(texto, camino, bloque);
+      const r = archivarEnElLog(texto, [{ camino: camino, bloque: bloque }]);
       texto = r.texto;
-      headings += r.plan.headingsNuevos.length;
+      headings += r.planes[0]!.headingsNuevos.length;
     }
     expect(headings).toBe(0);
     console.log(`  headings creados: ${primera.headings} la primera vuelta, ${headings} la segunda`);
@@ -202,5 +203,89 @@ describe.skipIf(!VAULT)("archivarEnElLog sobre el LOG real", () => {
       expect(l.clase, "el LOG no lleva checkboxes").not.toBe("tarea");
       expect(l.texto, "el LOG no lleva tokens").not.toContain("%%t:");
     }
+  });
+});
+
+/**
+ * Cuánto escribiría «archivar y reiniciar» sobre el LOG real (paso 6c).
+ *
+ * **El caso es construido, no medido, y eso hay que decirlo.** Contado el
+ * 03/09/2026: el corpus tiene **0 tareas con `rec`** en las siete notas reales,
+ * así que no hay ningún grupo cíclico que archivar. Cualquier número sobre esto
+ * hay que fabricarlo.
+ *
+ * Lo que sí es real es **el LOG**: el archivo contra el que se inserta, sus
+ * headings y su tamaño. Así que lo que este test mide de verdad es la mitad que
+ * importa —cuánto crece el archivo que solo recibe, y cuántas secciones nuevas
+ * aparecen— sobre el historial que existe hoy.
+ *
+ * El caso construido: se toman las tareas **completadas** del corpus, se las
+ * trata como si llevaran la etiqueta de un mismo grupo, y se archivan las N en
+ * una sola llamada, que es lo que la escritura 1 + N hace adentro de `process`.
+ */
+describe.skipIf(!VAULT)("cuánto escribiría «archivar y reiniciar» (construido)", () => {
+  const notas = notasReales();
+  const rutaLog = "0_inbox/tareas_LOG.md";
+  const logOriginal = notas.find((n) => n.rel === rutaLog)?.raw ?? "";
+  const HOY = "2026-09-03";
+
+  it("no hay ningún grupo cíclico en el corpus: el caso es construido", () => {
+    const conRec = notas
+      .filter((n) => n.rel !== rutaLog)
+      .flatMap(({ rel, raw }) => indexar(parseDocumento(raw), rel))
+      .filter((t) => t.rec !== null);
+    console.log(`  tareas con rec= en las siete notas: ${conRec.length}`);
+    // Si algún día deja de ser cierto, el número de abajo pasa a ser medido y
+    // este test lo tiene que decir en vez de seguir llamándolo construido.
+    expect(conRec.length).toBe(0);
+  });
+
+  it("el LOG de hoy, contado antes de tocarlo", () => {
+    const log = parseDocumento(logOriginal);
+    console.log(
+      `  LOG: ${log.lineas.length} líneas · ${headingsDe(log).length} headings · ` +
+        `${logOriginal.length} bytes`,
+    );
+    expect(log.lineas.length).toBeGreaterThan(0);
+  });
+
+  it("N entradas en una sola llamada: cuántas líneas y cuántas secciones", () => {
+    const entradas = notas
+      .filter((n) => n.rel !== rutaLog)
+      .flatMap(({ rel, raw }) => {
+        const doc = parseDocumento(raw);
+        const porLinea = new Map(indexar(doc, rel).map((t) => [t.linea, t.proyecto]));
+        return recorrer(arbolDe(doc))
+          .filter((n) => n.rol === "tarea" && estadoDe(n.bullet) !== " ")
+          .map((nodo) => ({
+            camino: caminoDeArchivado(rel, porLinea.get(nodo.n) ?? null),
+            bloque: bloqueParaElLog(doc, nodo, HOY),
+          }));
+      });
+
+    const { texto, planes } = archivarEnElLog(logOriginal, entradas);
+    const cuenta = cuentaDeArchivado(planes);
+    const antes = parseDocumento(logOriginal);
+    const despues = parseDocumento(texto);
+
+    console.log(
+      `  construido: ${entradas.length} bloques · ${cuenta.lineas} líneas al LOG · ` +
+        `${cuenta.headingsNuevos} headings nuevos`,
+    );
+    console.log(
+      `  el LOG pasa de ${antes.lineas.length} a ${despues.lineas.length} líneas ` +
+        `(+${despues.lineas.length - antes.lineas.length})`,
+    );
+
+    // El invariante 6 sobre el archivo real: cada camino, una sola vez.
+    const caminos = new Set(entradas.map((e) => e.camino.join("/")));
+    console.log(`  caminos distintos: ${caminos.size}`);
+    const nivel1 = headingsDe(despues)
+      .filter((h) => h.heading.nivel === 1)
+      .map((h) => h.heading.texto.trim());
+    expect(nivel1.length, "headings de nivel 1 repetidos").toBe(new Set(nivel1).size);
+
+    // Y no se pierde nada de lo que ya estaba: insertar por rango (§8).
+    expect(texto.startsWith(logOriginal)).toBe(true);
   });
 });

@@ -68,6 +68,11 @@ describe.skipIf(!VAULT)("costo de construir la fila, por transacción", () => {
         const opciones = {
           favoritos: () => FAV,
           conEliminar: () => true,
+          // El peor caso realista del 6c: los dos indicadores encendidos, que es
+          // como viene por omisión. Medirlo apagado mediría una fila que nadie
+          // tiene.
+          indicadores: () => ({ fecha: true, recurrencia: true }),
+          hoy: () => "2026-09-03",
           alClic: () => {},
           dibujarIcono: () => {},
         };

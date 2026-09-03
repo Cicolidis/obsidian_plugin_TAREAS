@@ -1,6 +1,6 @@
 import { Menu, Modal, Notice, Setting, type App } from "obsidian";
 import type { EditorState } from "@codemirror/state";
-import { workbenchesDelPopover, type Favoritos } from "../botones.js";
+import { opcionesDeRecurrencia, workbenchesDelPopover, type Favoritos } from "../botones.js";
 import {
   alternarWorkbench,
   archivarTarea,
@@ -14,9 +14,9 @@ import {
   nivelVisible,
   type Contexto,
 } from "../comandos.js";
-import { atajosDeDiaDelMes, atajosDeFecha } from "../fechas.js";
+import { atajosDeDiaDelMes, atajosDeFecha, type OrdenDeAtajo } from "../fechas.js";
 import { elegirFecha } from "../ui/elegirFecha.js";
-import { sanearWorkbenchOpcional } from "../settingsData.js";
+import { sanearWorkbenchOpcional, type SelectorDeFecha } from "../settingsData.js";
 import { STRINGS } from "../strings.js";
 import { parseTaskToken, type Prioridad } from "../token.js";
 import type { StoreDeTareas } from "../store.js";
@@ -77,6 +77,12 @@ export interface DependenciasDeMenu {
    * lo que decide dónde actúa el plugin, y dos copias divergirían.
    */
   archivoDe: (state: EditorState) => string | null;
+  /** En qué orden se ofrecen los atajos de fecha (paso 6c). */
+  ordenDeAtajos: () => OrdenDeAtajo;
+  /** Cuál de las dos formas de «Otra fecha…». */
+  selectorDeFecha: () => SelectorDeFecha;
+  /** Los grupos que el submenú ofrece aunque no exista ninguno todavía. */
+  gruposSugeridos: () => readonly string[];
   ahora?: () => string;
 }
 
@@ -147,6 +153,17 @@ export function manejarClicEnFila(dep: DependenciasDeMenu): AlClicEnFila {
         break;
       case "menu":
         abrirMenu(dep, ctx, clic.evento, fecha, clic.texto);
+        break;
+      // Los dos indicadores del 6c: **abren el submenú, no escriben**. No son
+      // toggles y la razón está en `botones.ts`: «tiene fecha» no tiene gesto
+      // inverso, y un apagado que borra el vencimiento es una pérdida de datos
+      // por un clic errado. Van a las mismas funciones que el ⋯: ningún camino
+      // de escritura nuevo, que es la regla desde el paso 4b.
+      case "fecha":
+        abrirSubmenuDeFecha(dep, ctx, clic.evento, fecha, clic.texto);
+        break;
+      case "recurrencia":
+        abrirSubmenuDeRecurrencia(dep, ctx, clic.evento, clic.texto);
         break;
       case "eliminar":
         // El mismo camino que el ítem del ⋯: son la misma acción por dos
@@ -292,7 +309,7 @@ function abrirSubmenuDeFecha(
       );
     }
   } else {
-    for (const { clave, valor } of atajosDeFecha(fecha())) {
+    for (const { clave, valor } of atajosDeFecha(fecha(), dep.ordenDeAtajos())) {
       menu.addItem((i) =>
         i
           .setTitle(
@@ -309,7 +326,13 @@ function abrirSubmenuDeFecha(
     i
       .setTitle(STRINGS.menu.otraFecha)
       .setIcon("calendar-days")
-      .onClick(() => elegirFecha(dep.app, { ciclica, actual }, poner)),
+      .onClick(() =>
+        elegirFecha(
+          dep.app,
+          { ciclica, actual, hoy: fecha(), selector: dep.selectorDeFecha() },
+          poner,
+        ),
+      ),
   );
   menu.addItem((i) =>
     i
@@ -322,17 +345,28 @@ function abrirSubmenuDeFecha(
 }
 
 /**
- * El submenú de recurrencia: los grupos que ya existen, y uno nuevo.
+ * El submenú de recurrencia: los grupos, ordenados por uso y con su tecla.
  *
  * Mismo esqueleto que el → (§11: los grupos «se crean escribiéndolos, como los
- * workbenches»), con dos diferencias que salen de que un grupo **no** es un
- * workbench: no hay atajo numérico —no es la acción más frecuente del plugin, y
- * el 1-9 del → existe porque aquella sí lo es— y hay un ítem para sacarlo, que
- * el → resuelve con el toggle sobre el mismo nombre.
+ * workbenches»), con una diferencia que sale de que un grupo **no** es un
+ * workbench: hay un ítem para sacarlo, que el → resuelve con el toggle sobre el
+ * mismo nombre.
  *
- * Los grupos son **globales**: salen de `gruposEnUso()`, que mira todas las
- * notas. Un grupo de reinicio no es de una nota — el botón de la §11 lo barre
- * entero.
+ * Lo que el paso 6c le agregó, y viene entero del pedido «recurrencia con
+ * opciones preconfiguradas, que recuerde y ofrezca las más usadas, elegibles con
+ * un clic o con una tecla que se muestre en pantalla»:
+ *
+ * - **El orden es por uso**, contado de las notas y no de un contador guardado
+ *   (`gruposPorUso`). Medido antes de construirlo: hoy hay 0 grupos en las siete
+ *   notas reales y 2 en las de prueba, así que este orden ordena dos ítems — que
+ *   es exactamente la razón por la que **no** justifica estado nuevo.
+ * - **La semilla**, detrás, para que el menú ofrezca algo el primer día.
+ * - **El atajo numérico**, con el número a la vista. Antes no lo tenía: la §13.0
+ *   pide «un clic más una tecla» para el →, y acá vale igual una vez que la
+ *   lista puede tener nueve nombres.
+ *
+ * Los grupos son **globales**: salen del store entero, no de la nota. Un grupo
+ * de reinicio no es de una nota — el botón de la §11 lo barre entero.
  */
 function abrirSubmenuDeRecurrencia(
   dep: DependenciasDeMenu,
@@ -345,15 +379,15 @@ function abrirSubmenuDeRecurrencia(
   const menu = new Menu().setUseNativeMenu(false);
   const etiquetar = (rec: string | null) => fijarRecurrencia(dep.app, dep.store, ctx, rec);
 
-  const grupos = dep.store.gruposEnUso();
-  for (const g of grupos) {
-    menu.addItem((i) =>
-      i
-        .setTitle(g)
+  const grupos = opcionesDeRecurrencia(dep.store.gruposPorUso(), dep.gruposSugeridos());
+  grupos.forEach((g, i) => {
+    menu.addItem((it) =>
+      it
+        .setTitle(i < 9 ? STRINGS.menu.numerado(i + 1, g) : g)
         .setChecked(g === actual)
         .onClick(() => etiquetar(g)),
     );
-  }
+  });
   if (grupos.length) menu.addSeparator();
 
   menu.addItem((i) =>
@@ -371,7 +405,34 @@ function abrirSubmenuDeRecurrencia(
       .onClick(() => etiquetar(null)),
   );
 
+  atajoNumerico(menu, grupos, etiquetar);
   menu.showAtMouseEvent(evento);
+}
+
+/**
+ * El atajo 1-9 de un menú, y su limpieza.
+ *
+ * Lo comparten el → y el submenú de recurrencia. Estaba escrito adentro del
+ * primero y con el segundo habrían quedado dos listeners con la misma regla —y
+ * dos formas de sacarlo al cerrar—, que es cómo se llega a un `keydown` que
+ * sobrevive a su menú y le come los dígitos al editor.
+ *
+ * Va **en captura**, para llegar antes que la navegación propia del menú, y solo
+ * sobre un dígito pelado: cualquier modificador tiene su propio significado y no
+ * se toca.
+ */
+function atajoNumerico(menu: Menu, nombres: readonly string[], elegir: (n: string) => void): void {
+  const teclas = (e: KeyboardEvent) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || !/^[1-9]$/.test(e.key)) return;
+    const nombre = nombres[Number(e.key) - 1];
+    if (nombre === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    menu.hide();
+    elegir(nombre);
+  };
+  document.addEventListener("keydown", teclas, true);
+  menu.onHide(() => document.removeEventListener("keydown", teclas, true));
 }
 
 /**
@@ -395,7 +456,7 @@ function abrirPopover(dep: DependenciasDeMenu, ctx: Contexto, evento: MouseEvent
   nombres.forEach((wb, i) => {
     menu.addItem((it) =>
       it
-        .setTitle(i < 9 ? `${i + 1} · ${wb}` : wb)
+        .setTitle(i < 9 ? STRINGS.menu.numerado(i + 1, wb) : wb)
         .setChecked(puestos.has(wb))
         .onClick(() => mandar(wb)),
     );
@@ -409,21 +470,7 @@ function abrirPopover(dep: DependenciasDeMenu, ctx: Contexto, evento: MouseEvent
       .onClick(() => new NombreNuevoModal(dep.app, STRINGS.menu.nuevoWorkbench, mandar).open()),
   );
 
-  // El atajo numérico. En captura, para llegar antes que la navegación propia
-  // del menú, y solo sobre un dígito pelado: cualquier modificador tiene su
-  // propio significado y no se toca.
-  const teclas = (e: KeyboardEvent) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || !/^[1-9]$/.test(e.key)) return;
-    const wb = nombres[Number(e.key) - 1];
-    if (wb === undefined) return;
-    e.preventDefault();
-    e.stopPropagation();
-    menu.hide();
-    mandar(wb);
-  };
-  document.addEventListener("keydown", teclas, true);
-  menu.onHide(() => document.removeEventListener("keydown", teclas, true));
-
+  atajoNumerico(menu, nombres, mandar);
   menu.showAtMouseEvent(evento);
 }
 

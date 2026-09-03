@@ -20,9 +20,17 @@ import { conDocumentoFalso, NodoFalso } from "./domFalso.js";
  */
 const FAV: Favoritos = { primario: "foco", secundario: "mudanza" };
 
-const opciones = (favoritos: Favoritos = FAV): OpcionesDeFila => ({
+/** Un día fijo: la etiqueta de una cíclica lo usa, y un test no puede depender del reloj. */
+const HOY = "2026-09-03";
+
+const opciones = (
+  favoritos: Favoritos = FAV,
+  indicadores = { fecha: false, recurrencia: false },
+): OpcionesDeFila => ({
   favoritos: () => favoritos,
   conEliminar: () => false,
+  indicadores: () => indicadores,
+  hoy: () => HOY,
   alClic: () => {},
   dibujarIcono: () => {},
 });
@@ -44,7 +52,7 @@ const todo = (doc: string, favoritos: Favoritos = FAV) => {
   return rangos(decoracionesDeFila(st, [{ from: 0, to: st.doc.length }], opciones(favoritos)));
 };
 
-const widget = (linea: string) => new FilaWidget(filaDe(linea, FAV)!, opciones());
+const widget = (linea: string) => new FilaWidget(filaDe(linea, { favoritos: FAV })!, opciones());
 
 // ---------------------------------------------------------- la restricción
 
@@ -192,9 +200,9 @@ describe("eq(): qué obliga a rehacer el DOM y qué no", () => {
   });
 
   it("cambiar los favoritos la hace distinta", () => {
-    const a = new FilaWidget(filaDe("- [ ] x", FAV)!, opciones());
+    const a = new FilaWidget(filaDe("- [ ] x", { favoritos: FAV })!, opciones());
     const otros: Favoritos = { primario: "otro", secundario: "mudanza" };
-    const b = new FilaWidget(filaDe("- [ ] x", otros)!, opciones(otros));
+    const b = new FilaWidget(filaDe("- [ ] x", { favoritos: otros })!, opciones(otros));
     expect(a.eq(b)).toBe(false);
   });
 
@@ -256,7 +264,7 @@ describe("la fila en su margen propio", () => {
  */
 describe("a dónde llega el clic de un botón", () => {
   const armar = (resolucion: Parameters<typeof construirFila>[2]) => {
-    const fila = filaDe("- [ ] una tarea", FAV)!;
+    const fila = filaDe("- [ ] una tarea", { favoritos: FAV })!;
     const ancla = construirFila(fila, opciones(), resolucion) as unknown as NodoFalso;
     // El ancestro que en Obsidian es el `.cm-gutter`.
     const gutter = new NodoFalso("div");
@@ -316,7 +324,7 @@ describe("a dónde llega el clic de un botón", () => {
     // no alcanza: el `domEventHandlers` reconoce el botón por su `data-accion`,
     // así que las dos cosas tienen que valer juntas o el clic llega y se pierde.
     conDocumentoFalso(() => {
-      const fila = filaDe("- [ ] una tarea", FAV)!;
+      const fila = filaDe("- [ ] una tarea", { favoritos: FAV })!;
       const ancla = new FilaMarker(fila, opciones()).toDOM() as unknown as NodoFalso;
       const gutter = new NodoFalso("div");
       gutter.appendChild(ancla);
@@ -347,7 +355,7 @@ describe("el orden de la fila en el margen", () => {
    * coordenadas: `eliminar` en x=235 y `wb-primario` en x=153, con el texto
    * empezando cerca de x=280.
    */
-  const conCinco = () => filaDe("- [ ] x", FAV, true)!;
+  const conCinco = () => filaDe("- [ ] x", { favoritos: FAV, conEliminar: true })!;
 
   it("el orden canónico es el de la §13.0, con el 🗑 último", () => {
     expect(conCinco().botones.map((b) => b.accion)).toEqual([
@@ -401,6 +409,77 @@ describe("el orden de la fila en el margen", () => {
         const accion = b.getAttribute("data-accion");
         expect(b.className, `${accion}`).toContain(`tareas-boton-${accion}`);
       }
+    });
+  });
+});
+
+/**
+ * Los dos indicadores del paso 6c, del lado del DOM.
+ *
+ * Lo que estos tests fijan es lo que ningún test de `botones.ts` puede: dónde
+ * quedan **en el margen**, que es donde la fila se dibuja al revés, y que dos
+ * tareas con fechas distintas no compartan widget.
+ */
+describe("los indicadores en la fila dibujada (paso 6c)", () => {
+  const CTX = {
+    favoritos: FAV,
+    conEliminar: true,
+    indicadores: { fecha: true, recurrencia: true },
+    hoy: HOY,
+  };
+  const conSiete = (texto = "- [ ] x") => filaDe(texto, CTX)!;
+  const ops = () => opciones(FAV, { fecha: true, recurrencia: true });
+
+  it("en el margen quedan **los más lejos del texto**, y el ★ no se mueve", () => {
+    conDocumentoFalso(() => {
+      const ancla = new FilaMarker(conSiete(), ops()).toDOM() as unknown as NodoFalso;
+      const acciones = ancla.querySelectorAll("button").map((b) => b.getAttribute("data-accion"));
+      // El texto está a la derecha: el último del arreglo es el más cercano.
+      expect(acciones.at(-1)).toBe("wb-primario");
+      expect(acciones.slice(0, 2)).toEqual(["recurrencia", "fecha"]);
+    });
+  });
+
+  it("dos fechas distintas NO comparten widget", () => {
+    // Sin esto, la caché de marcadores le da a una tarea el DOM de otra y el
+    // tooltip muestra la fecha equivocada.
+    const a = new FilaWidget(filaDe("- [ ] x %%t:due=2026-09-07%%", CTX)!, ops());
+    const b = new FilaWidget(filaDe("- [ ] x %%t:due=2026-09-08%%", CTX)!, ops());
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("ni marcador del margen", () => {
+    const a = new FilaMarker(filaDe("- [ ] x %%t:rec=lunes%%", CTX)!, ops());
+    const b = new FilaMarker(filaDe("- [ ] x %%t:rec=mensual%%", CTX)!, ops());
+    expect(a.eq(b)).toBe(false);
+  });
+
+  it("y dos tareas en el mismo estado sí, que es para lo que existe la caché", () => {
+    const a = new FilaWidget(filaDe("- [ ] una %%t:due=2026-09-07%%", CTX)!, ops());
+    const b = new FilaWidget(filaDe("- [ ] otra %%t:due=2026-09-07%%", CTX)!, ops());
+    expect(a.eq(b)).toBe(true);
+  });
+
+  it("el botón apagado **está en el DOM**, con su lugar y sin `display: none`", () => {
+    // La regla que impide que el ★ se mueva y que el margen se ensanche al
+    // scrollear: lo que apaga es la opacidad, no la ausencia.
+    conDocumentoFalso(() => {
+      const ancla = new FilaMarker(conSiete("- [ ] sin fecha"), ops()).toDOM() as unknown as NodoFalso;
+      const botones = ancla.querySelectorAll("button");
+      expect(botones).toHaveLength(7);
+      const fecha = botones.find((b) => b.getAttribute("data-accion") === "fecha")!;
+      expect(fecha.className).not.toContain("is-activo");
+    });
+  });
+
+  it("y el DOM mide lo mismo con fecha y sin fecha", () => {
+    conDocumentoFalso(() => {
+      const conF = new FilaMarker(conSiete("- [ ] x %%t:due=2026-09-07%%"), ops())
+        .toDOM() as unknown as NodoFalso;
+      const sinF = new FilaMarker(conSiete("- [ ] x"), ops()).toDOM() as unknown as NodoFalso;
+      expect(conF.querySelectorAll("button")).toHaveLength(
+        sinF.querySelectorAll("button").length,
+      );
     });
   });
 });

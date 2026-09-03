@@ -139,6 +139,25 @@ for (const marca of [
   "reiniciar-grupo-ciclico",
   "escribirEnVarias",
   "FuzzySuggestModal",
+  // Paso 6c: «archivar y reiniciar» (1 + N archivos) y los cuatro pedidos que
+  // salieron de usar el 6b. Los cinco se caen en silencio: un botón que no está
+  // en la fila, un orden de atajos que no se aplica y una grilla que no se
+  // dibuja no dan error, dejan de andar.
+  "escribirArchivadoEnVarias",
+  "planDeArchivarYReiniciar",
+  "gruposPorUso",
+  "grillaDelMes",
+  // El primer llamador de verdad de `resolverDue`: hasta el 6c solo lo nombraba
+  // un comentario, que es el guardia falso que la sesión 7 encontró.
+  "resolverDue",
+  // Los dos indicadores. **No se busca `tareas-boton-fecha`**: esa clase se arma
+  // como `tareas-boton-${accion}` y el literal no existe en el bundle — se
+  // intentó y el pipeline lo rechazó, que es exactamente para lo que está.
+  // Estas dos sí desaparecen si el mecanismo se cae: el ajuste que lo enciende,
+  // y la etiqueta que resuelve el día del mes contra el reloj.
+  "indicadorDeFecha",
+  "venceElDiaResuelto",
+  "opcionesDeRecurrencia",
 ]) {
   if (!codigo.includes(marca)) fallas.push(`falta "${marca}" en el código del bundle`);
 }
@@ -183,6 +202,13 @@ try {
     "tareas-con-margen",
     "tareas-hover",
     "tareas-estilo-barra-completa",
+    // Paso 6c. Sin la regla del relleno, los dos indicadores encendidos se
+    // dibujan como manchas sólidas —`calendar` y `repeat` son puro contorno—;
+    // sin la grilla, el calendario del modal se apila en una columna.
+    "tareas-boton-fecha",
+    "tareas-boton-recurrencia",
+    "tareas-calendario",
+    "tareas-calendario-celda",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
   }
