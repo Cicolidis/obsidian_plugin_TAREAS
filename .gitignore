@@ -13,3 +13,8 @@ main.js
 # El volcado del outline de Obsidian para `npm run test:corpus`. Lleva los
 # títulos reales de las notas y este repositorio es público.
 outline-obsidian.local.json
+
+# Las rutas reales de las notas de tareas, para `medir` y `test:corpus`.
+# Estuvo trackeado hasta el 29/09/2026 y por eso sigue en la historia.
+# La forma está en `notas-de-tareas.ejemplo.json`.
+notas-de-tareas.json

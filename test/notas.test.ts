@@ -1,31 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { esNotaDeTareas, NOTAS_POR_OMISION } from "../src/notas.js";
+import { esNotaDeTareas, NOTA_DE_LOG_POR_OMISION, NOTAS_POR_OMISION } from "../src/notas.js";
+
+/** Una lista inventada con las formas de la real: carpeta, prefijo y un acento. */
+const LISTA = [
+  "0_inbox/tareas_CASA.md",
+  "0_inbox/tareas_TRABAJO.md",
+  "0_inbox/tareas_CÍCLICAS.md".normalize("NFC"),
+];
+
+describe("la lista por omisión", () => {
+  /**
+   * Hasta el 29/09/2026 eran las rutas del vault de desarrollo, compiladas en
+   * el bundle. Un plugin que se instala en otro vault no puede proponer notas
+   * que ahí no existen, ni publicar las de su autor.
+   */
+  it("está vacía, y la nota de historial también", () => {
+    expect(NOTAS_POR_OMISION).toEqual([]);
+    expect(NOTA_DE_LOG_POR_OMISION).toBe("");
+  });
+});
 
 describe("esNotaDeTareas", () => {
-  it("las siete notas medidas están en la lista por omisión", () => {
-    expect(NOTAS_POR_OMISION).toHaveLength(7);
-    for (const n of NOTAS_POR_OMISION) expect(esNotaDeTareas(n, NOTAS_POR_OMISION)).toBe(true);
+  it("las notas de la lista son notas de tareas", () => {
+    for (const n of LISTA) expect(esNotaDeTareas(n, LISTA)).toBe(true);
   });
 
   it("cualquier otra nota del vault queda afuera", () => {
     for (const otra of [
       "0_inbox/workbench.md",
       "1_proyectos/p_6_Sheets.md",
-      "0_inbox/tareas_VIDA.canvas",
-      "tareas_VIDA.md", // misma hoja, otra carpeta
+      "0_inbox/tareas_CASA.canvas",
+      "tareas_CASA.md", // misma hoja, otra carpeta
     ]) {
-      expect(esNotaDeTareas(otra, NOTAS_POR_OMISION), otra).toBe(false);
+      expect(esNotaDeTareas(otra, LISTA), otra).toBe(false);
     }
   });
 
   it("sin archivo abierto no actúa", () => {
-    expect(esNotaDeTareas(null, NOTAS_POR_OMISION)).toBe(false);
-    expect(esNotaDeTareas(undefined, NOTAS_POR_OMISION)).toBe(false);
-    expect(esNotaDeTareas("", NOTAS_POR_OMISION)).toBe(false);
+    expect(esNotaDeTareas(null, LISTA)).toBe(false);
+    expect(esNotaDeTareas(undefined, LISTA)).toBe(false);
+    expect(esNotaDeTareas("", LISTA)).toBe(false);
   });
 
   it("una lista vacía apaga el plugin en todo el vault", () => {
-    expect(esNotaDeTareas("0_inbox/tareas_COLE.md", [])).toBe(false);
+    expect(esNotaDeTareas("0_inbox/tareas_CASA.md", [])).toBe(false);
   });
 
   /**
@@ -38,7 +56,7 @@ describe("esNotaDeTareas", () => {
     const nfc = "0_inbox/tareas_CÍCLICAS.md".normalize("NFC");
     const nfd = nfc.normalize("NFD");
     expect(nfc).not.toBe(nfd);
-    expect(esNotaDeTareas(nfd, NOTAS_POR_OMISION)).toBe(true);
+    expect(esNotaDeTareas(nfd, LISTA)).toBe(true);
     expect(esNotaDeTareas(nfc, [nfd])).toBe(true);
   });
 });

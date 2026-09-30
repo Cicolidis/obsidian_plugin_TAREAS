@@ -33,7 +33,7 @@ import { clicAlFinal } from "./editor/clicAlFinal.js";
 import { decoraciones } from "./editor/decoraciones.js";
 import { protegerTramo } from "./editor/protegerTramo.js";
 import { unirLimpio } from "./editor/unirLimpio.js";
-import { esNotaDeTareas, notasDeTrabajo, NOTAS_POR_OMISION } from "./notas.js";
+import { esNotaDeTareas, notasDeTrabajo } from "./notas.js";
 import { ORDENES_DE_ATAJO } from "./fechas.js";
 import {
   cargarSettings,
@@ -448,16 +448,6 @@ class TareasSettingTab extends PluginSettingTab {
         });
       ta.inputEl.rows = 8;
     });
-    notas.addExtraButton((b) =>
-      b
-        .setIcon("rotate-ccw")
-        .setTooltip(STRINGS.ajustes.notas.restaurar)
-        .onClick(async () => {
-          this.plugin.settings.notasDeTareas = [...NOTAS_POR_OMISION];
-          await this.plugin.guardar();
-          this.display();
-        }),
-    );
 
     new Setting(containerEl)
       .setName(STRINGS.ajustes.unirLimpio.nombre)

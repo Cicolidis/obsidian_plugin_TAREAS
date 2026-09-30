@@ -18,7 +18,8 @@ import { notasReales, VAULT } from "./vault.js";
  * Solo **títulos de heading de varias palabras**. Una palabra suelta se deja
  * pasar y no es pereza: `WORKBENCH`, `CLAUDE`, `CÍCLICAS` y `ACADEMIA` son a la
  * vez headings de sus notas y **vocabulario del plugin o nombres de archivo que
- * `notas-de-tareas.json` ya publica**, así que marcarlos sería 26 alarmas falsas
+ * `notas-de-tareas.json` publicó** —estuvo trackeado hasta el 29/09/2026 y
+ * sigue en la historia—, así que marcarlos sería 26 alarmas falsas
  * por corrida — y una alarma falsa que se repite es una alarma que se ignora.
  * Lo que delata contenido copiado es una frase, no un sustantivo.
  *

@@ -19,13 +19,23 @@ import { pathToFileURL } from "node:url";
 /**
  * Las notas de tareas activas.
  *
- * La lista vive en `notas-de-tareas.json`, en la raíz, porque la comparten
- * este script y `src/notas.ts`: una lista de valores escrita en dos archivos
- * termina divergiendo (CLAUDE.md).
+ * La lista vive en `notas-de-tareas.json`, en la raíz, **fuera de git**: lleva
+ * las rutas del vault real y el repositorio es público. La comparten este
+ * script y `npm run test:corpus`. La forma está en `notas-de-tareas.ejemplo.json`.
  */
-export const NOTAS = JSON.parse(
-  await readFile(new URL("../notas-de-tareas.json", import.meta.url), "utf8"),
-).notas;
+export const NOTAS = await (async () => {
+  try {
+    return JSON.parse(
+      await readFile(new URL("../notas-de-tareas.json", import.meta.url), "utf8"),
+    ).notas;
+  } catch {
+    console.error(
+      "Falta notas-de-tareas.json en la raíz del repo. Copiá notas-de-tareas.ejemplo.json " +
+        "con ese nombre y poné las rutas de tu vault.",
+    );
+    process.exit(1);
+  }
+})();
 
 // ---------------------------------------------------------------- gramática
 

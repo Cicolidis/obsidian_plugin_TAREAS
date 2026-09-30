@@ -50,8 +50,7 @@ export const STRINGS = {
       descripcion:
         "Una ruta por línea, desde la raíz del vault. El plugin solo actúa en estas notas. " +
         "Dejarlo vacío desactiva el plugin en todo el vault.",
-      marcador: "0_inbox/tareas_VIDA.md",
-      restaurar: "Volver a la lista original",
+      marcador: "carpeta/tareas.md",
     },
     notaDeLog: {
       nombre: "Nota de historial",
@@ -535,8 +534,11 @@ export const STRINGS = {
        * frase que describe uno tampoco.
        */
       sinHistorial: (ruta: string) =>
-        `No encuentro la nota de historial «${ruta}», así que «archivar y reiniciar» no se ` +
-        "puede ofrecer. Revisá «Nota de historial» en los ajustes.",
+        (ruta === ""
+          ? "Todavía no elegiste una nota de historial"
+          : `No encuentro la nota de historial «${ruta}»`) +
+        ", así que «archivar y reiniciar» no se puede ofrecer. Revisá «Nota de historial» en " +
+        "los ajustes.",
       deshacer:
         "En las notas que tengas abiertas, Ctrl-Z lo deshace. En las cerradas no hay nada que " +
         "lo deshaga, y en el historial tampoco: esa nota está siempre cerrada.",
@@ -603,7 +605,9 @@ export const STRINGS = {
       "a tener la entrada dos veces.",
     /** El LOG no existe. Nombra el ajuste, que es donde se arregla. */
     sinLog: (ruta: string) =>
-      `No encuentro la nota de historial «${ruta}». Revisá «Nota de historial» en los ajustes.`,
+      ruta === ""
+        ? "Todavía no elegiste una nota de historial. Configurala en «Nota de historial», en los ajustes."
+        : `No encuentro la nota de historial «${ruta}». Revisá «Nota de historial» en los ajustes.`,
     /** La otra mitad: el archivo de la tarea desapareció entre el clic y el write. */
     sinNota: (ruta: string) => `No encuentro la nota «${ruta}». No se escribió nada.`,
     /** El aviso que importa: no se escribió, y por qué. */

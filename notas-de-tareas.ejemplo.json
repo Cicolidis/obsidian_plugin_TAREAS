@@ -1,0 +1,19 @@
+{
+  "_comentario": [
+    "La forma de `notas-de-tareas.json`, que es local y está fuera de git.",
+    "Copialo con ese nombre y poné las rutas de tu vault, desde su raíz.",
+    "Lo leen `scripts/medir-tareas.mjs` y `npm run test:corpus`; el plugin",
+    "no: su lista efectiva vive en sus ajustes y por omisión está vacía.",
+    "",
+    "`log` es la nota de historial (spec §12). Está también en `notas`",
+    "porque el plugin escribe ahí al archivar, y aparte porque el store NO",
+    "la parsea al arrancar: el archivo solo recibe y crece sin techo."
+  ],
+  "log": "0_inbox/tareas_LOG.md",
+  "notas": [
+    "0_inbox/tareas_CASA.md",
+    "0_inbox/tareas_TRABAJO.md",
+    "0_inbox/tareas_CÍCLICAS.md",
+    "0_inbox/tareas_LOG.md"
+  ]
+}

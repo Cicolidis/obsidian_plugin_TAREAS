@@ -6,18 +6,19 @@
  * decide dónde se intercepta el teclado: fuera de esta lista el plugin no toca
  * ni una tecla.
  *
- * La lista por omisión vive en `notas-de-tareas.json`, en la raíz, porque la
- * comparte con `scripts/medir-tareas.mjs`. La lista **efectiva** sale de la
- * configuración: el usuario agrega notas nuevas sin recompilar.
+ * **Por omisión la lista está vacía**, y la nota de historial también. La
+ * lista **efectiva** sale de la configuración: el usuario agrega sus notas sin
+ * recompilar. Hasta el 29/09/2026 el valor por omisión eran las rutas reales
+ * del vault de desarrollo, importadas de `notas-de-tareas.json`: quedaban
+ * compiladas en el bundle y publicadas en el repositorio, y a cualquier otra
+ * instalación le proponían notas que no existen. Ese archivo sigue existiendo,
+ * pero **solo local** —fuera de git— para `scripts/medir-tareas.mjs` y
+ * `npm run test:corpus`. Su forma está en `notas-de-tareas.ejemplo.json`.
  */
-import datos from "../notas-de-tareas.json";
+export const NOTAS_POR_OMISION: readonly string[] = Object.freeze([]);
 
-export const NOTAS_POR_OMISION: readonly string[] = Object.freeze(
-  datos.notas.map((n) => n.normalize("NFC")),
-);
-
-/** La nota de historial (spec §12). Ver `notasDeTrabajo`. */
-export const NOTA_DE_LOG_POR_OMISION: string = datos.log.normalize("NFC");
+/** La nota de historial (spec §12). Vacía hasta que el usuario la elige. */
+export const NOTA_DE_LOG_POR_OMISION = "";
 
 /**
  * ¿Esta ruta es una nota de tareas?

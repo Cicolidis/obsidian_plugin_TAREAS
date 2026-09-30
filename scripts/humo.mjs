@@ -55,7 +55,6 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   domEventHandlers        el clic al final de la línea, que si no salta abajo
 //   tareas-p                las clases de prioridad (§14)
 //   tareas-estilo-          el estilo de prioridad, que viaja como clase de `body`
-//   0_inbox/tareas_         la lista de notas, que viaja como JSON importado
 //   [ ]                     lo que el filtro escribe
 //   onLayoutReady           el arranque del store (spec §20 paso 3)
 //   vault.process           el único camino de escritura (§8)
@@ -103,7 +102,6 @@ for (const marca of [
   "domEventHandlers",
   "tareas-p",
   "tareas-estilo-",
-  "0_inbox/tareas_",
   "[ ] ",
   "onLayoutReady",
   ".process(",

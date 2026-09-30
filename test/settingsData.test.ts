@@ -20,9 +20,10 @@ import {
  * razonable en vez de tirar.
  */
 describe("sanearNotas", () => {
-  it("lo que no es una lista vuelve a las de por omisión", () => {
+  it("lo que no es una lista vuelve a las de por omisión, que es ninguna", () => {
     for (const basura of [null, undefined, 7, "una nota", {}]) {
       expect(sanearNotas(basura)).toEqual([...NOTAS_POR_OMISION]);
+      expect(sanearNotas(basura)).toEqual([]);
     }
   });
 
