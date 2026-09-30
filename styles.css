@@ -864,6 +864,15 @@ body:not(.tareas-fila-columna) .markdown-source-view.mod-cm6 .cm-gutter.tareas-m
   cursor: pointer;
 }
 
+/* Los huecos ocupan el alto de una celda. `grillaDelMes` devuelve siempre seis
+   semanas para que la grilla no cambie de alto al navegar, y eso solo se cumple
+   si una semana vacía mide lo mismo que una llena: sin esta regla, un `span`
+   vacío mide cero, y un mes de seis semanas —noviembre de 2026— estiraba el
+   modal 27 px. Lo encontró la verificación por la CLI (C5), el 29/09/2026. */
+.tareas-calendario-hueco {
+  min-height: 1.8em;
+}
+
 .tareas-calendario-celda:hover {
   background-color: var(--background-modifier-hover);
 }

@@ -207,6 +207,9 @@ try {
     "tareas-boton-recurrencia",
     "tareas-calendario",
     "tareas-calendario-celda",
+    // Sin el alto de los huecos, la grilla cambia de alto al pasar por un mes
+    // de seis semanas (C5, sesión 9).
+    "tareas-calendario-hueco",
   ]) {
     if (!css.includes(clase)) fallas.push(`falta ".${clase}" en styles.css`);
   }
