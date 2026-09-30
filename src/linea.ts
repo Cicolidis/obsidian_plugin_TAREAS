@@ -128,7 +128,7 @@ export interface Heading {
    * dónde termina el nombre, y adivinar lo partiría. Cortar en el primer
    * espacio —lo que hace `scripts/medir-tareas.mjs`— produce nombres que no son
    * de nada: hay proyectos del vault cuyo nombre lleva espacios y existe como
-   * carpeta con el nombre entero. Ver `INFORME-gramaticas.md` §3.
+   * carpeta con el nombre entero. Ver `informes/INFORME-gramaticas.md` §3.
    */
   candidatoPlano: string | null;
 }
