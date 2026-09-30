@@ -311,3 +311,24 @@ export function loteInverso(resultado: ResultadoDeLote): CambioDeLote[] {
     return { tipo: "bloque", linea, antes: escrito, despues: habia };
   });
 }
+
+/**
+ * Las rutas que aparecen en más de un lote, una vez cada una y en orden de
+ * aparición. Compara en NFC, como `esNotaDeTareas`.
+ *
+ * Dos lotes sobre el mismo archivo se calcularon por separado —el segundo no vio
+ * lo que hizo el primero—, así que aplicarlos en fila lo corrompe, y la escritura
+ * se niega. Esto existe para que la negativa **nombre las que son**: hasta el
+ * 29/09/2026 salía como `sin-archivo` con todas las rutas del pedido, y el aviso
+ * decía «no encuentro la nota» sobre notas que existían.
+ */
+export function rutasRepetidas(lotes: readonly { archivo: string }[]): string[] {
+  // Un `Map` conserva el orden de la **primera** aparición: el aviso nombra las
+  // notas en el orden en que vinieron, no en el que se descubrió la repetición.
+  const cuenta = new Map<string, number>();
+  for (const { archivo } of lotes) {
+    const ruta = archivo.normalize("NFC");
+    cuenta.set(ruta, (cuenta.get(ruta) ?? 0) + 1);
+  }
+  return [...cuenta].filter(([, n]) => n > 1).map(([ruta]) => ruta);
+}

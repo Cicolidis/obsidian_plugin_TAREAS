@@ -53,7 +53,7 @@
 import { Notice, TFile, type App } from "obsidian";
 import { archivarEnElLog, cuentaDeArchivado, type EntradaParaElLog } from "../archivado.js";
 import type { CambioDeLote } from "../documento.js";
-import { aplicarLote, ubicarLote, type ResultadoDeLote } from "../ubicar.js";
+import { aplicarLote, rutasRepetidas, ubicarLote, type ResultadoDeLote } from "../ubicar.js";
 
 export type ResultadoDeEscritura =
   | { estado: "escrito"; contenido: string; movidas: number; lineas: number }
@@ -278,6 +278,8 @@ export type ResultadoDeVarias =
   /** El paso en seco dijo que no. **No se escribió nada, en ninguna nota.** */
   | { estado: "no-ubicada"; fallas: { archivo: string; lote: ResultadoDeLote }[] }
   | { estado: "sin-archivo"; cuales: string[] }
+  /** Dos lotes sobre la misma nota. **No se escribió nada.** Es un error de quien llama. */
+  | { estado: "repetidas"; cuales: string[] }
   /** Algunas sí y otras no. La mitad que se puede quedar a medias. */
   | { estado: "media-operacion"; escritas: NotaEscrita[]; fallas: string[] };
 
@@ -319,7 +321,7 @@ export async function escribirEnVarias(
 ): Promise<ResultadoDeVarias> {
   const p = prepararLotes(app, lotes);
   if (p.estado === "sin-cambios") return { estado: "sin-cambios" };
-  if (p.estado === "sin-archivo") return p;
+  if (p.estado === "sin-archivo" || p.estado === "repetidas") return p;
 
   await Promise.all(p.orden.map((l) => volcarEditores(app, l.archivo)));
 
@@ -340,6 +342,10 @@ export type ResultadoDeArchivadoEnVarias =
   | { estado: "no-ubicada"; fallas: { archivo: string; lote: ResultadoDeLote }[] }
   | { estado: "sin-cambios" }
   | { estado: "sin-archivo"; cuales: string[] }
+  /** Dos lotes sobre la misma nota. **No se escribió nada.** */
+  | { estado: "repetidas"; cuales: string[] }
+  /** La nota de historial es también una de las notas a reiniciar. **No se escribió nada.** */
+  | { estado: "log-es-nota"; archivo: string }
   /** El LOG sí, y alguna nota no. La mitad que se puede quedar a medias. */
   | {
       estado: "media-operacion";
@@ -401,14 +407,17 @@ export async function escribirArchivadoEnVarias(
 
   const p = prepararLotes(app, lotes);
   if (p.estado === "sin-cambios") return { estado: "sin-cambios" };
-  if (p.estado === "sin-archivo") return p;
+  if (p.estado === "sin-archivo" || p.estado === "repetidas") return p;
 
   // Escribir el LOG como si fuera una nota más lo corrompería: el lote de esa
   // nota se calculó sobre bytes anteriores a la inserción. No puede pasar —el
   // LOG no está en el store, así que no se puede elegir una tarea suya— pero un
   // ajuste mal puesto no tiene por qué costar el historial.
+  //
+  // Hasta el 29/09/2026 esto salía como `sin-archivo`, y el aviso decía «no
+  // encuentro la nota de historial» sobre una nota que existía.
   if (p.orden.some((l) => l.archivo === log.archivo)) {
-    return { estado: "sin-archivo", cuales: [log.archivo] };
+    return { estado: "log-es-nota", archivo: log.archivo };
   }
 
   const archivoDelLog = app.vault.getFileByPath(log.archivo);
@@ -453,7 +462,8 @@ export async function escribirArchivadoEnVarias(
 type Preparacion =
   | { estado: "listo"; orden: LoteConDestino[]; archivos: Map<string, TFile> }
   | { estado: "sin-cambios" }
-  | { estado: "sin-archivo"; cuales: string[] };
+  | { estado: "sin-archivo"; cuales: string[] }
+  | { estado: "repetidas"; cuales: string[] };
 
 /** Los lotes con algo que hacer, sus archivos, y el orden estable. */
 function prepararLotes(app: App, lotes: readonly LoteConDestino[]): Preparacion {
@@ -464,8 +474,8 @@ function prepararLotes(app: App, lotes: readonly LoteConDestino[]): Preparacion 
   // segundo no vio lo que hizo el primero: aplicarlos en fila lo corrompe. No
   // puede pasar desde el store —una nota es una entrada— pero esta es la capa
   // donde el daño se para.
-  const rutas = new Set(conCambios.map((l) => l.archivo));
-  if (rutas.size !== conCambios.length) return { estado: "sin-archivo", cuales: [...rutas] };
+  const repetidas = rutasRepetidas(conCambios);
+  if (repetidas.length) return { estado: "repetidas", cuales: repetidas };
 
   const orden = [...conCambios].sort((a, b) => a.archivo.localeCompare(b.archivo));
 

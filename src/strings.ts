@@ -608,6 +608,18 @@ export const STRINGS = {
       ruta === ""
         ? "Todavía no elegiste una nota de historial. Configurala en «Nota de historial», en los ajustes."
         : `No encuentro la nota de historial «${ruta}». Revisá «Nota de historial» en los ajustes.`,
+    /**
+     * Dos cambios para la misma nota en una sola operación. No lo puede producir
+     * el store —una nota es una entrada—, así que si aparece es un error del
+     * plugin, y el aviso lo dice en vez de culpar a una nota que existe.
+     */
+    lotesRepetidos: (notas: readonly string[]) =>
+      `No se escribió nada: la operación traía dos cambios para ${notas.length === 1 ? "la nota" : "las notas"} ` +
+      `${notas.map((n) => `«${n}»`).join(", ")}, y aplicarlos en fila la corrompería. Es un error del plugin.`,
+    /** El ajuste mal puesto que la escritura ataja: el LOG es a la vez una nota de tareas. */
+    logEsNota: (ruta: string) =>
+      `No se escribió nada: «${ruta}» es la nota de historial y también una de las notas a ` +
+      "reiniciar. Revisá «Nota de historial» y «Notas de tareas» en los ajustes.",
     /** La otra mitad: el archivo de la tarea desapareció entre el clic y el write. */
     sinNota: (ruta: string) => `No encuentro la nota «${ruta}». No se escribió nada.`,
     /** El aviso que importa: no se escribió, y por qué. */

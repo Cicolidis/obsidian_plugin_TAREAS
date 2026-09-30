@@ -746,6 +746,9 @@ async function escribirReinicio(
     case "sin-archivo":
       new Notice(STRINGS.avisos.sinNota(r.cuales.join(", ")), 10000);
       break;
+    case "repetidas":
+      new Notice(STRINGS.avisos.lotesRepetidos(r.cuales.map(nombreDeNota)), 10000);
+      break;
     case "media-operacion":
       // El estado a medias, que acá es por nota. Aviso sin cierre automático:
       // media operación que termina en silencio es peor que una que no ocurrió.
@@ -810,6 +813,12 @@ async function escribirReinicioConArchivado(
           : STRINGS.avisos.sinNota(r.cuales.join(", ")),
         10000,
       );
+      break;
+    case "repetidas":
+      new Notice(STRINGS.avisos.lotesRepetidos(r.cuales.map(nombreDeNota)), 10000);
+      break;
+    case "log-es-nota":
+      new Notice(STRINGS.avisos.logEsNota(r.archivo), 10000);
       break;
     case "media-operacion":
       for (const n of r.escritas) store.absorber(n.archivo, n.contenido, "escritura");
