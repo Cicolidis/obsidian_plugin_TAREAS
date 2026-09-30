@@ -1,0 +1,11 @@
+{
+  "notasDeTareas": [
+    "0_inbox/tareas_PRUEBA.md",
+    "0_inbox/tareas_PRUEBA_2.md",
+    "0_inbox/tareas_LARGA.md",
+    "0_inbox/tareas_LOG.md"
+  ],
+  "notaDeLog": "0_inbox/tareas_LOG.md",
+  "workbenchFavorito": "foco",
+  "workbenchSecundario": "casa"
+}
