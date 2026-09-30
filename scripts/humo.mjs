@@ -300,7 +300,9 @@ try {
 // ---------------------------------------------------------------------------
 try {
   const { readdirSync } = await import("node:fs");
-  const raiz = new URL("../", import.meta.url);
+  // Desde el 29/09/2026 las guías viven en `sesiones/`, con los traspasos y
+  // los resultados.
+  const raiz = new URL("../sesiones/", import.meta.url);
   for (const nombre of readdirSync(raiz).filter((f) => /^VERIFICAR-.*\.md$/.test(f))) {
     const guia = readFileSync(new URL(nombre, raiz), "utf8");
     const filas = (guia.match(/^\| [A-Z]\d+ /gm) ?? []).length;

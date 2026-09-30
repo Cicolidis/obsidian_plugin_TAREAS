@@ -6,7 +6,7 @@ description: Cerrar una sesión de trabajo y escribir el PROMPT-sesion-N.md de l
 # Handoff entre sesiones
 
 Este proyecto se construye en sesiones de una ventana de contexto cada una, y el
-traspaso es un archivo `PROMPT-sesion-N.md` en la raíz que el usuario pega en la
+traspaso es un archivo `sesiones/PROMPT-sesion-N.md` que el usuario pega en la
 ventana siguiente. La forma está validada en las sesiones 2, 3 y 4: seguila.
 
 **El handoff no es un resumen.** Es el prompt con el que otra instancia arranca
@@ -19,7 +19,7 @@ No de memoria: de los comandos.
 
 ```bash
 git status --short
-git log --oneline "$(ls PROMPT-sesion-*.md | sort -V | tail -1 | sed 's/.*/HEAD/')" | head -20
+git log --oneline -20
 npm test 2>&1 | grep -E "Test Files|Tests "
 npm run test:corpus 2>&1 | grep -E "Test Files|Tests "
 ```
@@ -63,9 +63,12 @@ se entrega sin verificar.
     medir en vez de suponer; la spec también es una medición con fecha; cuando
     una propiedad falla, preguntarse primero si la propiedad dice la verdad;
     mirar la salida; español.
-11. **Qué espero al final** — incluida la **lista de lo que solo puede verificar
-    el usuario**, que nunca puede faltar: el comportamiento del editor —cursor,
-    selección, teclado, cómo se ve algo— no se comprueba desde Claude Code.
+11. **Qué espero al final** — incluida la **verificación en vivo**, en dos
+    partes que nunca pueden faltar: lo que Claude Code corre con la CLI de
+    Obsidian sobre el vault de prueba (un script en `scripts/verificar/` con los
+    ids de la guía, y su informe en `sesiones/`), y la **lista de lo que solo
+    puede verificar el usuario**: cómo se ve algo, elegir entre alternativas, el
+    teléfono, Sync. Ver «Verificar en vivo» en `CLAUDE.md`.
 
 ## 4. Antes de commitear
 

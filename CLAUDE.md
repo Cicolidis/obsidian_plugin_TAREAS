@@ -2,84 +2,36 @@
 
 ## Qué es esto
 
-Plugin de Obsidian para gestión de tareas. **La especificación completa está en `plugin-tareas-spec.md`** — leerla antes de trabajar. Este archivo dice cómo se trabaja, no qué se construye.
+Plugin de Obsidian para gestión de tareas. **La especificación está en `plugin-tareas-spec.md`** — leerla antes de trabajar. Es la parte normativa: qué es el plugin y qué quedó decidido. Las bitácoras de las secciones que más crecieron (§5.5 y §13.0) están en `informes/`, y se leen cuando se toca esa sección. Este archivo dice cómo se trabaja, no qué se construye; **el porqué de cada regla** —con la sesión y el bug que la produjo— está en `NOTAS-DE-METODO.md`.
 
 Segundo plugin del proyecto. El primero, **Anotaciones (Zotero + papel)**, está en `~/Downloads/claude/obsidian_plugin_anotaciones` y es **referencia de solo lectura**: 18.000 líneas de TS, 468 tests, y varios módulos que esta spec pide portar (`hiddenTail.ts`, `outline.ts`, `color.ts`, `settingsData.ts`, `editor/annotationDecorations.ts`).
 
-Vault de trabajo: `~/Downloads/obsidian/mental palace`. Notas de tareas: `0_inbox/tareas_*.md`.
+Vault de trabajo: `~/Downloads/obsidian/mental palace`. Notas de tareas: `0_inbox/tareas_*.md`. **Vault de prueba**: `tareas-vault-prueba/`, adentro del repo (ver «Verificar en vivo»).
+
+Los traspasos entre sesiones (`PROMPT-sesion-N.md`), las guías de verificación (`VERIFICAR-*.md`) y sus resultados están en `sesiones/`.
 
 ---
 
 ## Método
 
-Estas reglas salieron de construir Anotaciones. Están desarrolladas en su `NOTAS-DE-METODO.md`; acá va lo que aplica a todo lo que se haga en este repo.
+Una línea por regla. La historia de cada una está en `NOTAS-DE-METODO.md`.
 
-### Verificar contra el sistema real, no razonar sobre documentación
+### Las reglas
 
-Si hay una duda sobre cómo se comporta Obsidian, medirla. El espía de transacciones, en la consola de Obsidian con el foco en el editor:
-
-```js
-const v = app.workspace.activeEditor.editor.cm;
-const o = v.dispatch.bind(v);
-v.dispatch = (...a) => { console.log(a); return o(...a); };
-```
-
-El argumento llega como **spec**, no como `Transaction`: `iterChanges` no existe sobre él.
-El espía completo, con las trampas ya resueltas, está en `scripts/espia.js`.
-
-Para los eventos del vault —cuándo llega `metadataCache.on("changed")`, si llega
-también para las escrituras del propio plugin, cuánto tarda, y la distancia entre
-`modify` y `changed`— está `scripts/espia-eventos.js`, que se pega igual en la
-consola.
-
-Para saber **quién movió el cursor** —cuál transacción, con qué `userEvent`, y
-si traía una selección explícita— está `scripts/espia-cursor.js`, que se pega
-igual en la consola. Sirve para lo que los tests con filtros encadenados no
-pueden ver: Outliner interceptando la tecla, y lo que Obsidian despacha detrás.
-
-**Una unidad relativa vale distinto en cada contexto**, y eso produce errores
-que parecen de posición. En la sesión 5 los botones del margen quedaban 2,8px
-más arriba que el checkbox: `--list-spacing` es `0.075em` y
-`--line-height-normal` es un número sin unidad, y la línea los resuelve contra
-`--font-text-size` (16px) mientras el margen los resuelve contra
-`--font-ui-smaller` (que es el 80% de aquel). La corrección no es un número, es
-**fijar el contexto**. Dos correcciones a ojo antes de medirlo no acertaron.
-
-Para lo que se ve en pantalla y no se puede deducir —cuántos márgenes hay, qué
-ancho tiene cada uno, cuánto mide un hueco— está `scripts/espia-margen.js`. Nació
-de una cuenta que daba 7 px donde la pantalla mostraba 45: cuando el número
-calculado y el visto no coinciden, falta un elemento en el modelo, y eso solo lo
-contesta el navegador.
-
-Para el **ciclo de medición de CodeMirror** —los avisos `Measure loop restarted`
-y `Viewport failed to stabilize` de la §5.5— está `scripts/espia-medicion.js`.
-Nació de que esa comprobación se pidió **seis veces a ojo y nunca reprodujo su
-línea de base**: la última vuelta informó cero, no 1 y 4. Hace tres cosas que
-mirar la consola no hace: cuenta, **scrollea solo** —«angostá la ventana y
-scrolleá hacia arriba» a mano se cumple distinto cada vez— y **demuestra que el
-parche está puesto** haciendo pasar un aviso sintético antes de medir. No tiene
-reloj propio: se consulta con `medicion.leer()`.
-
-> **Una comprobación que en seis vueltas no produjo un número no protege nada**,
-> y anotarla como verde es peor que sacarla. Si algo se pide en una guía de
-> verificación y vuelve vacío dos veces seguidas, la pregunta no es «probá otra
-> vez» sino «¿esto se puede medir?».
-
-Para leer el CSS o el JS internos de Obsidian en vez de deducirlos, están los scripts de Anotaciones (`extraer-css-de-obsidian.mjs`).
-
-Hay además un **MCP conectado al Obsidian de esta máquina**. Sirve como tercer
-instrumento —`get_note_outline` y `get_outgoing_links` dan el parser propio de
-Obsidian, que es independiente de los dos míos— con tres reglas:
-
-- **`src/` no lo importa nunca.** El plugin tiene que funcionar con Obsidian
-  cerrado. Es para medir y para tests opt-in, no una dependencia.
-- **Puede escribir en el vault** (`patch_vault_file`, `search_and_replace`,
-  `delete_vault_file`) y no se usa para eso. Vale la regla dura de más abajo.
-- **Es otro instrumento y puede mentir.** Lee del `metadataCache`, así que
-  necesita la aplicación abierta y puede ir atrasado respecto del disco. Nunca en
-  la suite normal.
-
-No expone ítems de lista, así que para las tareas no hay diferencial por ese lado.
+- **Verificar contra el sistema real, no razonar sobre documentación.** Si hay una duda sobre cómo se comporta Obsidian, medirla.
+- **Medir antes de diseñar, y antes de optimizar.** La medición dimensiona, no vetea.
+- **La spec también es una medición, y tiene fecha.** Antes de apoyar una decisión en un dato de la spec, contarlo. Ningún test hardcodea los números de la §2.
+- **Una foto del vault envejece.** Todo instrumento que guarde una foto detecta que quedó vieja y se saltea diciéndolo.
+- **Una reproducción tiene que copiar la forma del sistema**, no una forma razonable. Cuando no se sabe la forma, la dice el instrumento en vivo.
+- **Una hipótesis que no falla su test se revierte.** El test queda como caracterización.
+- **Un test que expone el bug antes de arreglarlo.** Los invariantes de la §18 son propiedades, no casos.
+- **Cuando una propiedad falla, la primera pregunta es si la propiedad dice la verdad.** Una que falla de forma intermitente se caza (`{ numRuns: 20000 }`), no se ignora.
+- **Mirar la salida, no solo los tests**: el texto que se genera, el DOM que se construye, lo que imprime un instrumento.
+- **Lo que no se puede mirar, hacerlo fallar en el pipeline** (`humo.mjs`).
+- **Un instrumento miente antes que el código.** Sospechar del cero. Antes de creerle a un resultado sorprendente, correrlo con el cambio revertido. Un instrumento con reloj propio miente sin avisar. Todo `console.log` de un espía va como `console.log("%s", texto)`.
+- **Una comprobación que en dos vueltas no produce un número** no se pide otra vez: se pregunta si se puede medir.
+- **Una unidad relativa vale distinto en cada contexto.** La corrección no es un número: es fijar el contexto.
+- **Un cambio de diseño se prueba encendiéndolo**, no reemplazando el anterior (patrón `designFlags.ts` de Anotaciones). Y **cuando el usuario elige, la alternativa que perdió se borra**: si no, los ajustes crecen sin techo.
 
 ### Lógica pura primero, interfaz después
 
@@ -130,153 +82,53 @@ El criterio no es «¿borra?» sino «¿reescribe el documento entero?». Se esc
   DOM de todas las filas de abajo en cada tecla.
 - **Obsidian se actualiza solo y el `.asar` del instalador no es el que corre.** El que vale está en `~/Library/Application Support/obsidian/obsidian-N.asar`. Leer el de `/Applications` es medir otra versión y creerle.
 
-### Medir antes de diseñar, y antes de optimizar
+### Los instrumentos
 
-El corpus se midió con `scripts/medir-tareas.mjs` y los resultados están en la §2 de la spec. Si aparece una decisión que depende de cómo son las notas, medirla en vez de suponerla. La medición dimensiona, no vetea.
+| Qué | Para qué |
+|---|---|
+| `scripts/espia.js` | Las transacciones del editor. El argumento llega como **spec**, no como `Transaction` |
+| `scripts/espia-eventos.js` | Los eventos del vault: cuándo llega `changed`, si llega para las escrituras propias, cuánto tarda |
+| `scripts/espia-cursor.js` | **Quién movió el cursor**: qué transacción, con qué `userEvent`, con selección explícita o no |
+| `scripts/espia-margen.js` | Lo que se ve y no se deduce: cuántos márgenes hay, qué ancho tiene cada uno |
+| `scripts/espia-medicion.js` | El ciclo de medición de CodeMirror (§5.5): cuenta, scrollea solo y demuestra que el parche está puesto |
+| `scripts/extraer-css-de-obsidian.mjs` | Leer el CSS o el JS internos de Obsidian en vez de deducirlos |
+| La CLI de Obsidian, por `scripts/obs.mjs` | Todo lo anterior sin pegar nada en una consola, y las verificaciones en vivo. Ver abajo |
 
-**La spec también es una medición, y tiene fecha.** Sus afirmaciones fácticas
-envejecen y algunas ya eran falsas: la §2 decía 386 tareas y hoy son 395; la §12
-justificaba el formato `[✓ fecha]` diciendo que el LOG «ya lo usa», y ninguno de
-sus 37 bullets tiene fecha; la §7 daba por perceptible un costo de parseo que
-medido es de 0,31 ms para las siete notas. Antes de apoyar una decisión en un
-dato de la spec, contarlo. Y **ningún test hardcodea los números de la §2**: el
-corpus se sigue escribiendo.
+Los espías se pueden seguir pegando en la consola, y también se cargan desde la CLI: `node scripts/obs.mjs eval-archivo scripts/espia-medicion.js`.
 
-**Una foto del vault envejece rápido.** Medido: dos de las siete notas cambiaron
-en disco en las horas entre tomar el volcado de headings de Obsidian y correr el
-test. Todo instrumento que guarde una foto tiene que **detectar que quedó vieja y
-saltearse diciéndolo**, no fallar como si el código estuviera mal. Una alarma
-falsa que se repite es una alarma que se ignora.
+Hay además un **MCP conectado al Obsidian de esta máquina** (`get_note_outline`, `get_outgoing_links`: el parser propio de Obsidian). Tres reglas: `src/` no lo importa nunca; puede escribir en el vault y no se usa para eso; lee del `metadataCache`, así que puede ir atrasado y nunca va en la suite normal.
 
-### Una reproducción tiene que copiar la forma del sistema
+---
 
-En la sesión 5 el cursor saltaba al comienzo de la línea al asignar un workbench.
-Se montó offline el camino entero —plan, diff, transacción con
-`userEvent: "set"`— y **no se reprodujo**, así que se descartó la escritura como
-causa. Estaba mal: la reproducción usaba un diff **mínimo**, carácter a carácter,
-y el de Obsidian arranca en el comienzo de la línea. `ChangeSet.mapPos` de una
-posición adentro de un rango reemplazado devuelve el comienzo del rango, y ahí
-estaba todo.
+## Verificar en vivo: la CLI de Obsidian
 
-Una reproducción que elige la forma «razonable» de un cambio en vez de la que el
-sistema produce de verdad no refuta nada: mide otra cosa. Cuando no se pueda
-saber la forma, el instrumento en vivo lo dice —el espía la mostró en dos
-líneas— y eso vale más que una hora de razonar sobre el diff que uno habría
-escrito.
+Desde la sesión 9, **Claude Code verifica el comportamiento del plugin en un Obsidian real**, con la CLI de Obsidian (1.12 o posterior: Ajustes → General → «Command line interface»). Antes lo hacía el usuario a mano: 216 comprobaciones pedidas entre las sesiones 6 y 8.
 
-### Una hipótesis que no falla su test se revierte
+```bash
+npm run vault:prueba     # arma el vault de prueba y lo abre en una ventana propia
+npm run deploy:prueba    # compila, prueba de humo, copia y recarga el plugin ahí
+node scripts/verificar/paso-6c.mjs [A B …]   # una verificación, por secciones
+```
 
-En la sesión 5 el cursor quedaba mal después de unir dos tareas y la explicación
-parecía obvia: un `transactionFilter` que devuelve un `TransactionSpec` reemplaza
-la transacción entera, así que `protegerTramo` estaría pisando la selección que
-puso `unirLimpio`. Se escribió el arreglo y **después** el test que tenía que
-exponerlo. Pasó con el arreglo y **también sin él**: con las cinco formas de
-unión, con token y sin token, el cursor cae siempre en la costura, y
-`protegerTramo` no deja ningún camino con `cursor: null`.
+- **El vault de prueba es `tareas-vault-prueba/`**, adentro del repo y fuera de git. Se arma desde `test/vault-semilla/` —inventada, porque el repo es público— con Outliner copiado del vault real, porque la forma de una edición depende de él. `node scripts/vault-prueba.mjs notas` lo restaura.
+- **Todo pasa por `scripts/obs.mjs`**, que fija `vault=tareas-vault-prueba` y se niega a recibir otro. `obsidian eval` puede escribir en cualquier vault abierto, y el real está en Sync. Nunca `obsidian` a secas.
+- **Cada guía `VERIFICAR-*.md` tiene su script** en `scripts/verificar/`, con los mismos identificadores. El informe va a `sesiones/RESULTADOS-sesion-N-cli.md` y arranca con el commit y el `main.js` sobre el que corrió.
+- **Cada comprobación informa lo que midió**, no solo «ok». Y antes de darla por buena, se comprueba que **distingue**: que el mismo instrumento ve el estado contrario, o que falla con el cambio revertido.
+- **Teclas y clics reales, por el protocolo de Chrome** (`tecla`, `clicEn` en `scripts/verificar/lib.mjs`). Un `KeyboardEvent` sintético no escribe nada en el editor.
+- **El gesto se reproduce con la forma que tiene de verdad.** En Live Preview el comienzo de una tarea es la columna 6, después del checkbox; la primera versión de G3 usaba la 0 y fallaba sin que nada estuviera roto.
 
-El arreglo se revirtió. Un cambio sin un test que lo justifique es un cambio de
-comportamiento apoyado en un razonamiento, que es exactamente de donde salieron
-los tres bugs de ese módulo. Los tests quedaron, como **caracterización**: fijan
-dónde cae el cursor hoy. Y para lo que no se puede reproducir offline —Outliner
-interceptando la tecla— la respuesta es un instrumento, no una corrección a
-ciegas.
+**Trampas que ya costaron** (sesión 9 y el `docs/spikes.md` de COMENTARIOS INLINE):
 
-### Un test que expone el bug antes de arreglarlo
+- Con la ventana en segundo plano, Chromium espacia los timers hasta uno por minuto y la CLI parece colgada. `lib.mjs` apaga ese freno en la ventana de prueba, y `obs.mjs` corta a los 150 s.
+- En Obsidian 1.13 el botón de cerrar un modal ya no es `.modal-close-button`: se cierra con un clic en `.modal-bg`. Un modal viejo abajo hace que la comprobación siguiente lea el equivocado.
+- Restaurar el disco con una nota abierta no restaura nada: el editor guarda su buffer encima. `reiniciarVault()` cierra los editores primero.
+- `dev:screenshot` devuelve el cuadro anterior: sacar dos. La ventana de ajustes es otra ventana y no sale en la captura.
+- Después de `plugin:reload`, lo ya dibujado conserva el código viejo: volver a abrir la nota.
+- Si se corta una corrida a mitad de camino, el depurador de `dev:debug` queda puesto: `node scripts/obs.mjs dev:debug off`.
 
-Y las propiedades encuentran lo que los casos no. Los invariantes de la §18 de la spec son propiedades, no casos: escribirlos así.
+**Lo que sigue siendo del usuario**: cómo se ve algo y si convence; elegir entre alternativas; el teléfono (`dev:mobile` emula la pantalla, no el teclado por composición); Sync entre dispositivos; y el uso real, que es de donde salieron los pedidos de las sesiones 6 a 8. Las guías se parten en dos: **lo que ya corrió Claude Code, con su resultado**, y **lo que queda a mano**.
 
-**Cuando una propiedad falla, la primera pregunta es si la propiedad dice la
-verdad.** En la sesión 2 fallaron cuatro veces y **tres fueron del generador o de
-la propiedad**, no del código: un patch mal tipado que ninguna llamada real puede
-producir, un conteo que no contemplaba un camino repetido dos veces, y una
-propiedad que exigía `ok` donde lo correcto era `sin-token`. Esa última importa:
-afirmaba algo **más fuerte que la verdad**, y eso habría tapado una regresión
-real en el caso vacío.
-
-**Una propiedad que falla de forma intermitente hay que cazarla, no encogerse de
-hombros.** Pasó cinco corridas seguidas y fallaba una de cada tantas; apareció
-con `{ numRuns: 20000 }` en un archivo temporal, y el contraejemplo era de cuatro
-caracteres.
-
-### Mirar la salida, no solo los tests
-
-Los tests comprueban lo que se te ocurrió. El bug de que las secciones nuevas del
-LOG se insertaban **arriba de todo**, por encima de los headings que ya estaban,
-no lo agarró ninguno de los 60 tests del corpus: apareció imprimiendo la
-estructura del archivo resultante y mirándola. Cuando algo genera texto para que
-lo lea una persona, generarlo una vez y leerlo.
-
-Eso vale también para el **DOM** y para los **instrumentos**. En la sesión 5 la
-misma práctica encontró dos cosas que ningún test iba a agarrar:
-
-- Sobre una tarea con el token roto, los cuatro botones de la fila prometían
-  «Mandar a foco» y clickearlos no hacía nada. Un control que miente es peor que
-  uno apagado, y ninguna aserción lo miraba.
-- La primera versión del test de costo informaba 0,711 ms para la primera nota y
-  0,02 para las siguientes. No era una nota cara: era el JIT, y con dos ventanas
-  «la mediana» eran dos muestras. **El test pasaba** —el techo era 16 ms— y el
-  número que informaba no era el que decía medir. Todo instrumento que promedie
-  necesita una pasada de calentamiento que se descarte y suficientes muestras
-  para que la mediana signifique algo.
-
-Sin entorno DOM instalado, mirar lo que construye un `toDOM` cuesta un
-`document` mínimo instrumentado en el scratchpad y un `esbuild --bundle`. Es más
-barato que agregar una dependencia, y alcanza para leer estructura, clases y
-atributos, que es donde estaba el bug.
-
-**Y lo que no se puede mirar, hay que hacerlo fallar en el pipeline.** Una
-cascada de CSS no se resuelve sin un navegador: en la sesión 5, al pasar la fila
-de botones a un margen, quedó en pie un `opacity: 0` sobre `.tareas-fila` sin
-decir **cuál** de las dos formas —el widget vive adentro de `.cm-line`, el
-marcador del margen afuera— y en el margen no había nada que la volviera a
-encender. Ningún test lo agarró y yo no lo podía ver. Lo que sí se puede es
-escribir la regla que la prohíbe: `humo.mjs` se niega a desplegar un
-`styles.css` donde un bloque toque `opacity` o `pointer-events` sobre
-`.tareas-fila` sin nombrar `.cm-line` o `.cm-gutter`. Cuando el ojo no llega, la
-alternativa no es mirar más fuerte: es convertir la regla en algo que el
-pipeline pueda comprobar.
-
-**Un instrumento miente antes que el código, y hay que sospechar del cero.** En
-la sesión 6 pasó tres veces seguidas: una sonda que medía diez segundos **desde
-que se pegaba** —y se cerraba antes de que uno volviera a Obsidian— informó cero
-llamadas tres veces, y el cero era imposible porque lo que medía estaba
-funcionando a la vista. La misma sonda parcheaba una **instancia** en vez del
-prototipo, así que no veía las otras vistas abiertas. Y un test reproducía un
-Enter sin la continuación de lista que Obsidian sí pone, y **fallaba también sin
-el cambio que decía medir**. Dos reglas de eso: **un instrumento con reloj propio
-miente sin avisar** —los que se consultan a mano, no—, y **antes de creerle a un
-resultado sorprendente, comprobar que el instrumento mide lo que dice**, corriendo
-el mismo test con el cambio revertido.
-
-Y hay que leer la salida **de los instrumentos**, no solo la del código. En la
-sesión 5 el espía del cursor imprimía el token como `%t:id=…%`: la consola de
-Chrome —que es la de Obsidian— trata el primer argumento de `console.log` como
-cadena de formato aunque sea el único, y ahí `%%` es el escape de un `%`
-literal. El instrumento mentía sobre lo único que este plugin escribe. **Node no
-lo reproduce**, así que probarlo en la terminal no sirve de nada: con un solo
-argumento devuelve la cadena tal cual. Todo `console.log` de un espía va como
-`console.log("%s", texto)`.
-
-### Lo que solo puede verificar el usuario
-
-El comportamiento del editor —cursor, selección, teclado, cómo se ve algo— no se puede comprobar desde acá. Al terminar un cambio que lo toque, entregar una **lista concreta de qué observar**, no un «probalo a ver».
-
-Un cambio de diseño se prueba **encendiéndolo**, no reemplazando el anterior. Ver `designFlags.ts` de Anotaciones.
-
-**Un resultado de verificación vale sobre un binario, no en abstracto.** En la
-sesión 6 él verificó 36 comprobaciones y, mientras llegaban los resultados, se
-commitearon tres cambios encima —uno sobre `cursor.ts`, que interviene en cada
-escritura, y un `transactionFilter` nuevo, que cambia lo que hace el teclado—.
-Dar por verificado lo que se probó sobre otro `main.js` es exactamente el error
-que el invariante 10 evita un escalón más abajo. Dos consecuencias prácticas:
-**toda guía de verificación empieza pidiendo sobre qué corrió** —el commit y el
-`mtime` del `main.js` desplegado, con un comando que lo imprima—, y **si se
-commitea código mientras la verificación está en curso, hay que decir qué caducó
-y por qué**, en vez de esperar los resultados como si nada.
-
-Y las guías prometen un número de comprobaciones que hay que contar, no estimar:
-dos veces se escribió uno equivocado. `humo.mjs` cuenta las filas de cada
-`VERIFICAR-*.md` y se niega a desplegar si no coincide.
+**Un resultado de verificación vale sobre un binario, no en abstracto.** Toda guía empieza diciendo sobre qué corrió —commit y `mtime` del `main.js`—, y si se commitea mientras la verificación está en curso, se dice qué caducó. Las guías prometen un número de comprobaciones que `humo.mjs` cuenta.
 
 ---
 
@@ -284,18 +136,17 @@ dos veces se escribió uno equivocado. `humo.mjs` cuenta las filas de cada
 
 ```bash
 npm test                # vitest: unitarias y propiedades, sin vault
-npm run test:corpus     # diferencial contra las siete notas reales (opt-in)
+npm run test:corpus     # diferencial contra las notas reales (opt-in)
 npm run typecheck
 npm run build
-npm run deploy          # compila, copia al vault y corre la prueba de humo
+npm run deploy          # compila, copia al vault real y corre la prueba de humo
 npm run humo            # prueba de humo del bundle
 npm run medir           # node scripts/medir-tareas.mjs "$OBSIDIAN_VAULT"
+npm run vault:prueba    # arma y abre el vault de prueba
+npm run deploy:prueba   # despliega en el vault de prueba y recarga el plugin
 ```
 
-`npm run test:corpus` se saltea sin `OBSIDIAN_VAULT`. El bloque que compara
-contra el parser de Obsidian necesita además `outline-obsidian.local.json`
-—ignorado por git, porque lleva los títulos reales de las notas— y se saltea
-solo si falta o si quedó viejo. Ver `INFORME-gramaticas.md`.
+`npm run test:corpus` y `npm run medir` leen la lista de notas de `notas-de-tareas.json`, que es **local y está fuera de git**: lleva las rutas del vault real. La forma está en `notas-de-tareas.ejemplo.json`. Sin ese archivo o sin `OBSIDIAN_VAULT`, el diferencial se saltea diciéndolo. El bloque que compara contra el parser de Obsidian necesita además `outline-obsidian.local.json` y se saltea solo si falta o si quedó viejo. Ver `informes/INFORME-gramaticas.md`.
 
 `OBSIDIAN_VAULT` por defecto es `$HOME/Downloads/obsidian/mental palace`.
 
@@ -313,6 +164,6 @@ solo si falta o si quedó viejo. Ver `INFORME-gramaticas.md`.
 
 - **No modificar `obsidian_plugin_anotaciones`.** Es referencia.
 - **El repositorio es público.** No entra contenido real de las notas: ni textos de tarea, ni nombres de proyecto, ni títulos de heading, ni en el código, ni en los tests, ni en los mensajes de commit. Las fixtures son inventadas y reproducen las **formas** de la §2; las notas de verdad se comparan solo en `npm run test:corpus`, que no está en el repositorio y no puede estarlo.
-- **No escribir en el vault** salvo que el paso lo pida explícitamente y esté aprobado.
+- **No escribir en el vault real** salvo que el paso lo pida explícitamente y esté aprobado. El de prueba está para eso, y se habla con él **solo** por `scripts/obs.mjs`.
 - Nada que borre o pise corre sin mirar primero.
 - Si la spec no cubre algo, **preguntar**. No inventar comportamiento.
