@@ -704,6 +704,19 @@ async function seccionH() {
 
 // ------------------------------------------------------------------ main
 instalar();
+// Un tamaño de ventana fijo. La primera corrida entera después de la sección
+// H arrancó con la ventana en 700 px —la había dejado así una corrida cortada—
+// y tres comprobaciones de la A fallaron sin nada roto: con el editor angosto
+// las líneas envuelven y la fila se buscaba en el renglón equivocado. Lo que
+// se mide con la ventana angosta es la H, y la H la angosta y la devuelve.
+//
+// Y al frente, sin quitarle el foco a nadie: tapada, la ventana cuenta como
+// oculta y Chromium frena sus timers hasta colgar un `eval` minutos enteros.
+const ventana = vt(`const w = require("@electron/remote").getCurrentWindow();
+  w.showInactive(); w.moveTop();
+  if (!w.isFullScreen()) { if (w.isMaximized()) w.unmaximize(); w.setSize(1600, 1000); await vt.esperar(600); }
+  return { tamano: w.getSize(), completa: w.isFullScreen() };`);
+console.log(`   ventana: ${ventana.completa ? "pantalla completa" : ventana.tamano.join("×")}`);
 const secciones = { A: seccionA, B: seccionB, C: seccionC, D: seccionD, E: seccionE, F: seccionF, G: seccionG, H: seccionH };
 for (const [s, fn] of Object.entries(secciones)) if (corre(s)) await fn();
 vt(`await vt.cerrarMenus(); await vt.cerrarModales(); return true;`);

@@ -119,7 +119,8 @@ node scripts/verificar/paso-6c.mjs [A B …]   # una verificación, por seccione
 
 **Trampas que ya costaron** (sesión 9 y el `docs/spikes.md` de COMENTARIOS INLINE):
 
-- Con la ventana en segundo plano, Chromium espacia los timers hasta uno por minuto y la CLI parece colgada. `lib.mjs` apaga ese freno en la ventana de prueba, y `obs.mjs` corta a los 150 s.
+- Con la ventana tapada, Chromium la cuenta como oculta y frena sus timers hasta colgar un `eval` minutos enteros. La verificación la trae al frente sin quitar el foco (`showInactive()` + `moveTop()`), y los recorridos largos los da Node, un paso por `eval`. Apagar el freno con `setBackgroundThrottling(false)` se probó y fue peor: los eventos de `dev:cdp` quedaron esperando un cuadro. `obs.mjs` corta a los 150 s.
+- Una ventana a pantalla completa ignora `setSize`: la primera cuenta del ciclo de medición salió con el editor en 1561 px. Salir de pantalla completa congela la ventana unos segundos.
 - En Obsidian 1.13 el botón de cerrar un modal ya no es `.modal-close-button`: se cierra con un clic en `.modal-bg`. Un modal viejo abajo hace que la comprobación siguiente lea el equivocado.
 - Restaurar el disco con una nota abierta no restaura nada: el editor guarda su buffer encima. `reiniciarVault()` cierra los editores primero.
 - `dev:screenshot` devuelve el cuadro anterior: sacar dos. La ventana de ajustes es otra ventana y no sale en la captura.
