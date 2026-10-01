@@ -14,15 +14,13 @@ import { Prec } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import {
   CLASE_CON_MARGEN,
-  CLASES_DE_FILA,
   CLASES_DE_REVELACION,
-  claseDeFila,
   claseDeRevelacion,
   type Favoritos,
 } from "./botones.js";
 import { comandos, hoy } from "./comandos.js";
-import { CLASES_DE_ESTILO, clasesDelEstilo } from "./color.js";
-import { filaDeBotones, filaEnElMargen } from "./editor/filaDeBotones.js";
+import { CLASES_DE_PRIORIDAD } from "./color.js";
+import { filaEnElMargen } from "./editor/filaDeBotones.js";
 import { cursorExterno } from "./editor/cursorExterno.js";
 import { lineaHover } from "./editor/lineaHover.js";
 import { archivarAlClic } from "./editor/archivarAlClic.js";
@@ -34,21 +32,12 @@ import { decoraciones } from "./editor/decoraciones.js";
 import { protegerTramo } from "./editor/protegerTramo.js";
 import { unirLimpio } from "./editor/unirLimpio.js";
 import { esNotaDeTareas, notasDeTrabajo } from "./notas.js";
-import { ORDENES_DE_ATAJO } from "./fechas.js";
 import {
   cargarSettings,
   DEFAULT_SETTINGS,
-  ESTILOS_DE_FILA,
-  ESTILOS_DE_PRIORIDAD,
-  MODOS_OFRECIDOS,
-  SELECTORES_DE_FECHA,
-  sanearEstilo,
-  sanearEstiloDeFila,
+  MODO_DE_REVELACION,
   sanearGrupos,
   sanearNotas,
-  sanearOrdenDeAtajos,
-  sanearRevelacion,
-  sanearSelectorDeFecha,
   sanearWorkbench,
   sanearWorkbenchOpcional,
   type TareasSettings,
@@ -58,19 +47,20 @@ import { STRINGS } from "./strings.js";
 import { puertoObsidian } from "./vault/puertoObsidian.js";
 
 /**
- * Plugin de tareas — pasos 1, 3, 4a y 4b de la §20 de la spec.
+ * Plugin de tareas — pasos 1 a 4 y 6 de la §20 de la spec.
  *
  * Están el camino completo de lectura y escritura —el índice en memoria que se
  * mantiene solo y los comandos que escriben por él—, la decoración pasiva sobre
- * la nota —el token invisible en Live Preview y el color de la prioridad— y la
- * fila de botones de la §13.0. Todavía no hay vistas.
+ * la nota —el token invisible en Live Preview y el color de la prioridad—, la
+ * fila de botones de la §13.0 y terminar, fechar y reiniciar tareas. Todavía no
+ * hay vistas (paso 5).
  *
- * Este archivo es el único de la capa 3 que importa `obsidian`, y por eso es el
- * único que traduce «un editor de CodeMirror» a «un archivo del vault». Los
+ * Es el punto de entrada de la capa 3, y el que traduce «un editor de
+ * CodeMirror» a «un archivo del vault». Los
  * módulos de `editor/` reciben esa decisión como función y se prueban enteros
  * contra un `EditorState` pelado, sin abrir la aplicación.
  */
-/** La clase del glifo. Las de los estilos las da `color.ts`. */
+/** La clase del glifo. Las de la prioridad las da `color.ts`. */
 const CLASE_DE_GLIFO = "tareas-ind-glifo";
 
 export default class TareasPlugin extends Plugin {
@@ -124,12 +114,6 @@ export default class TareasPlugin extends Plugin {
           console.log(`[tareas] decorar · ${lineas} líneas · ${ms.toFixed(2)} ms`);
         },
       ),
-      // La fila va en un `ViewPlugin` y no en un `StateField`, y eso **no**
-      // contradice la §5.5: un widget inline de ancho cero sin `estimatedHeight`
-      // ni `lineBreaks` no entra al mapa de alturas venga de donde venga.
-      // Verificado adentro del asar instalado; el porqué está en
-      // `editor/filaDeBotones.ts` y hay un test que falla si el widget declara
-      // altura alguna vez.
       // Que un cambio externo no le mueva el cursor al usuario. Va con el mismo
       // alcance que el resto: solo en las notas de la lista.
       cursorExterno((state) => this.enNotaDeTareas(state)),
@@ -143,20 +127,13 @@ export default class TareasPlugin extends Plugin {
           () => hoy(),
         ),
       ),
-      filaDeBotones(
-        (state) => this.filaActiva(state),
-        this.opcionesDeFila(),
-        (ms, lineas) => {
-          if (!this.settings.registrarEventos) return;
-          console.log(`[tareas] fila · ${lineas} líneas visibles · ${ms.toFixed(2)} ms`);
-        },
-      ),
-      // La misma fila, en un margen propio a la derecha de los números de línea.
-      // `Prec.lowest` es lo que la pone **después** del margen de Obsidian: «el
-      // orden en que aparecen los márgenes lo decide la precedencia de su
-      // extensión». Los dos no pueden estar encendidos a la vez, y de eso se
-      // encargan `filaActiva` y `filaEnMargenActiva`.
-      Prec.lowest(filaEnElMargen((state) => this.filaEnMargenActiva(state), this.opcionesDeFila())),
+      // La fila de botones, en un margen propio a la derecha de los números de
+      // línea. `Prec.lowest` es lo que la pone **después** del margen de
+      // Obsidian: «el orden en que aparecen los márgenes lo decide la
+      // precedencia de su extensión». Hasta el 30/09/2026 había además una
+      // forma adentro de la línea, como widget; se eligió esta y la otra se
+      // borró.
+      Prec.lowest(filaEnElMargen((state) => this.filaActiva(state), this.opcionesDeFila())),
       // **El margen existe en todos los editores, aunque esté vacío.** Un
       // `gutter()` es una extensión registrada, no algo que se prenda por nota:
       // `lineMarker` devuelve `null` fuera de las notas de tareas y con eso no
@@ -168,15 +145,14 @@ export default class TareasPlugin extends Plugin {
       // La clase va en el `.cm-editor`, que es ancestro del `.cm-gutter`, así
       // que la hoja de estilos puede acotar el ancho a las notas que lo usan.
       // Se recalcula en cada actualización de la vista, y `redibujar()` despacha
-      // una transacción vacía al guardar los ajustes, así que cambiar el estilo
-      // de fila tiene efecto sin recargar.
+      // una transacción vacía al guardar los ajustes, así que apagar la fila
+      // tiene efecto sin recargar.
       EditorView.editorAttributes.of((vista) =>
-        this.filaEnMargenActiva(vista.state) ? { class: CLASE_CON_MARGEN } : null,
+        this.filaActiva(vista.state) ? { class: CLASE_CON_MARGEN } : null,
       ),
-      // Quién tiene el mouse encima. Solo hace falta para el margen: adentro de
-      // la línea el `:hover` del CSS alcanza, y acá no, porque el margen es
-      // hermano de `.cm-line` y no su descendiente.
-      lineaHover((state) => this.filaEnMargenActiva(state)),
+      // Quién tiene el mouse encima. El margen es hermano de `.cm-line` y no su
+      // descendiente, así que el `:hover` de la línea no lo alcanza.
+      lineaHover((state) => this.filaActiva(state)),
       // Cmd+clic en el checkbox: completar y archivar de un gesto. Es el único
       // mecanismo del plugin que **intercepta un clic**, y tiene su propio
       // interruptor por eso: en el teléfono no existe y depende de llegar antes
@@ -218,9 +194,8 @@ export default class TareasPlugin extends Plugin {
   override onunload(): void {
     this.store?.detener();
     // Las clases viven en `body` y no en el editor, así que no se van solas.
-    for (const c of CLASES_DE_ESTILO) document.body.removeClass(c);
+    for (const c of CLASES_DE_PRIORIDAD) document.body.removeClass(c);
     for (const c of CLASES_DE_REVELACION) document.body.removeClass(c);
-    for (const c of CLASES_DE_FILA) document.body.removeClass(c);
     document.body.removeClass(CLASE_DE_GLIFO);
   }
 
@@ -233,17 +208,14 @@ export default class TareasPlugin extends Plugin {
    * `StateField` de cada editor abierto.
    */
   private sincronizarIndicadores(): void {
-    const encendidas = new Set(clasesDelEstilo(this.settings.estiloDePrioridad));
-    for (const c of CLASES_DE_ESTILO) document.body.toggleClass(c, encendidas.has(c));
+    for (const c of CLASES_DE_PRIORIDAD) document.body.addClass(c);
     document.body.toggleClass(CLASE_DE_GLIFO, this.settings.indicadorGlifo);
 
-    // El modo de revelación de la fila, por lo mismo: el widget dibuja siempre
-    // lo mismo y la hoja de estilos decide si se ve (§15 punto 1).
-    const modo = claseDeRevelacion(this.settings.modoDeRevelacion);
+    // El modo de revelación de la fila, por lo mismo: el marcador dibuja siempre
+    // lo mismo y la hoja de estilos decide si se ve (§15 punto 1). Hoy hay uno
+    // solo; el día que exista `swipe`, se elige acá según la plataforma.
+    const modo = claseDeRevelacion(MODO_DE_REVELACION);
     for (const c of CLASES_DE_REVELACION) document.body.toggleClass(c, c === modo);
-
-    const donde = claseDeFila(this.settings.estiloDeFila);
-    for (const c of CLASES_DE_FILA) document.body.toggleClass(c, c === donde);
   }
 
   /**
@@ -321,8 +293,6 @@ export default class TareasPlugin extends Plugin {
       confirmarAlEliminar: () => this.settings.confirmarAlEliminar,
       archivoDe: (state: EditorState) =>
         state.field(editorInfoField, false)?.file?.path ?? null,
-      ordenDeAtajos: () => this.settings.ordenDeAtajos,
-      selectorDeFecha: () => this.settings.selectorDeFecha,
       gruposSugeridos: () => this.settings.gruposSugeridos,
     };
   }
@@ -343,18 +313,6 @@ export default class TareasPlugin extends Plugin {
    * apagar el color no tiene por qué apagar los botones, y al revés tampoco.
    */
   private filaActiva(state: EditorState): boolean {
-    // `columna` la dibuja el margen, no el widget: los dos encendidos a la vez
-    // pondrían dos filas por tarea.
-    if (this.settings.estiloDeFila === "columna") return false;
-    return this.filaEncendida(state);
-  }
-
-  /** ¿Va la fila en su margen propio acá? Es `columna` y nada más. */
-  private filaEnMargenActiva(state: EditorState): boolean {
-    return this.settings.estiloDeFila === "columna" && this.filaEncendida(state);
-  }
-
-  private filaEncendida(state: EditorState): boolean {
     if (!this.settings.filaDeBotones) return false;
     if (!state.field(editorLivePreviewField, false)) return false;
     return this.enNotaDeTareas(state);
@@ -560,32 +518,6 @@ class TareasSettingTab extends PluginSettingTab {
     );
 
     new Setting(containerEl)
-      .setName(STRINGS.ajustes.ordenDeAtajos.nombre)
-      .setDesc(STRINGS.ajustes.ordenDeAtajos.descripcion)
-      .addDropdown((d) => {
-        for (const o of ORDENES_DE_ATAJO) {
-          d.addOption(o, STRINGS.ajustes.ordenDeAtajos.opciones[o]);
-        }
-        d.setValue(this.plugin.settings.ordenDeAtajos).onChange(async (v) => {
-          this.plugin.settings.ordenDeAtajos = sanearOrdenDeAtajos(v);
-          await this.plugin.guardar();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(STRINGS.ajustes.selectorDeFecha.nombre)
-      .setDesc(STRINGS.ajustes.selectorDeFecha.descripcion)
-      .addDropdown((d) => {
-        for (const o of SELECTORES_DE_FECHA) {
-          d.addOption(o, STRINGS.ajustes.selectorDeFecha.opciones[o]);
-        }
-        d.setValue(this.plugin.settings.selectorDeFecha).onChange(async (v) => {
-          this.plugin.settings.selectorDeFecha = sanearSelectorDeFecha(v);
-          await this.plugin.guardar();
-        });
-      });
-
-    new Setting(containerEl)
       .setName(STRINGS.ajustes.gruposSugeridos.nombre)
       .setDesc(STRINGS.ajustes.gruposSugeridos.descripcion)
       .addText((t) =>
@@ -600,63 +532,6 @@ class TareasSettingTab extends PluginSettingTab {
             await this.plugin.guardar();
           }),
       );
-
-    new Setting(containerEl)
-      .setName(STRINGS.ajustes.estiloDeFila.nombre)
-      .setDesc(STRINGS.ajustes.estiloDeFila.descripcion)
-      .addDropdown((d) => {
-        // Los cinco conviven y se comparan **en Obsidian**, que es el único
-        // lugar donde se puede juzgar cómo se ve algo (patrón `designFlags.ts`).
-        for (const e of ESTILOS_DE_FILA) {
-          d.addOption(e, STRINGS.ajustes.estiloDeFila.opciones[e]);
-        }
-        d.setValue(this.plugin.settings.estiloDeFila).onChange(async (v) => {
-          this.plugin.settings.estiloDeFila = sanearEstiloDeFila(v);
-          await this.plugin.guardar();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(STRINGS.ajustes.modoDeRevelacion.nombre)
-      .setDesc(STRINGS.ajustes.modoDeRevelacion.descripcion)
-      .addDropdown((d) => {
-        // Solo los modos **ofrecidos**: `swipe` existe en el tipo y no acá,
-        // porque hoy no hace nada (§15). Un modo que no funciona es lo mismo
-        // que un ítem gris en el ⋯.
-        for (const m of MODOS_OFRECIDOS) {
-          d.addOption(m, STRINGS.ajustes.modoDeRevelacion.opciones[m]);
-        }
-        d.setValue(this.plugin.settings.modoDeRevelacion).onChange(async (v) => {
-          this.plugin.settings.modoDeRevelacion = sanearRevelacion(v);
-          await this.plugin.guardar();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(STRINGS.ajustes.decoraciones.nombre)
-      .setDesc(STRINGS.ajustes.decoraciones.descripcion)
-      .addToggle((t) =>
-        t.setValue(this.plugin.settings.decoracionesEnLaNota).onChange(async (v) => {
-          this.plugin.settings.decoracionesEnLaNota = v;
-          await this.plugin.guardar();
-        }),
-      );
-
-    // Los tres estilos conviven y se comparan **en Obsidian**, que es el único
-    // lugar donde se puede juzgar cómo se ve algo. Es el patrón `designFlags.ts`:
-    // un diseño nuevo se prueba encendiéndolo, no tirando el anterior.
-    new Setting(containerEl)
-      .setName(STRINGS.ajustes.estiloDePrioridad.nombre)
-      .setDesc(STRINGS.ajustes.estiloDePrioridad.descripcion)
-      .addDropdown((d) => {
-        for (const e of ESTILOS_DE_PRIORIDAD) {
-          d.addOption(e, STRINGS.ajustes.estiloDePrioridad.opciones[e]);
-        }
-        d.setValue(this.plugin.settings.estiloDePrioridad).onChange(async (v) => {
-          this.plugin.settings.estiloDePrioridad = sanearEstilo(v);
-          await this.plugin.guardar();
-        });
-      });
 
     new Setting(containerEl)
       .setName(STRINGS.ajustes.indicadorGlifo.nombre)
@@ -692,17 +567,28 @@ class TareasSettingTab extends PluginSettingTab {
         }),
       );
 
-    // Andamiaje de verificación (patrón `designFlags.ts` de Anotaciones): se
-    // enciende para probar, no reemplaza nada, y apagado no cambia nada.
-    new Setting(containerEl).setName(STRINGS.ajustes.verificacion.titulo).setHeading();
+    // Los instrumentos, juntos y al final: se usan para probar y medir, y con
+    // los valores de fábrica no cambian nada de cómo funciona el plugin.
+    new Setting(containerEl).setName(STRINGS.ajustes.desarrollo.titulo).setHeading();
     containerEl.createEl("p", {
-      text: STRINGS.ajustes.verificacion.descripcion,
+      text: STRINGS.ajustes.desarrollo.descripcion,
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName(STRINGS.ajustes.verificacion.congelarStore.nombre)
-      .setDesc(STRINGS.ajustes.verificacion.congelarStore.descripcion)
+      .setName(STRINGS.ajustes.decoraciones.nombre)
+      .setDesc(STRINGS.ajustes.decoraciones.descripcion)
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.decoracionesEnLaNota).onChange(async (v) => {
+          this.plugin.settings.decoracionesEnLaNota = v;
+          await this.plugin.guardar();
+        }),
+      );
+
+
+    new Setting(containerEl)
+      .setName(STRINGS.ajustes.desarrollo.congelarStore.nombre)
+      .setDesc(STRINGS.ajustes.desarrollo.congelarStore.descripcion)
       .addToggle((t) =>
         t.setValue(this.plugin.settings.congelarStore).onChange(async (v) => {
           this.plugin.settings.congelarStore = v;
@@ -711,8 +597,8 @@ class TareasSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(STRINGS.ajustes.verificacion.registrarEventos.nombre)
-      .setDesc(STRINGS.ajustes.verificacion.registrarEventos.descripcion)
+      .setName(STRINGS.ajustes.desarrollo.registrarEventos.nombre)
+      .setDesc(STRINGS.ajustes.desarrollo.registrarEventos.descripcion)
       .addToggle((t) =>
         t.setValue(this.plugin.settings.registrarEventos).onChange(async (v) => {
           this.plugin.settings.registrarEventos = v;

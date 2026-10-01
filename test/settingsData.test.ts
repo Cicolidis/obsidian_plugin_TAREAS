@@ -3,14 +3,10 @@ import { NOTAS_POR_OMISION } from "../src/notas.js";
 import {
   cargarSettings,
   DEFAULT_SETTINGS,
-  ESTILOS_DE_PRIORIDAD,
   FORMAT_VERSION,
-  ESTILOS_DE_FILA,
+  MODO_DE_REVELACION,
   MODOS_DE_REVELACION,
-  sanearEstilo,
-  sanearEstiloDeFila,
   sanearNotas,
-  sanearRevelacion,
   sanearWorkbenchOpcional,
 } from "../src/settingsData.js";
 
@@ -62,21 +58,25 @@ describe("cargarSettings", () => {
   });
 });
 
-describe("el estilo de prioridad", () => {
-  it("acepta los tres conocidos", () => {
-    for (const e of ESTILOS_DE_PRIORIDAD) expect(sanearEstilo(e)).toBe(e);
-  });
-
-  // Se lee de un `data.json` que el usuario puede editar a mano, así que
-  // cualquier cosa que llegue tiene que caer parada, no romper el plugin.
-  it("cualquier otra cosa cae en el de por omisión", () => {
-    for (const v of ["filete", "", null, undefined, 3, {}, ["barra"]]) {
-      expect(sanearEstilo(v)).toBe("barra-checkbox");
+describe("las alternativas que se eligieron", () => {
+  /**
+   * El 30/09/2026 el usuario eligió entre las alternativas de diseño y las que
+   * perdieron se borraron, con sus ajustes. Un `data.json` de antes las sigue
+   * teniendo: se ignoran, y la próxima vez que se guarde desaparecen.
+   */
+  it("una configuración vieja con los ajustes borrados carga sin ellos", () => {
+    const s = cargarSettings({
+      estiloDePrioridad: "fondo",
+      estiloDeFila: "derecha",
+      modoDeRevelacion: "siempre",
+      ordenDeAtajos: "semana",
+      selectorDeFecha: "nativo",
+      checkboxAutomatico: false,
+    });
+    for (const k of ["estiloDePrioridad", "estiloDeFila", "modoDeRevelacion", "ordenDeAtajos", "selectorDeFecha"]) {
+      expect(s).not.toHaveProperty(k);
     }
-  });
-
-  it("una configuración vieja, sin el campo, arranca en el de por omisión", () => {
-    expect(cargarSettings({ indicadorFilete: true }).estiloDePrioridad).toBe("barra-checkbox");
+    expect(s.checkboxAutomatico).toBe(false);
   });
 });
 
@@ -112,58 +112,14 @@ describe("sanearWorkbenchOpcional", () => {
   });
 });
 
-describe("sanearRevelacion", () => {
-  it("los modos ofrecidos pasan", () => {
-    expect(sanearRevelacion("hover")).toBe("hover");
-    expect(sanearRevelacion("siempre")).toBe("siempre");
-  });
-
+describe("el modo de revelación", () => {
   /**
    * `swipe` está en el tipo —la §15 punto 1 pide que el modo sea un parámetro—
-   * y **no** se puede elegir, porque hoy no hace nada. Un modo que no funciona
-   * es lo mismo que un ítem gris en el ⋯.
+   * y hoy no hace nada. El que está en uso es `hover`, elegido el 30/09/2026.
    */
-  it("`swipe` está declarado pero cae a `hover`", () => {
+  it("está en uso `hover`, y `swipe` sigue declarado para el móvil", () => {
+    expect(MODO_DE_REVELACION).toBe("hover");
     expect(MODOS_DE_REVELACION).toContain("swipe");
-    expect(sanearRevelacion("swipe")).toBe("hover");
-  });
-
-  it("cualquier basura cae a `hover`", () => {
-    for (const basura of [null, undefined, 7, {}, "HOVER"]) {
-      expect(sanearRevelacion(basura)).toBe("hover");
-    }
-  });
-});
-
-describe("sanearEstiloDeFila", () => {
-  it("los cinco estilos pasan", () => {
-    for (const e of ESTILOS_DE_FILA) expect(sanearEstiloDeFila(e)).toBe(e);
-  });
-
-  // Contra `DEFAULT_SETTINGS` y no contra un nombre escrito acá: el estilo por
-  // omisión se elige mirándolo y va a cambiar; lo que no puede cambiar es que
-  // un `data.json` editado a mano caiga en el mismo lugar que un vault nuevo.
-  it("cualquier otra cosa cae al de por omisión", () => {
-    for (const basura of [null, undefined, 7, {}, "DERECHA", "abajo"]) {
-      expect(sanearEstiloDeFila(basura)).toBe(DEFAULT_SETTINGS.estiloDeFila);
-    }
-    expect(ESTILOS_DE_FILA).toContain(DEFAULT_SETTINGS.estiloDeFila);
-  });
-
-  /**
-   * La propuesta de la segunda vuelta: los botones de los workbenches donde la
-   * tarea **ya está** se ven siempre, y el resto aparece al pasar el mouse. Que
-   * el estilo exista está acá para que sacarlo sea una decisión.
-   */
-  it("está la columna del margen izquierdo", () => {
-    expect(ESTILOS_DE_FILA).toContain("columna");
-  });
-
-  // Los dos que no pueden tapar una palabra. Están acá para que sacarlos sea
-  // una decisión y no un descuido: son la respuesta a la objeción de fondo al
-  // primer diseño.
-  it("están los dos que viven afuera del texto", () => {
-    expect(ESTILOS_DE_FILA).toContain("margen");
-    expect(ESTILOS_DE_FILA).toContain("izquierda");
+    expect(MODOS_DE_REVELACION).not.toContain("siempre");
   });
 });

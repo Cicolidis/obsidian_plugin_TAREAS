@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { Favoritos } from "../../src/botones.js";
-import { decoracionesDeFila } from "../../src/editor/filaDeBotones.js";
+import { contextoDe, marcadorDeLinea, type FilaMarker } from "../../src/editor/filaDeBotones.js";
 import { notasReales, VAULT } from "./vault.js";
 
 /**
@@ -10,12 +10,12 @@ import { notasReales, VAULT } from "./vault.js";
  * Es el hermano de `costo-decoraciones.test.ts` y se compara contra él: decorar
  * el documento entero cuesta **0,65 ms** en el peor caso realista, medido. La
  * fila recorre solo el viewport, así que tiene que costar mucho menos — y si no
- * lo hace, la decisión de mandarla a un `ViewPlugin` no compró nada y hay que
- * mirarla de nuevo.
+ * lo hace, dibujarla por línea visible no compró nada y hay que mirarlo de nuevo.
  *
- * Se mide `decoracionesDeFila`, que es puro sobre un `EditorState`, y no el
- * `ViewPlugin`: aquel necesita una vista de verdad y esto no. Es la razón por la
- * que las dos piezas están separadas.
+ * Se mide `marcadorDeLinea` sobre cada línea de la ventana, que es lo que corre
+ * el margen por cada línea visible, y no el `gutter`: aquel necesita una vista de
+ * verdad y esto no. Hasta el 30/09/2026 se medía el widget adentro de la línea,
+ * que se borró al elegir el margen; los números de antes son de aquel.
  *
  * El viewport se simula con una ventana de líneas, y el número **está medido**,
  * no elegido: la verificación de la sesión 5 informó desde la consola de
@@ -86,11 +86,18 @@ describe.skipIf(!VAULT)("costo de construir la fila, por transacción", () => {
           ventanas.push([{ from: st.doc.line(inicio).from, to: st.doc.line(fin).to }]);
         }
 
+        const cache = new Map<string, FilaMarker>();
         const ms: number[] = [];
         for (let pasada = 0; pasada < PASADAS; pasada++) {
           for (const rango of ventanas) {
             const t0 = performance.now();
-            decoracionesDeFila(st, rango, opciones);
+            // Como el margen: el contexto se pide por línea, y la caché vive
+            // toda la sesión, así que se arma antes de medir.
+            for (const { from, to } of rango) {
+              for (let n = st.doc.lineAt(from).number; n <= st.doc.lineAt(to).number; n++) {
+                marcadorDeLinea(st.doc.line(n).text, contextoDe(opciones), opciones, cache);
+              }
+            }
             const t = performance.now() - t0;
             if (pasada > 0) ms.push(t); // la primera es el calentamiento
           }

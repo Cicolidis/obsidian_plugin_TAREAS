@@ -15,7 +15,6 @@
  * se encienden por separado desde los ajustes; acá no cambia nada, porque la
  * clase es la misma.
  */
-import { ESTILOS_DE_PRIORIDAD, type EstiloDePrioridad } from "./settingsData.js";
 import type { Prioridad } from "./token.js";
 
 export const PRIORIDAD_MINIMA: Prioridad = 0;
@@ -59,24 +58,14 @@ export function bajar(p: Prioridad): Prioridad {
 }
 
 /**
- * Las clases de `body` que enciende cada estilo de prioridad.
+ * Las clases de `body` que encienden el dibujo de la prioridad.
  *
  * Viven acá y no en `main.ts` por lo mismo que `colorClass`: es la traducción de
- * un dato a una clase de CSS, y en un solo lugar. El estilo combinado no tiene
- * clase propia —enciende las dos— así que la hoja de estilos no necesita saber
- * que existe: cada regla sigue mirando una sola clase.
+ * un dato a una clase de CSS, y en un solo lugar. Son dos porque el estilo
+ * elegido —barra + checkbox— son dos dibujos independientes, y cada regla de
+ * la hoja de estilos mira una sola clase.
+ *
+ * Hasta el 30/09/2026 había cinco estilos para comparar mirándolos. El usuario
+ * eligió este y los otros cuatro se borraron, con su ajuste.
  */
-export function clasesDelEstilo(estilo: EstiloDePrioridad): readonly string[] {
-  if (estilo === "barra-checkbox") return ["tareas-estilo-barra", "tareas-estilo-checkbox"];
-  // `barra-completa` es la barra con otra altura, no otro dibujo: enciende la
-  // misma clase base y una de más. Así la hoja de estilos no repite la paleta
-  // ni la posición, que es lo que después diverge.
-  if (estilo === "barra-completa")
-    return ["tareas-estilo-barra", "tareas-estilo-barra-completa"];
-  return [`tareas-estilo-${estilo}`];
-}
-
-/** Todas las clases que este módulo puede poner, para poder sacarlas al salir. */
-export const CLASES_DE_ESTILO: readonly string[] = ESTILOS_DE_PRIORIDAD.flatMap((e) =>
-  clasesDelEstilo(e),
-).filter((c, i, xs) => xs.indexOf(c) === i);
+export const CLASES_DE_PRIORIDAD: readonly string[] = ["tareas-estilo-barra", "tareas-estilo-checkbox"];

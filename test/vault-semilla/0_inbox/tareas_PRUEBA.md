@@ -22,3 +22,5 @@
 - [ ] tarea de abajo para unir
 - [ ] tarea para tildar con fecha %%t:due=2026-11-20%%
 - [ ] tarea para partir con token %%t:id=c3d4;wb=foco%%
+- [ ] tarea urgente %%t:p=2%%
+	- [ ] hija de la urgente

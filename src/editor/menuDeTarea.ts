@@ -14,9 +14,9 @@ import {
   nivelVisible,
   type Contexto,
 } from "../comandos.js";
-import { atajosDeDiaDelMes, atajosDeFecha, type OrdenDeAtajo } from "../fechas.js";
+import { atajosDeDiaDelMes, atajosDeFecha } from "../fechas.js";
 import { elegirFecha } from "../ui/elegirFecha.js";
-import { sanearWorkbenchOpcional, type SelectorDeFecha } from "../settingsData.js";
+import { sanearWorkbenchOpcional } from "../settingsData.js";
 import { STRINGS } from "../strings.js";
 import { parseTaskToken, type Prioridad } from "../token.js";
 import type { StoreDeTareas } from "../store.js";
@@ -77,10 +77,6 @@ export interface DependenciasDeMenu {
    * lo que decide dónde actúa el plugin, y dos copias divergirían.
    */
   archivoDe: (state: EditorState) => string | null;
-  /** En qué orden se ofrecen los atajos de fecha (paso 6c). */
-  ordenDeAtajos: () => OrdenDeAtajo;
-  /** Cuál de las dos formas de «Otra fecha…». */
-  selectorDeFecha: () => SelectorDeFecha;
   /** Los grupos que el submenú ofrece aunque no exista ninguno todavía. */
   gruposSugeridos: () => readonly string[];
   ahora?: () => string;
@@ -309,7 +305,7 @@ function abrirSubmenuDeFecha(
       );
     }
   } else {
-    for (const { clave, valor } of atajosDeFecha(fecha(), dep.ordenDeAtajos())) {
+    for (const { clave, valor } of atajosDeFecha(fecha())) {
       menu.addItem((i) =>
         i
           .setTitle(
@@ -329,7 +325,7 @@ function abrirSubmenuDeFecha(
       .onClick(() =>
         elegirFecha(
           dep.app,
-          { ciclica, actual, hoy: fecha(), selector: dep.selectorDeFecha() },
+          { ciclica, actual, hoy: fecha() },
           poner,
         ),
       ),

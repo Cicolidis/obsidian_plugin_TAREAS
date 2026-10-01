@@ -58,8 +58,7 @@ for (const m of src.matchAll(/require\(["']([^"']+)["']\)/g)) {
 //   [ ]                     lo que el filtro escribe
 //   onLayoutReady           el arranque del store (spec §20 paso 3)
 //   vault.process           el único camino de escritura (§8)
-//   ViewPlugin              la fila de botones (§13.0, paso 4b)
-//   posAtDOM                cómo la fila sabe en qué línea está: sin esto, escribe a ciegas
+//   ViewPlugin              el hover del margen y el Cmd+clic en el checkbox
 //   tareas-fila             el ancla y la fila; si se cae, los botones no se ven
 //   tareas-revelar-         el modo de revelación, que viaja como clase de `body`
 //   setIcon                 sin esto los botones son cuatro cuadrados vacíos
@@ -106,7 +105,6 @@ for (const marca of [
   "onLayoutReady",
   ".process(",
   "ViewPlugin",
-  "posAtDOM",
   // El margen propio de la fila (estilo `columna`) y el guardia del cursor.
   "GutterMarker",
   "lineMarkerChange",
@@ -172,34 +170,21 @@ try {
     "tareas-p2",
     "tareas-hija-p1",
     "tareas-ind-glifo",
-    // Los tres estilos: si uno se cae del CSS, el ajuste sigue estando y no
-    // dibuja nada, que parece «la prioridad no anda».
     // El 🗑 borra sin preguntar por omisión, así que su color al pasar el
     // mouse es lo único que lo distingue del resto **antes** de apretarlo.
     "tareas-boton-eliminar",
+    // Las dos marcas de la prioridad (barra + checkbox, el estilo elegido): si
+    // una se cae del CSS, la clase sigue en `body` y no dibuja nada, que parece
+    // «la prioridad no anda».
     "tareas-estilo-barra",
     "tareas-estilo-checkbox",
-    "tareas-estilo-fondo",
-    // La fila: sin esto los botones se dibujan **en el flujo del renglón**, o
-    // sea empujando el corte de línea, que es exactamente lo que el diseño
-    // evita. No es «se ve feo»: es la regresión de la §5.5.
+    // La fila, en su margen. Sin el revelado, los botones no aparecen nunca.
     "tareas-fila-ancla",
     "tareas-boton",
     "tareas-revelar-hover",
-    "tareas-revelar-siempre",
-    // Los cinco estilos de fila: si uno se cae del CSS, el ajuste sigue en el
-    // desplegable y la fila se queda sin posición, o sea pegada al comienzo de
-    // la línea encima del checkbox. Parece «la fila se rompió».
-    "tareas-fila-derecha",
-    "tareas-fila-derecha-plana",
-    "tareas-fila-pastilla",
-    "tareas-fila-margen",
-    "tareas-fila-izquierda",
-    "tareas-fila-columna",
     "tareas-margen",
     "tareas-con-margen",
     "tareas-hover",
-    "tareas-estilo-barra-completa",
     // Paso 6c. Sin la regla del relleno, los dos indicadores encendidos se
     // dibujan como manchas sólidas —`calendar` y `repeat` son puro contorno—;
     // sin la grilla, el calendario del modal se apila en una columna.

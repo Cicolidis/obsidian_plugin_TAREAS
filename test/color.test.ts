@@ -1,14 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import {
-  bajar,
-  CLASES_DE_ESTILO,
-  claseDeHija,
-  clasesDelEstilo,
-  colorClass,
-  subir,
-} from "../src/color.js";
-import { ESTILOS_DE_PRIORIDAD } from "../src/settingsData.js";
+import { readFileSync } from "node:fs";
+import { bajar, CLASES_DE_PRIORIDAD, claseDeHija, colorClass, subir } from "../src/color.js";
 import type { Prioridad } from "../src/token.js";
 
 const prioridad = fc.constantFrom<Prioridad>(0, 1, 2);
@@ -65,49 +58,17 @@ describe("subir y bajar", () => {
   });
 });
 
-describe("las clases de cada estilo", () => {
-  it("cada estilo suelto enciende una sola clase", () => {
-    expect(clasesDelEstilo("barra")).toEqual(["tareas-estilo-barra"]);
-    expect(clasesDelEstilo("checkbox")).toEqual(["tareas-estilo-checkbox"]);
-    expect(clasesDelEstilo("fondo")).toEqual(["tareas-estilo-fondo"]);
+describe("las clases de body de la prioridad", () => {
+  // El estilo elegido el 30/09/2026 —barra + checkbox— son dos dibujos, y cada
+  // regla de la hoja de estilos mira una sola clase.
+  it("son las dos marcas del estilo elegido, sin repetir", () => {
+    expect(CLASES_DE_PRIORIDAD).toEqual(["tareas-estilo-barra", "tareas-estilo-checkbox"]);
   });
 
-  // El combinado no tiene clase propia: enciende las dos. Así la hoja de
-  // estilos no necesita saber que existe y cada regla mira una sola clase.
-  it("el combinado enciende las dos", () => {
-    expect(clasesDelEstilo("barra-checkbox")).toEqual([
-      "tareas-estilo-barra",
-      "tareas-estilo-checkbox",
-    ]);
-  });
-
-  it("`CLASES_DE_ESTILO` las cubre todas, sin repetir", () => {
-    for (const e of ESTILOS_DE_PRIORIDAD) {
-      for (const c of clasesDelEstilo(e)) expect(CLASES_DE_ESTILO).toContain(c);
-    }
-    expect(new Set(CLASES_DE_ESTILO).size).toBe(CLASES_DE_ESTILO.length);
-  });
-});
-
-describe("las clases de body", () => {
-  /**
-   * `barra-completa` es la barra con otra altura, no otro dibujo: enciende la
-   * misma clase base y una de más. Si algún día tuviera clase propia, la hoja
-   * de estilos tendría que repetir la paleta y la posición — y eso es lo que
-   * después diverge.
-   */
-  it("`barra-completa` se apoya en la barra", () => {
-    expect(clasesDelEstilo("barra-completa")).toEqual([
-      "tareas-estilo-barra",
-      "tareas-estilo-barra-completa",
-    ]);
-  });
-
-  it("todo estilo tiene al menos una clase, y todas están en CLASES_DE_ESTILO", () => {
-    for (const e of ESTILOS_DE_PRIORIDAD) {
-      const clases = clasesDelEstilo(e);
-      expect(clases.length).toBeGreaterThan(0);
-      for (const c of clases) expect(CLASES_DE_ESTILO).toContain(c);
-    }
+  // Una clase que el código pone y la hoja de estilos no usa es una prioridad
+  // que no se dibuja, y eso no da error: parece «la prioridad no anda».
+  it("las dos tienen reglas en styles.css", () => {
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    for (const c of CLASES_DE_PRIORIDAD) expect(css).toContain(`body.${c} `);
   });
 });

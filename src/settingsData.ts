@@ -5,63 +5,7 @@
  * puede verificar sin abrir la aplicación. El módulo de la pantalla importa
  * `obsidian` en tiempo de ejecución y eso basta para que ningún test lo toque.
  */
-import { ORDENES_DE_ATAJO, type OrdenDeAtajo } from "./fechas.js";
 import { NOTA_DE_LOG_POR_OMISION, NOTAS_POR_OMISION } from "./notas.js";
-
-/**
- * Las dos formas del selector de «Otra fecha…» (paso 6c).
- *
- * `nativo` es el `<input type="date">` que ya estaba, más el selector propio del
- * navegador; `grilla` es un calendario dibujado por el plugin. Conviven, como los
- * cinco estilos de fila: cuál se lee mejor solo se juzga mirándolo.
- *
- * Lo que paga la grilla es el **caso cíclico**: ahí el campo es un número del 1
- * al 31 (§11) y el navegador no ofrece ningún selector, así que hoy no hay nada
- * que abrir. Una grilla de 1 a 31 sí es un selector de día del mes.
- */
-export const SELECTORES_DE_FECHA = ["nativo", "grilla"] as const;
-export type SelectorDeFecha = (typeof SELECTORES_DE_FECHA)[number];
-
-/** Los tres estilos de la §14. Un solo lugar: los consumen los ajustes y el CSS. */
-export const ESTILOS_DE_PRIORIDAD = [
-  "barra-checkbox",
-  "barra",
-  "barra-completa",
-  "checkbox",
-  "fondo",
-] as const;
-export type EstiloDePrioridad = (typeof ESTILOS_DE_PRIORIDAD)[number];
-
-/**
- * Dónde y cómo se dibuja la fila de botones.
- *
- * Cinco, y conviven: un diseño nuevo se prueba **encendiéndolo**, no tirando el
- * anterior, y cómo se ve algo solo se puede juzgar mirándolo en Obsidian
- * (patrón `designFlags.ts`).
- *
- * | | Dónde | Qué se ve |
- * |---|---|---|
- * | `derecha` | sobre el final de la línea | degradado hasta el fondo de la nota; el primero |
- * | `derecha-plana` | ídem | sin fondo ni caja: cuatro íconos tenues |
- * | `pastilla` | ídem | los cuatro adentro de una pastilla con borde: se lee como **un** control |
- * | `margen` | **afuera** del texto, a la derecha | nunca tapa una palabra, y no depende del largo de la tarea |
- * | `izquierda` | antes del checkbox, después del filete | columna fija: todas las filas alineadas, indentación aparte |
- * | `columna` | en un **margen propio**, a la derecha de los números de línea | el orden pedido en la 2.ª vuelta: número de línea · botones · filete · plegado · checkbox. Los botones de los workbenches donde la tarea **ya está** se ven siempre; el resto aparece al pasar el mouse. **Es el elegido**, con revelación por hover |
- *
- * `margen` e `izquierda` son las dos que **no pueden tapar texto**, que era la
- * objeción de fondo al primero. Las dos cuestan margen de nota: si la ventana
- * es angosta o «longitud de línea legible» está apagado, pueden quedar
- * recortadas. Eso se mira, no se deduce.
- */
-export const ESTILOS_DE_FILA = [
-  "derecha",
-  "derecha-plana",
-  "pastilla",
-  "margen",
-  "izquierda",
-  "columna",
-] as const;
-export type EstiloDeFila = (typeof ESTILOS_DE_FILA)[number];
 
 /**
  * Cómo se revela la fila de botones (§13.0, §15 punto 1).
@@ -71,16 +15,20 @@ export type EstiloDeFila = (typeof ESTILOS_DE_FILA)[number];
  * en `body` —igual que el estilo de prioridad— y la hoja de estilos decide; en
  * `hover` no hay un solo gesto cableado en el código.
  *
- * `swipe` está declarado y **no se ofrece**: es la alternativa móvil de la §15
- * y hoy no hace nada. Un modo que no funciona es lo mismo que un ítem gris en
- * el ⋯, y vale la misma regla: si no se puede usar, no va. `sanearRevelacion`
- * lo hace caer a `hover`, así que un `data.json` que lo tenga no rompe nada.
+ * `swipe` está declarado y hoy no hace nada: es la alternativa móvil de la
+ * §15. `siempre` existió hasta el 30/09/2026 y se borró al elegir.
  */
-export const MODOS_DE_REVELACION = ["hover", "siempre", "swipe"] as const;
+export const MODOS_DE_REVELACION = ["hover", "swipe"] as const;
 export type ModoDeRevelacion = (typeof MODOS_DE_REVELACION)[number];
 
-/** Los que hoy se pueden elegir. El desplegable de ajustes lee de acá. */
-export const MODOS_OFRECIDOS = ["hover", "siempre"] as const satisfies readonly ModoDeRevelacion[];
+/**
+ * El modo en uso. **No es un ajuste**: el 30/09/2026 el usuario eligió «al pasar
+ * el mouse» contra «siempre», y la alternativa que perdió se borró —con un
+ * solo modo ofrecido, un desplegable no elige nada—. El parámetro sigue
+ * existiendo porque la §15 lo exige: `swipe` es la forma móvil, y cuando exista
+ * se elige acá según la plataforma, en la capa 3.
+ */
+export const MODO_DE_REVELACION: ModoDeRevelacion = "hover";
 
 /**
  * Versión del **formato de lo que el plugin escribe en las notas**.
@@ -212,16 +160,6 @@ export interface TareasSettings {
   indicadorDeFecha: boolean;
   indicadorDeRecurrencia: boolean;
   /**
-   * En qué orden se ofrecen los atajos de fecha del ⋯ (paso 6c).
-   *
-   * Salió de usar el menú: «no me convence la selección de fechas ni el orden en
-   * que figuran». Los tres conviven y arranca en el que ya estaba, así que
-   * actualizar el plugin no cambia nada hasta que se elija otro.
-   */
-  ordenDeAtajos: OrdenDeAtajo;
-  /** Cómo se elige en «Otra fecha…». Ver `SELECTORES_DE_FECHA`. */
-  selectorDeFecha: SelectorDeFecha;
-  /**
    * Los grupos de reinicio que el submenú ofrece **aunque no exista ninguno**.
    *
    * Es la mitad del pedido «recurrencia con opciones preconfiguradas». La otra
@@ -236,10 +174,6 @@ export interface TareasSettings {
    * workbench: `NOMBRE_RE` es literalmente la misma para `wb` y para `rec`.
    */
   gruposSugeridos: string[];
-  /** Cuándo se ve la fila. Ver `MODOS_DE_REVELACION`. */
-  modoDeRevelacion: ModoDeRevelacion;
-  /** Dónde y cómo se dibuja. Ver `ESTILOS_DE_FILA`. */
-  estiloDeFila: EstiloDeFila;
   /**
    * Las decoraciones sobre la nota: token invisible y color de prioridad (§4a).
    *
@@ -254,31 +188,6 @@ export interface TareasSettings {
    * deja dos `%%t:` en una y la vuelve ilegible para siempre.
    */
   decoracionesEnLaNota: boolean;
-  /**
-   * Cómo se dibuja la prioridad. Tres estilos, uno a la vez.
-   *
-   * Los tres salieron de usar el primero: teñir la línea entera resultó pesado,
-   * la distinción madre/hijos por fondo contra filete no convenció, y dos
-   * tareas contiguas de distinta prioridad formaban una franja continua que
-   * cambiaba de color. Es el patrón `designFlags.ts` llevado a su forma útil
-   * acá: los tres conviven y se comparan **en Obsidian**, que es el único lugar
-   * donde se puede juzgar cómo se ve algo.
-   *
-   * | | Qué dibuja | Cómo se lee el nivel sin color |
-   * |---|---|---|
-   * | `barra-checkbox` | las dos cosas juntas | por la altura y por el anillo |
-   * | `barra` | una marca corta en el margen | por su **altura** |
-   * | `checkbox` | el checkbox de la tarea, coloreado | por un anillo de más |
-   * | `fondo` | la línea teñida más un filete | por el grosor y las muescas |
-   *
-   * El combinado es el que pidió el usuario después de mirar los tres sueltos, y
-   * por eso es el de por omisión.
-   *
-   * La §14 pide que los tres niveles se distingan **también sin color**, por
-   * accesibilidad y por pantallas al sol; por eso los tres estilos lo resuelven
-   * de alguna manera y ninguno se apoya solo en el tono.
-   */
-  estiloDePrioridad: EstiloDePrioridad;
   /**
    * Al unir dos tareas, la línea queda limpia: con un espacio y sin el marcador
    * de la absorbida.
@@ -354,34 +263,6 @@ export function sanearNotas(saved: unknown): string[] {
  */
 export const WORKBENCH_POR_OMISION = "foco";
 
-/** Un estilo conocido, o el de por omisión. Se lee de un `data.json` editable. */
-export function sanearEstilo(valor: unknown): EstiloDePrioridad {
-  return (ESTILOS_DE_PRIORIDAD as readonly unknown[]).includes(valor)
-    ? (valor as EstiloDePrioridad)
-    : "barra-checkbox";
-}
-
-/** Un estilo de fila conocido, o el primero. Se lee de un `data.json` editable. */
-export function sanearEstiloDeFila(valor: unknown): EstiloDeFila {
-  return (ESTILOS_DE_FILA as readonly unknown[]).includes(valor)
-    ? (valor as EstiloDeFila)
-    : "columna";
-}
-
-/** Un orden de atajos conocido, o el que ya estaba. */
-export function sanearOrdenDeAtajos(valor: unknown): OrdenDeAtajo {
-  return (ORDENES_DE_ATAJO as readonly unknown[]).includes(valor)
-    ? (valor as OrdenDeAtajo)
-    : "semana";
-}
-
-/** Un selector de fecha conocido, o el que ya estaba. */
-export function sanearSelectorDeFecha(valor: unknown): SelectorDeFecha {
-  return (SELECTORES_DE_FECHA as readonly unknown[]).includes(valor)
-    ? (valor as SelectorDeFecha)
-    : "nativo";
-}
-
 /**
  * La semilla de grupos: nombres utilizables, sin repetidos y sin vacíos.
  *
@@ -416,13 +297,6 @@ export function sanearGrupos(saved: unknown): string[] {
  */
 export const GRUPOS_POR_OMISION: readonly string[] = ["semanal", "mensual"];
 
-/** Un modo conocido y **ofrecido**, o `hover`. Ver `MODOS_DE_REVELACION`. */
-export function sanearRevelacion(valor: unknown): ModoDeRevelacion {
-  return (MODOS_OFRECIDOS as readonly unknown[]).includes(valor)
-    ? (valor as ModoDeRevelacion)
-    : "hover";
-}
-
 export const DEFAULT_SETTINGS: TareasSettings = {
   formatVersion: FORMAT_VERSION,
   notasDeTareas: [...NOTAS_POR_OMISION],
@@ -438,13 +312,8 @@ export const DEFAULT_SETTINGS: TareasSettings = {
   confirmarAlEliminar: false,
   indicadorDeFecha: true,
   indicadorDeRecurrencia: true,
-  ordenDeAtajos: "semana",
-  selectorDeFecha: "nativo",
   gruposSugeridos: [...GRUPOS_POR_OMISION],
-  modoDeRevelacion: "hover",
-  estiloDeFila: "columna",
   decoracionesEnLaNota: true,
-  estiloDePrioridad: "barra-checkbox",
   indicadorGlifo: false,
   unirLimpio: true,
   congelarStore: false,
@@ -502,13 +371,8 @@ export function cargarSettings(saved: unknown): TareasSettings {
     indicadorDeFecha: raw.indicadorDeFecha ?? DEFAULT_SETTINGS.indicadorDeFecha,
     indicadorDeRecurrencia:
       raw.indicadorDeRecurrencia ?? DEFAULT_SETTINGS.indicadorDeRecurrencia,
-    ordenDeAtajos: sanearOrdenDeAtajos(raw.ordenDeAtajos),
-    selectorDeFecha: sanearSelectorDeFecha(raw.selectorDeFecha),
     gruposSugeridos: sanearGrupos(raw.gruposSugeridos),
-    modoDeRevelacion: sanearRevelacion(raw.modoDeRevelacion),
-    estiloDeFila: sanearEstiloDeFila(raw.estiloDeFila),
     decoracionesEnLaNota: raw.decoracionesEnLaNota ?? DEFAULT_SETTINGS.decoracionesEnLaNota,
-    estiloDePrioridad: sanearEstilo(raw.estiloDePrioridad),
     indicadorGlifo: raw.indicadorGlifo ?? DEFAULT_SETTINGS.indicadorGlifo,
     unirLimpio: raw.unirLimpio ?? DEFAULT_SETTINGS.unirLimpio,
     congelarStore: raw.congelarStore ?? DEFAULT_SETTINGS.congelarStore,

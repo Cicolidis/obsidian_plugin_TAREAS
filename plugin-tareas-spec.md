@@ -918,7 +918,7 @@ Sobre cada línea de tarea, al pasar el mouse:
 
 Indicador persistente: el ★ queda relleno si la tarea está en ese workbench. Sin esto se hace doble clic sin darse cuenta, porque la tarea no se va de la nota al asignarla.
 
-**El componente de fila recibe el modo de revelación como parámetro** (`hover` | `siempre` | `swipe`). Nunca `mouseenter` cableado adentro. Ver §15.
+**El componente de fila recibe el modo de revelación como parámetro** (`hover` | `swipe`). Nunca `mouseenter` cableado adentro. Ver §15. (`siempre` existió hasta el 30/09/2026.)
 
 ### Lo que quedó decidido
 
@@ -939,9 +939,13 @@ Lo que vale hoy:
   pegado al texto.
 - **Nada sale del flujo**: lo que se apaga cambia de opacidad, nunca de `display`,
   para que el ★ no se corra y el margen no cambie de ancho al scrollear.
-- Por omisión: **columna en el margen propio, revelada al pasar el mouse**. Las
-  otras cinco posiciones y el modo «siempre» quedan encendibles; `swipe` está
-  declarado en el tipo (§15) y no se ofrece.
+- **Columna en el margen propio, revelada al pasar el mouse.** Elegido por el
+  usuario el 30/09/2026 entre seis posiciones y dos modos; las otras cinco
+  —todas adentro de la línea, como widget— y el modo «siempre» se borraron, con
+  sus ajustes. `swipe` sigue declarado en el tipo para el móvil (§15).
+  Construir los marcadores de una ventana de 103 líneas cuesta 0,30 ms de
+  mediana en `tareas_COLE` saturada, contra 0,10 del widget: más, y todavía la
+  mitad de decorar la nota entera.
 - Los éxitos de ★ ◐ → son silenciosos —el botón que se rellena es el aviso— y los
   fracasos avisan siempre. Sobre un token ilegible la fila se dibuja apagada, y
   los tooltips dicen por qué.
@@ -968,13 +972,15 @@ Lo que vale hoy:
   propio, no un submenú (`setSubmenu` no está en la API pública).
 - El **reinicio de un grupo es un comando de paleta**, no un ítem del ⋯: un grupo
   puede estar entero en notas cerradas.
-- Los atajos de fecha llevan la fecha resuelta en la etiqueta («Lunes · 7 sep»).
-  Hay tres órdenes —`semana` por omisión, `cronológico` y `discontinuo`— y los
-  tres cumplen dos propiedades: **ningún atajo repite el valor de otro, y la
-  cantidad no cambia según el día**.
-- «Otra fecha…» se elige con el selector nativo (por omisión) o con una grilla,
-  que es lo único que hay en una cíclica. Un clic en la grilla **elige, no
-  acepta**.
+- Los atajos de fecha llevan la fecha resuelta en la etiqueta («Mañana · 1 oct»).
+  Son **discontinuos**: hoy, mañana, pasado, en una semana, en dos, en 30 días.
+  Elegidos el 30/09/2026 contra «la semana de lunes a domingo» y «en orden de
+  fecha», que se borraron. Cumplen dos propiedades: **ningún atajo repite el
+  valor de otro, y la cantidad no cambia según el día**.
+- «Otra fecha…» abre **una grilla**: un mes, o los 31 días en una cíclica, donde
+  el selector del navegador no ofrece nada. Elegida el 30/09/2026 contra abrir el
+  selector nativo, que se borró; el campo sigue para escribir a mano. Un clic en
+  la grilla **elige, no acepta**.
 - Los indicadores 📅 y 🔁 son **atajos, no toggles**: abren el submenú y nunca
   escriben solos. La etiqueta dice el valor resuelto, y en una cíclica las dos
   cosas («día 10 de cada mes: este mes, el 10 sep»).
@@ -1016,6 +1022,15 @@ Tres niveles: normal (sin color), alta (amarillo), muy alta (rojo).
 - Se porta el mecanismo de Anotaciones: decoración de línea + `colorClass()` + la barra de colores rápidos configurable de `settingsData.ts`.
 - **Verificar contraste en tema claro y oscuro.** Amarillo sobre fondo claro es el peor caso.
 - Los tres niveles deben distinguirse **también sin color** (un indicador de forma), por accesibilidad y por pantallas al sol.
+
+**Cómo se dibuja, decidido el 30/09/2026: barra + checkbox.** Una barra corta en
+el margen, cuya **altura** dice el nivel (media letra en alta, una letra en muy
+alta), y el checkbox de la tarea coloreado, con un anillo de más en muy alta. Las
+hijas llevan una línea fina de 1 px que cubre todos sus renglones. El `!` / `!!`
+al final del texto sigue siendo un ajuste aparte, apagado por omisión. Los otros
+cuatro estilos —barra sola, barra completa, checkbox solo y el fondo teñido del
+principio— se borraron con su ajuste; el «filete con textura» de la tabla de
+abajo es el de aquel fondo y ya no existe.
 
 ### Lo que el paso 4a decidió y midió
 

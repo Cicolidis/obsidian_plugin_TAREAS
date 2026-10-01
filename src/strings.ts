@@ -65,24 +65,11 @@ export const STRINGS = {
         "el token se esconde solo, porque es un comentario de Obsidian. Un token que no se " +
         "entiende queda a la vista a propósito: es la única forma de arreglarlo.",
     },
-    estiloDePrioridad: {
-      nombre: "Prioridad: cómo se dibuja",
-      descripcion:
-        "Los tres se ven distinto y los tres distinguen los niveles sin depender del color. " +
-        "Se cambian en caliente: alcanza con mirar la nota al lado.",
-      opciones: {
-        "barra-checkbox": "Barra corta + checkbox coloreado",
-        barra: "Barra corta en el margen (la altura dice el nivel)",
-        "barra-completa": "Barra que cubre toda la tarea (el ancho dice el nivel)",
-        checkbox: "El checkbox de la tarea, coloreado",
-        fondo: "Línea teñida con filete (el primero)",
-      },
-    },
     indicadorGlifo: {
       nombre: "Prioridad: signo al final del texto",
       descripcion:
-        "Un «!» para alta y «!!» para muy alta, al final de la línea. Se suma al estilo " +
-        "elegido arriba. Suma ancho al renglón: medido, empuja el corte unas tres letras.",
+        "Un «!» para alta y «!!» para muy alta, al final de la línea, además de la barra y " +
+        "el color del checkbox. Suma ancho al renglón: medido, empuja el corte unas tres letras.",
     },
     /**
      * Los dos indicadores del paso 6c, en un solo bloque con dos interruptores.
@@ -100,28 +87,6 @@ export const STRINGS = {
         "solo. Ocupan su lugar aunque estén apagados, para que el ★ no se mueva.",
       fecha: "Indicador de vencimiento",
       recurrencia: "Indicador de recurrencia",
-    },
-    ordenDeAtajos: {
-      nombre: "Fecha: en qué orden se ofrecen los atajos",
-      descripcion:
-        "Los tres se comparan abriendo el ⋯ → «Fecha…» y mirando. Ninguno repite dos veces " +
-        "el mismo día, y ninguno cambia de largo según el día de la semana.",
-      opciones: {
-        semana: "Hoy, mañana y la semana de lunes a domingo",
-        cronologico: "Hoy, mañana y los días siguientes, en orden de fecha",
-        discontinuo: "Hoy, mañana, pasado, en una semana, en dos, en 30 días",
-      },
-    },
-    selectorDeFecha: {
-      nombre: "«Otra fecha…»: cómo se elige",
-      descripcion:
-        "El nativo es el selector del navegador sobre el campo de fecha, y en una tarea " +
-        "cíclica no ofrece nada, porque ahí el campo es un número. La grilla dibuja un mes, " +
-        "y en una cíclica los 31 días.",
-      opciones: {
-        nativo: "El selector del navegador",
-        grilla: "Una grilla dibujada por el plugin",
-      },
     },
     gruposSugeridos: {
       nombre: "Grupos de reinicio sugeridos",
@@ -193,36 +158,16 @@ export const STRINGS = {
         "completar, archivar y eliminar. No suma ancho al renglón ni cambia la altura de " +
         "la línea.",
     },
-    estiloDeFila: {
-      nombre: "Fila de botones: dónde va",
+    /**
+     * Los instrumentos, juntos y al final (30/09/2026). Hasta entonces las
+     * decoraciones estaban entre los ajustes de uso, y no son uno: existen para
+     * medir A/B y como salida de emergencia.
+     */
+    desarrollo: {
+      titulo: "Desarrollo",
       descripcion:
-        "Los seis conviven y se comparan mirándolos. Los tres de la izquierda y el del " +
-        "margen no pueden tapar una palabra, y todos ellos gastan margen de nota: si la " +
-        "ventana es angosta pueden quedar recortados. En «columna», los botones de los " +
-        "workbenches donde la tarea ya está se ven siempre.",
-      opciones: {
-        derecha: "Sobre el final de la línea, con degradado (el primero)",
-        "derecha-plana": "Sobre el final de la línea, sin fondo",
-        pastilla: "Sobre el final de la línea, en una pastilla",
-        margen: "En el margen derecho, afuera del texto",
-        izquierda: "Antes del checkbox, después del filete",
-        columna: "Columna en el margen izquierdo, en pastilla",
-      },
-    },
-    modoDeRevelacion: {
-      nombre: "Fila de botones: cuándo se ve",
-      descripcion:
-        "Con el mouse encima, o siempre. Es una clase en el cuerpo del documento y lo " +
-        "resuelve la hoja de estilos: no hay ningún gesto cableado en el código.",
-      opciones: {
-        hover: "Con el mouse sobre la línea",
-        siempre: "Siempre",
-      },
-    },
-    verificacion: {
-      titulo: "Verificación",
-      descripcion:
-        "Andamiaje para probar el plugin. Apagado, no cambia nada de cómo funciona.",
+        "Instrumentos para probar y medir el plugin. Con los valores de fábrica no cambian " +
+        "nada de cómo funciona.",
       congelarStore: {
         nombre: "Congelar el índice en memoria",
         descripcion:
@@ -308,13 +253,6 @@ export const STRINGS = {
     atajosDeFecha: {
       hoy: "Hoy",
       manana: "Mañana",
-      lunes: "Lunes",
-      martes: "Martes",
-      miercoles: "Miércoles",
-      jueves: "Jueves",
-      viernes: "Viernes",
-      sabado: "Sábado",
-      domingo: "Domingo",
       pasadoManana: "Pasado mañana",
       enUnaSemana: "En una semana",
       enDosSemanas: "En dos semanas",

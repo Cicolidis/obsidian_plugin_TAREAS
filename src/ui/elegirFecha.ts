@@ -22,15 +22,13 @@
  * «cuál de las dos escribió» tiene que verse **antes** de aceptar. En la nota
  * no se ve: el token está oculto.
  *
- * ## Las dos formas de elegir (paso 6c)
+ * ## La grilla (paso 6c)
  *
- * Pedido al verificar el 6b: «"Otra fecha…" con un calendario chico». Se ofrecen
- * las dos y conviven, que es el patrón `designFlags.ts`:
- *
- * | | Qué es | Cuánto cuesta |
- * |---|---|---|
- * | `nativo` | el `<input type="date">` que ya estaba, con `showPicker()` | seis líneas |
- * | `grilla` | un calendario dibujado acá | ~30 líneas puras en `fechas.ts` + el DOM de abajo |
+ * Pedido al verificar el 6b: «"Otra fecha…" con un calendario chico». En el 6c
+ * convivió con el selector nativo del navegador, que se abría solo con
+ * `showPicker()`, y el 30/09/2026 el usuario eligió la grilla; la apertura
+ * automática del nativo se borró. El campo sigue estando —para escribir una
+ * fecha a mano, y su ícono abre el selector del navegador igual—.
  *
  * **Lo que paga la grilla es el caso cíclico.** Ahí el campo es un número del 1
  * al 31 (§11) y el navegador no ofrece **ningún** selector: `showPicker()` sobre
@@ -43,7 +41,6 @@
  */
 import { Modal, Notice, Setting, type App } from "obsidian";
 import { diasDelMes, esDiaDelMes, esFechaReal, grillaDelMes, mesVecino } from "../fechas.js";
-import type { SelectorDeFecha } from "../settingsData.js";
 import { DIAS_INICIALES, STRINGS } from "../strings.js";
 import { formaDeDue } from "../token.js";
 
@@ -54,8 +51,6 @@ export interface OpcionesDeFecha {
   actual: string | null;
   /** Hoy, en `AAAA-MM-DD`: de dónde arranca la grilla y qué celda se marca. */
   hoy: string;
-  /** Cuál de las dos formas de elegir. Ver `SELECTORES_DE_FECHA`. */
-  selector: SelectorDeFecha;
 }
 
 /** Abre el selector. Si aceptan, llama con el valor ya validado. */
@@ -136,33 +131,16 @@ class ElegirFechaModal extends Modal {
       window.setTimeout(() => campo.inputEl.focus(), 0);
     });
 
-    /** Lo que un clic en la grilla —o el selector nativo— deja elegido. */
+    /** Lo que un clic en la grilla deja elegido. */
     const elegir = (v: string): void => {
       valor = v;
       if (campoEl) campoEl.value = v;
       refrescar();
     };
 
-    if (this.opciones.selector === "grilla") {
-      repintar = ciclica
-        ? this.grillaDeDias(elegir, () => valor)
-        : this.grillaDeFechas(hoy, elegir, () => valor);
-    } else if (!ciclica) {
-      // `showPicker` es de Chromium 99 y Obsidian corre Electron, pero el
-      // manifiesto declara `minAppVersion` 1.6.0 y llamar a lo que no existe
-      // rompería **el modal entero** — o sea que no habría con qué elegir la
-      // fecha, justo en la pantalla que existe para eso. Es la misma guardia que
-      // `setDestructive` en `confirmar.ts`.
-      window.setTimeout(() => {
-        const el = campoEl as (HTMLInputElement & { showPicker?: () => void }) | null;
-        try {
-          el?.showPicker?.();
-        } catch {
-          // Chromium lo tira si no hubo gesto del usuario en esta ventana. No
-          // es un error: el campo sigue estando y su ícono lo abre igual.
-        }
-      }, 0);
-    }
+    repintar = ciclica
+      ? this.grillaDeDias(elegir, () => valor)
+      : this.grillaDeFechas(hoy, elegir, () => valor);
 
     refrescar();
 

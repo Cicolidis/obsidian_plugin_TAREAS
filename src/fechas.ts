@@ -36,13 +36,6 @@ export type ClaveDeAtajo =
   | "hoy"
   | "manana"
   | "pasadoManana"
-  | "lunes"
-  | "martes"
-  | "miercoles"
-  | "jueves"
-  | "viernes"
-  | "sabado"
-  | "domingo"
   | "enUnaSemana"
   | "enDosSemanas"
   | "enTreintaDias";
@@ -55,125 +48,35 @@ export interface Atajo {
 }
 
 /**
- * Los tres órdenes en que se pueden ofrecer los atajos.
+ * Los atajos de una tarea **normal**: hoy, mañana, pasado, en una semana, en
+ * dos, en treinta días.
  *
  * Salieron del pedido de la verificación del 6b: «no me convence la selección de
- * fechas ni el orden en que figuran. Si queremos ofrecer los siete próximos días
- * de la semana, hay que colocarlos en orden. Pero quizás es mejor ofrecer
- * opciones discontinuas: hoy, mañana, en una semana…».
+ * fechas ni el orden en que figuran […] quizás es mejor ofrecer opciones
+ * discontinuas: hoy, mañana, en una semana…». En el 6c convivieron tres órdenes
+ * —los siete días de lunes a domingo, los siete en orden de fecha, y este— y el
+ * 30/09/2026 el usuario eligió este. Los otros dos se borraron.
  *
- * Los tres **conviven** y se eligen en ajustes, que es el patrón
- * `designFlags.ts`: cómo se lee un menú solo se juzga mirándolo. Y los tres
- * cumplen las dos reglas que la sesión 7 pagó caro:
+ * Son **seis desplazamientos fijos**, y eso cumple de una las dos reglas que la
+ * sesión 7 pagó caro, sin ningún filtro:
  *
  * 1. **Ningún atajo repite el valor de otro.** Un miércoles, «Hoy · 2 sep» y
  *    «Miércoles · 2 sep» escribían exactamente lo mismo, y además rompían el
- *    tilde del menú: `setChecked(valor === actual)` marcaba los dos a la vez, o
- *    sea que la pantalla decía que la tarea tenía dos vencimientos.
+ *    tilde del menú: `setChecked(valor === actual)` marcaba los dos a la vez.
+ *    Seis distancias distintas desde el mismo día no pueden chocar nunca.
  * 2. **La cantidad de ítems no cambia según el día.** Un menú cuyo largo se
  *    mueve no se puede aprender, que es la misma razón por la que el ⋯ no
  *    acomoda sus ítems según la tarea (§13.0).
- */
-export const ORDENES_DE_ATAJO = ["semana", "cronologico", "discontinuo"] as const;
-export type OrdenDeAtajo = (typeof ORDENES_DE_ATAJO)[number];
-
-/** Los siete días, de lunes a domingo, en el orden en que se muestran. */
-const DIAS: readonly ClaveDeAtajo[] = [
-  "lunes",
-  "martes",
-  "miercoles",
-  "jueves",
-  "viernes",
-  "sabado",
-  "domingo",
-];
-
-/**
- * Los atajos de una tarea **normal**: hoy, mañana y los siete días.
- *
- * Cada día se resuelve a su **próxima** ocurrencia, y **hoy cuenta como hoy**:
- * es la misma regla que `resolverDue` usa con el día del mes, y tenerlas
- * distintas haría que «el lunes» significara una cosa en una tarea y otra en
- * una cíclica. La ambigüedad no se resuelve con una regla: se resuelve
- * **mostrando la fecha resuelta en la etiqueta**, que es lo que hace el menú.
- *
- * El orden nunca rota —lunes a domingo, siempre— porque un menú cuyo orden
- * cambia según el día no se puede aprender, que es la misma razón por la que el
- * ⋯ no acomoda sus ítems según la tarea (§13.0).
- *
- * **Pero los dos días que «hoy» y «mañana» ya cubren no se repiten**, y eso
- * salió de mirar la salida, no de un test: un miércoles el menú mostraba «Hoy ·
- * 2 sep» y «Miércoles · 2 sep», que escriben exactamente lo mismo. Dos ítems
- * que hacen lo mismo son ruido, y además rompían el tilde del menú — `setChecked`
- * marcaba los dos a la vez, así que la pantalla decía que la tarea tenía dos
- * vencimientos. Son siempre exactamente dos los que se van, así que la lista
- * tiene siete ítems todos los días.
- */
-export function atajosDeFecha(hoy: string, orden: OrdenDeAtajo = "semana"): Atajo[] {
-  switch (orden) {
-    case "cronologico":
-      return cronologico(hoy);
-    case "discontinuo":
-      return discontinuo(hoy);
-    default:
-      return porSemana(hoy);
-  }
-}
-
-function porSemana(hoy: string): Atajo[] {
-  const manana = sumarDias(hoy, 1);
-  const cubiertos = new Set([hoy, manana]);
-  return [
-    { clave: "hoy" as const, valor: hoy },
-    { clave: "manana" as const, valor: manana },
-    ...DIAS.map((clave, i) => ({ clave, valor: proximoDiaDeSemana(hoy, i + 1) })).filter(
-      (a) => !cubiertos.has(a.valor),
-    ),
-  ];
-}
-
-/**
- * Hoy, mañana y los cinco días siguientes, **en orden de fecha**.
- *
- * Es la mitad literal del pedido: «si queremos ofrecer los siete próximos días
- * de la semana, hay que colocarlos en orden». La diferencia con `porSemana` no
- * es cuáles son —los dos cubren una semana— sino que acá el primero es siempre
- * el más cercano, y ahí el nombre del día es una **etiqueta** y no el criterio.
- *
- * Siete ítems todos los días, y ninguno puede repetir a otro: son siete
- * desplazamientos distintos desde el mismo día.
- */
-function cronologico(hoy: string): Atajo[] {
-  return [
-    { clave: "hoy", valor: hoy },
-    { clave: "manana", valor: sumarDias(hoy, 1) },
-    ...[2, 3, 4, 5, 6].map((n) => {
-      const valor = sumarDias(hoy, n);
-      return { clave: claveDelDia(valor), valor };
-    }),
-  ];
-}
-
-/**
- * Hoy, mañana, pasado, en una semana, en dos, en treinta días.
- *
- * La otra mitad del pedido: «quizás es mejor ofrecer opciones discontinuas».
- * Son **seis desplazamientos fijos**, y eso no es una lista arbitraria: al ser
- * todos distancias distintas desde el mismo día, **no pueden chocar entre sí
- * ningún día del año**, y la lista mide siempre seis.
  *
  * Por eso **«fin de mes» no está**, aunque sería el candidato obvio: un día 17
- * de un mes de 31 coincide con «en dos semanas», y ahí vuelven las dos cosas
- * que la sesión 7 encontró mirando la salida —dos ítems que escriben lo mismo,
- * y el tilde marcado en los dos— más una tercera, que el largo del menú
- * cambiaría según el día. Para el fin de mes está el selector, donde no compite
- * con nada.
+ * de un mes de 31 coincide con «en dos semanas», y ahí vuelven las dos cosas.
+ * Para el fin de mes está la grilla, donde no compite con nada.
  *
  * «En treinta días» y no «en un mes» porque es lo que de verdad escribe. Un
  * «en un mes» tendría que decidir qué hace el 31 de enero, y eso es una regla
  * más que aprender por un atajo que se usa poco.
  */
-function discontinuo(hoy: string): Atajo[] {
+export function atajosDeFecha(hoy: string): Atajo[] {
   return (
     [
       ["hoy", 0],
@@ -184,11 +87,6 @@ function discontinuo(hoy: string): Atajo[] {
       ["enTreintaDias", 30],
     ] as const
   ).map(([clave, n]) => ({ clave, valor: sumarDias(hoy, n) }));
-}
-
-/** El nombre del día de la semana de esa fecha, como clave de atajo. */
-function claveDelDia(fecha: string): ClaveDeAtajo {
-  return DIAS[diaIso(fecha) - 1]!;
 }
 
 /** Qué atajo es, en una cíclica. Ver `atajosDeDiaDelMes`. */
@@ -221,25 +119,12 @@ export function sumarDias(fecha: string, n: number): string {
 }
 
 /**
- * La próxima vez que caiga ese día de la semana, contando hoy.
- *
- * `dia` va en la convención ISO —1 lunes … 7 domingo— y no en la de
- * `Date.getUTCDay()`, que arranca en domingo. La conversión se hace acá y en un
- * solo lugar: es exactamente la clase de desfasaje de uno que no se ve hasta
- * que alguien reporta que «el domingo» escribió el lunes.
- */
-export function proximoDiaDeSemana(hoy: string, dia: number): string {
-  return sumarDias(hoy, (dia - diaIso(hoy) + 7) % 7);
-}
-
-/**
  * El día de la semana en la convención ISO: 1 lunes … 7 domingo.
  *
  * `Date.getUTCDay()` arranca en domingo, y la conversión vive **acá y en un solo
  * lugar**: es exactamente la clase de desfasaje de uno que no se ve hasta que
- * alguien reporta que «el domingo» escribió el lunes. Lo usan los tres que
- * dependen del calendario: los atajos por semana, el nombre del día en el orden
- * cronológico, y la grilla del mes.
+ * alguien reporta que «el domingo» escribió el lunes. Lo usa la grilla del mes,
+ * que arranca en lunes.
  */
 export function diaIso(fecha: string): number {
   const jsDia = new Date(aUTC(fecha)).getUTCDay();

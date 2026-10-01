@@ -358,10 +358,10 @@ export function opcionesDeRecurrencia(
 /**
  * La clase de `body` que enciende cada modo de revelación.
  *
- * Va en `body` y no en la decoración por lo mismo que las clases del estilo de
- * prioridad (§14): alternar un ajuste no puede obligar a reconstruir el set de
- * decoraciones de cada editor abierto. El widget dibuja siempre lo mismo y la
- * hoja de estilos decide si se ve.
+ * Va en `body` y no en el marcador por lo mismo que las clases de la prioridad
+ * (§14): el marcador dibuja siempre lo mismo y la hoja de estilos decide si se
+ * ve. Hoy hay un solo modo en uso —`hover`, elegido el 30/09/2026—, y el
+ * parámetro queda porque la §15 lo exige para el móvil.
  *
  * `swipe` cae en su propia clase aunque hoy no tenga reglas: el día que exista
  * el móvil, la hoja de estilos ya tiene dónde colgarlas.
@@ -371,9 +371,7 @@ export function claseDeRevelacion(modo: string): string {
 }
 
 /** Todas las que este módulo puede poner, para poder sacarlas al salir. */
-export const CLASES_DE_REVELACION: readonly string[] = ["hover", "siempre", "swipe"].map(
-  claseDeRevelacion,
-);
+export const CLASES_DE_REVELACION: readonly string[] = ["hover", "swipe"].map(claseDeRevelacion);
 
 /**
  * La clase del `.cm-editor` de una nota que **usa** el margen de botones.
@@ -391,23 +389,3 @@ export const CLASES_DE_REVELACION: readonly string[] = ["hover", "siempre", "swi
  */
 export const CLASE_CON_MARGEN = "tareas-con-margen";
 
-/**
- * La clase de `body` de cada estilo de fila.
- *
- * Mismo mecanismo que el modo de revelación y que el estilo de prioridad: el
- * widget dibuja siempre lo mismo y la hoja de estilos decide dónde queda.
- * Cambiar de estilo no reconstruye ninguna decoración.
- */
-export function claseDeFila(estilo: string): string {
-  return `tareas-fila-${estilo}`;
-}
-
-/** Todas las que este módulo puede poner, para poder sacarlas al salir. */
-export const CLASES_DE_FILA: readonly string[] = [
-  "derecha",
-  "derecha-plana",
-  "pastilla",
-  "margen",
-  "izquierda",
-  "columna",
-].map(claseDeFila);
