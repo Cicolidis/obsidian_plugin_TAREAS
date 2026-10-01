@@ -320,10 +320,40 @@ return true;`;
 let depurando = false;
 function cdp(method, params) {
   if (!depurando) {
-    obs("dev:debug", "on");
+    // «already attached» no es un error: lo deja una corrida cortada.
+    try {
+      obs("dev:debug", "on");
+    } catch {}
     depurando = true;
+    // Una corrida cortada a mitad de un clic deja el botón **apretado** del lado
+    // de Chromium, y el próximo `mousePressed` espera para siempre: así se
+    // encadenaron los cuelgues de la sesión 9. Soltarlo en una esquina no hace
+    // nada si no estaba apretado.
+    obs("dev:cdp", "method=Input.dispatchMouseEvent",
+      `params=${JSON.stringify({ type: "mouseReleased", x: 2, y: 2, button: "left", clickCount: 1 })}`);
   }
   return obs("dev:cdp", `method=${method}`, `params=${JSON.stringify(params)}`);
+}
+
+/**
+ * La ventana de prueba al frente, sin quitarle el foco a nadie, **antes de cada
+ * evento real**.
+ *
+ * Con la ventana tapada por otra aplicación, Chromium la da por oculta y
+ * `Input.dispatchMouseEvent` espera un cuadro que no llega: la CLI se quedaba
+ * colgada minutos en un `mousePressed`. Pasó tres veces en la sesión 9, siempre
+ * con el usuario usando la Mac al mismo tiempo. Traerla una vez al empezar no
+ * alcanza; hay que traerla cada vez, y si igual no se ve, fallar diciéndolo en
+ * vez de colgarse.
+ */
+function alFrente() {
+  const vis = evaluar(`const w = require("@electron/remote").getCurrentWindow();
+    if (document.visibilityState !== "visible") { w.showInactive(); w.moveTop(); }
+    for (let i = 0; i < 10 && document.visibilityState !== "visible"; i++) await new Promise((r) => setTimeout(r, 200));
+    return document.visibilityState;`);
+  if (vis !== "visible") {
+    throw new Error("la ventana del vault de prueba está tapada y no se pudo traer al frente: un clic real se colgaría");
+  }
 }
 
 const TECLAS = {
@@ -336,6 +366,7 @@ const TECLAS = {
 
 /** Una tecla real. Un dígito o una letra se escriben como texto. */
 export async function tecla(key, modificadores = 0) {
+  alFrente();
   const t = TECLAS[key] ?? { code: `Digit${key}`, keyCode: key.charCodeAt(0), text: key };
   const base = { key, code: t.code, windowsVirtualKeyCode: t.keyCode, modifiers: modificadores };
   cdp("Input.dispatchKeyEvent", { type: t.text ? "keyDown" : "rawKeyDown", ...base, ...(t.text ? { text: t.text } : {}) });
@@ -345,6 +376,7 @@ export async function tecla(key, modificadores = 0) {
 
 /** Un clic real en coordenadas de la ventana. \`modificadores\`: 4 = Cmd. */
 export async function clicEn(x, y, modificadores = 0) {
+  alFrente();
   const b = { x, y, button: "left", clickCount: 1, modifiers: modificadores };
   cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, modifiers: modificadores });
   cdp("Input.dispatchMouseEvent", { type: "mousePressed", ...b });
@@ -353,6 +385,7 @@ export async function clicEn(x, y, modificadores = 0) {
 }
 
 export async function moverA(x, y) {
+  alFrente();
   cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
   await esperar(200);
 }
@@ -411,6 +444,12 @@ export function aMano(id, que, porque) {
   console.log(`✋ ${id} ${que} — ${porque}`);
 }
 
+/** Una comprobación de la guía que dejó de tener sentido: lo que miraba se borró. */
+export function noAplica(id, que, porque) {
+  resultados.push({ id, que, estado: "no aplica", dato: porque });
+  console.log(`— ${id} ${que} — ${porque}`);
+}
+
 /** El commit y el `main.js` desplegado en el vault de prueba. */
 export function binario() {
   const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
@@ -423,14 +462,14 @@ export function binario() {
 export function informe(titulo) {
   const n = (e) => resultados.filter((r) => r.estado === e).length;
   const filas = resultados.map(
-    (r) => `| ${r.id} | ${r.que} | ${r.estado === "ok" ? "✅" : r.estado === "falla" ? "❌" : "✋ a mano"} | ${String(r.dato).replace(/\|/g, "\\|").replace(/\n/g, " ")} |`,
+    (r) => `| ${r.id} | ${r.que} | ${{ ok: "✅", falla: "❌", "a mano": "✋ a mano", "no aplica": "— no aplica" }[r.estado]} | ${String(r.dato).replace(/\|/g, "\\|").replace(/\n/g, " ")} |`,
   );
   return [
     `# ${titulo}`,
     "",
     `Corrido con \`scripts/verificar/\` sobre el vault de prueba. ${binario()}.`,
     "",
-    `**${n("ok")} en verde · ${n("falla")} fallas · ${n("a mano")} a mano**, de ${resultados.length}.`,
+    `**${n("ok")} en verde · ${n("falla")} fallas · ${n("a mano")} a mano**${n("no aplica") ? ` · ${n("no aplica")} que ya no aplican` : ""}, de ${resultados.length}.`,
     "",
     "| # | Qué | Estado | Qué midió |",
     "|---|---|---|---|",

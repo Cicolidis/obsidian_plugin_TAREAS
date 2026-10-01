@@ -119,13 +119,13 @@ node scripts/verificar/paso-6c.mjs [A B …]   # una verificación, por seccione
 
 **Trampas que ya costaron** (sesión 9 y el `docs/spikes.md` de COMENTARIOS INLINE):
 
-- Con la ventana tapada, Chromium la cuenta como oculta y frena sus timers hasta colgar un `eval` minutos enteros. La verificación la trae al frente sin quitar el foco (`showInactive()` + `moveTop()`), y los recorridos largos los da Node, un paso por `eval`. Apagar el freno con `setBackgroundThrottling(false)` se probó y fue peor: los eventos de `dev:cdp` quedaron esperando un cuadro. `obs.mjs` corta a los 150 s.
+- Con la ventana tapada, Chromium la cuenta como oculta y frena sus timers hasta colgar un `eval` minutos enteros. `lib.mjs` la trae al frente sin quitar el foco (`showInactive()` + `moveTop()`) **antes de cada tecla o clic real** —una vez al empezar no alcanza si el usuario está usando la Mac—, y falla diciéndolo si igual queda tapada. Los recorridos largos los da Node, un paso por `eval`. Apagar el freno con `setBackgroundThrottling(false)` se probó y fue peor: los eventos de `dev:cdp` quedaron esperando un cuadro. `obs.mjs` corta a los 150 s.
 - Una ventana a pantalla completa ignora `setSize`: la primera cuenta del ciclo de medición salió con el editor en 1561 px. Salir de pantalla completa congela la ventana unos segundos.
 - En Obsidian 1.13 el botón de cerrar un modal ya no es `.modal-close-button`: se cierra con un clic en `.modal-bg`. Un modal viejo abajo hace que la comprobación siguiente lea el equivocado.
 - Restaurar el disco con una nota abierta no restaura nada: el editor guarda su buffer encima. `reiniciarVault()` cierra los editores primero.
 - `dev:screenshot` devuelve el cuadro anterior: sacar dos. La ventana de ajustes es otra ventana y no sale en la captura.
 - Después de `plugin:reload`, lo ya dibujado conserva el código viejo: volver a abrir la nota.
-- Si se corta una corrida a mitad de camino, el depurador de `dev:debug` queda puesto: `node scripts/obs.mjs dev:debug off`.
+- Si se corta una corrida a mitad de camino, el depurador de `dev:debug` queda puesto y, si fue a mitad de un clic, **el botón queda apretado** del lado de Chromium: el próximo `mousePressed` se cuelga. `lib.mjs` suelta el botón al empezar; a mano, `node scripts/obs.mjs dev:debug off`.
 
 **Lo que sigue siendo del usuario**: cómo se ve algo y si convence; elegir entre alternativas; el teléfono (`dev:mobile` emula la pantalla, no el teclado por composición); Sync entre dispositivos; y el uso real, que es de donde salieron los pedidos de las sesiones 6 a 8. Las guías se parten en dos: **lo que ya corrió Claude Code, con su resultado**, y **lo que queda a mano**.
 

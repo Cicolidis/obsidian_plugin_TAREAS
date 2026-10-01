@@ -10,7 +10,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import {
-  aMano, clicEn, comprobar, esperar, informe, instalar, leer, lineaEnDisco, moverA, obs,
+  aMano, clicEn, comprobar, noAplica, esperar, informe, instalar, leer, lineaEnDisco, moverA, obs,
   reiniciarVault, soltarDepurador, tecla, vt,
 } from "./lib.mjs";
 
@@ -152,63 +152,38 @@ async function seccionA() {
 async function seccionB() {
   await reiniciarVault();
   await abrir(P);
-  const ORDEN = {
-    semana: "Hoy, mañana y la semana de lunes a domingo",
-    cronologico: "En orden de fecha",
-    discontinuo: "Hoy, mañana, pasado, en una semana",
-  };
-  const listas = {};
-  for (const [clave] of Object.entries(ORDEN)) {
-    vt(`await vt.ajuste("Fecha: en qué orden se ofrecen los atajos", ${JSON.stringify(clave)}); return true;`);
-    vt(`await vt.clic("tarea sin fecha ni grupo", "fecha"); return true;`);
-    listas[clave] = vt(`return vt.menu();`)
-      .filter((m) => !/^(Otra fecha|Sin fecha)/.test(m.titulo));
-    vt(`await vt.cerrarMenus(); return true;`);
-  }
-  const titulos = (k) => listas[k].map((m) => m.titulo).join(" · ");
-  await comprobar("B1", "«semana»: siete ítems, los días de lunes a domingo", () => ({
-    ok: listas.semana.length === 7,
-    dato: `hoy es ${hoyD().toLocaleDateString("es-AR", { weekday: "long" })}: ${titulos("semana")}`,
+  // El 30/09/2026 se eligió el orden discontinuo y los otros dos se borraron,
+  // con su ajuste. B1, B2 y B6 comparaban órdenes; B3 a B5 siguen valiendo.
+  noAplica("B1", "«semana»: siete ítems, los días de lunes a domingo", "se borró: quedó el orden discontinuo");
+  noAplica("B2", "«cronológico»: arranca en hoy, día por día", "se borró: quedó el orden discontinuo");
+  vt(`await vt.clic("tarea sin fecha ni grupo", "fecha"); return true;`);
+  const lista = vt(`return vt.menu();`).filter((m) => !/^(Otra fecha|Sin fecha)/.test(m.titulo));
+  vt(`await vt.cerrarMenus(); return true;`);
+  const titulos = lista.map((m) => m.titulo).join(" · ");
+  await comprobar("B3", "discontinuo: seis ítems y el último es «En 30 días»", () => ({
+    ok: lista.length === 6 && lista.at(-1).titulo.startsWith("En 30 días"),
+    dato: titulos,
   }));
-  const dias = (k) => listas[k].map((m) => m.titulo.split("·")[1]?.trim() ?? m.titulo);
-  await comprobar("B2", "«cronológico»: arranca en hoy, día por día, siete ítems", () => ({
-    ok: listas.cronologico.length === 7 && listas.cronologico[0].titulo.startsWith("Hoy"),
-    dato: titulos("cronologico"),
-  }));
-  await comprobar("B3", "«discontinuo»: seis ítems y el último es «En 30 días»", () => ({
-    ok: listas.discontinuo.length === 6 && listas.discontinuo.at(-1).titulo.startsWith("En 30 días"),
-    dato: titulos("discontinuo"),
-  }));
-  await comprobar("B4", "en ninguno de los tres se repite una fecha", () => {
-    const rep = Object.keys(listas).filter((k) => new Set(dias(k)).size !== dias(k).length);
-    return { ok: rep.length === 0, dato: rep.length ? `repiten: ${rep.join(", ")}` : "ninguna repetida, en los tres" };
+  await comprobar("B4", "ningún atajo repite una fecha", () => {
+    const dias = lista.map((m) => m.titulo.split("·")[1]?.trim() ?? m.titulo);
+    return { ok: new Set(dias).size === dias.length, dato: dias.join(", ") };
   });
   await comprobar("B5", "sobre una tarea con fecha de mañana, el tilde marca uno solo", async () => {
     vt(`await vt.clic("tarea sin fecha ni grupo", "fecha"); await vt.elegir("Mañana"); return true;`);
     await esperar(500);
-    const r = {};
-    for (const clave of Object.keys(ORDEN)) {
-      vt(`await vt.ajuste("Fecha: en qué orden se ofrecen los atajos", ${JSON.stringify(clave)}); return true;`);
-      vt(`await vt.clic("tarea sin fecha ni grupo", "fecha"); return true;`);
-      r[clave] = vt(`return vt.menu();`).filter((m) => m.marcado).map((m) => m.titulo);
-      vt(`await vt.cerrarMenus(); return true;`);
-    }
-    vt(`await vt.ajuste("Fecha: en qué orden se ofrecen los atajos", "semana"); return true;`);
-    return {
-      ok: Object.values(r).every((m) => m.length === 1),
-      dato: Object.entries(r).map(([k, m]) => `${k}: ${m.join(", ") || "ninguno"}`).join(" · "),
-    };
+    vt(`await vt.clic("tarea sin fecha ni grupo", "fecha"); return true;`);
+    const marcados = vt(`return vt.menu();`).filter((m) => m.marcado).map((m) => m.titulo);
+    vt(`await vt.cerrarMenus(); return true;`);
+    return { ok: marcados.length === 1, dato: marcados.join(", ") || "ninguno" };
   });
-  aMano("B6", "cuál de los tres órdenes convence", "es una elección");
+  noAplica("B6", "cuál de los tres órdenes convence", "elegido el 30/09/2026: discontinuo");
 }
-
 
 // -------------------------------------------------------------------- C
 async function seccionC() {
   await reiniciarVault();
   await abrir(P);
-  aMano("C1", "el selector nativo aparece solo al abrir «Otra fecha…»", "el selector del navegador no está en el DOM: no se puede leer desde la CLI");
-  vt(`await vt.ajuste("«Otra fecha…»: cómo se elige", "grilla"); return true;`);
+  noAplica("C1", "el selector nativo aparece solo al abrir «Otra fecha…»", "se borró: quedó la grilla");
 
   const abrirGrilla = (texto) => {
     vt(`await vt.clic(${JSON.stringify(texto)}, "fecha"); await vt.elegir("Otra fecha"); await vt.esperar(400); return true;`);
@@ -292,7 +267,6 @@ async function seccionC() {
       dato: `disco: «${d.trim()}» · aviso: «${avisos.join(" | ")}»`,
     };
   });
-  vt(`await vt.ajuste("«Otra fecha…»: cómo se elige", "nativo"); return true;`);
 }
 
 // -------------------------------------------------------------------- D
@@ -578,7 +552,11 @@ async function seccionG() {
     const l = vt(`const l = vt.linea("tarea para partir con token"); vt.cursor("tarea para partir con token", l.text.indexOf(" %%")); return vt.sel();`);
     await tecla("ArrowRight");
     const s = vt(`return vt.sel();`);
-    return { ok: s.linea === l.linea + 1 && s.col === 0, dato: `de ${l.linea}:${l.col} a ${s.linea}:${s.col}` };
+    // Cruzar el token es llegar a la línea de abajo de un teclazo. En qué
+    // columna cae depende de esa línea: si es una tarea, Live Preview salta el
+    // `- [ ] ` y cae en la 6. La primera versión exigía la 0, porque en la
+    // semilla de entonces la de abajo estaba vacía.
+    return { ok: s.linea === l.linea + 1 && s.col <= 6, dato: `de ${l.linea}:${l.col} a ${s.linea}:${s.col}` };
   });
 
   await comprobar("G3", "Backspace desde el comienzo de la línea de abajo: saca el checkbox, y el segundo une limpio", async () => {

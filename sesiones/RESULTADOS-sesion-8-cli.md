@@ -1,8 +1,10 @@
 # Verificación del paso 6c, corrida por Claude Code con la CLI
 
-Corrido con `scripts/verificar/` sobre el vault de prueba. commit 91fde07 · main.js 187785 bytes, 2026-09-30T03:16:58.275Z.
+Corrido con `scripts/verificar/` sobre el vault de prueba. commit e3d2236 (con los cambios que quedaron en el commit 04e6e6e) · main.js 174744 bytes, 2026-10-01T02:32:48.062Z.
 
-**61 en verde · 0 fallas · 3 a mano**, de 64.
+**59 en verde · 0 fallas · 1 a mano** · 4 que ya no aplican, de 64.
+
+La sección G se volvió a correr aparte: en la corrida entera G2 y G6 se colgaron esperando un clic real con la ventana tapada (ver «Verificar en vivo» en `CLAUDE.md`), y G2 exigía la columna 0 cuando la semilla nueva deja una tarea debajo. Las filas G son de esa segunda corrida, sobre el mismo binario.
 
 | # | Qué | Estado | Qué midió |
 |---|---|---|---|
@@ -11,20 +13,20 @@ Corrido con `scripts/verificar/` sobre el vault de prueba. commit 91fde07 · mai
 | A3 | el tooltip del 📅 dice la fecha con el año | ✅ | «Vence el 1 oct 2026.» |
 | A4 | poner un grupo: el 🔁 queda encendido y dice el grupo | ✅ | menú: 1 · mensual / 2 · semanal / Grupo nuevo… / No es cíclica · «Cíclica, en el grupo «mensual».» · disco: «- [ ] tarea para ponerle grupo %%t:rec=mensual%%» |
 | A5 | cíclica con due=5 (hoy ya pasó el 5): dice el día y la fecha del mes que viene | ✅ | «Vence el día 5 de cada mes; el próximo, el 5 oct.» (esperaba «5 oct») |
-| A6 | clic en el 📅 abre el submenú y no escribe | ✅ | 9 ítems · archivo intacto |
+| A6 | clic en el 📅 abre el submenú y no escribe | ✅ | 8 ítems · archivo intacto |
 | A7 | clic en el 🔁 abre el submenú de recurrencia | ✅ | 1 · mensual / 2 · semanal / Grupo nuevo… / No es cíclica |
 | A8 | «Sin fecha» apaga el 📅 y el ★ no se corre | ✅ | ★ en x=757.6 sin fecha y x=757.6 con fecha |
 | A9 | token roto: los siete inertes y dicen que es ilegible | ✅ | 7 botones · inertes 7 · «Esta tarea tiene el token ilegible: no se puede escribir sobre ella.» |
 | A10 | con la ventana angosta, ¿el margen se come demasiado texto? | ✋ a mano | es un juicio sobre cómo se ve |
 | A11 | apagar los dos indicadores: cinco botones sin recargar, margen más angosto | ✅ | 5 botones · margen 168.4 → 128.4 px |
 | A12 | cuánto cuestan los dos indicadores en el ancho del margen | ✅ | 40 px (168.4 con, 128.4 sin) |
-| B1 | «semana»: siete ítems, los días de lunes a domingo | ✅ | hoy es miércoles: Hoy · 30 sep · Mañana · 1 oct · Lunes · 5 oct · Martes · 6 oct · Viernes · 2 oct · Sábado · 3 oct · Domingo · 4 oct |
-| B2 | «cronológico»: arranca en hoy, día por día, siete ítems | ✅ | Hoy · 30 sep · Mañana · 1 oct · Viernes · 2 oct · Sábado · 3 oct · Domingo · 4 oct · Lunes · 5 oct · Martes · 6 oct |
-| B3 | «discontinuo»: seis ítems y el último es «En 30 días» | ✅ | Hoy · 30 sep · Mañana · 1 oct · Pasado mañana · 2 oct · En una semana · 7 oct · En dos semanas · 14 oct · En 30 días · 30 oct |
-| B4 | en ninguno de los tres se repite una fecha | ✅ | ninguna repetida, en los tres |
-| B5 | sobre una tarea con fecha de mañana, el tilde marca uno solo | ✅ | semana: Mañana · 1 oct · cronologico: Mañana · 1 oct · discontinuo: Mañana · 1 oct |
-| B6 | cuál de los tres órdenes convence | ✋ a mano | es una elección |
-| C1 | el selector nativo aparece solo al abrir «Otra fecha…» | ✋ a mano | el selector del navegador no está en el DOM: no se puede leer desde la CLI |
+| B1 | «semana»: siete ítems, los días de lunes a domingo | — no aplica | se borró: quedó el orden discontinuo |
+| B2 | «cronológico»: arranca en hoy, día por día | — no aplica | se borró: quedó el orden discontinuo |
+| B3 | discontinuo: seis ítems y el último es «En 30 días» | ✅ | Hoy · 30 sep · Mañana · 1 oct · Pasado mañana · 2 oct · En una semana · 7 oct · En dos semanas · 14 oct · En 30 días · 30 oct |
+| B4 | ningún atajo repite una fecha | ✅ | 30 sep, 1 oct, 2 oct, 7 oct, 14 oct, 30 oct |
+| B5 | sobre una tarea con fecha de mañana, el tilde marca uno solo | ✅ | Mañana · 1 oct |
+| B6 | cuál de los tres órdenes convence | — no aplica | elegido el 30/09/2026: discontinuo |
+| C1 | el selector nativo aparece solo al abrir «Otra fecha…» | — no aplica | se borró: quedó la grilla |
 | C2 | con la grilla: el mes actual, lunes primero, y hoy marcado | ✅ | «septiembre 2026» · 30 celdas · hoy: «2026-09-30» · columnas: L M M J V S D |
 | C3 | un clic en un día elige y no acepta: el campo cambia y aparece «Va a escribir» | ✅ | campo=2026-09-20 · modal abierto |
 | C4 | aceptar escribe lo mismo que decía «Va a escribir» | ✅ | disco: «- [ ] tarea para la grilla %%t:due=2026-09-20%%» |
@@ -61,7 +63,7 @@ Corrido con `scripts/verificar/` sobre el vault de prueba. commit 91fde07 · mai
 | F7 | la otra nota quedó intacta, con su tarea en [x] | ✅ | «- [x] pagar la cuota del club %%t:rec=mensual;done=2026-09-30%%» |
 | F9 | descongelado y sin tocar nada: ahora escribe en las dos y en el historial | ✅ | 2 tareas reiniciadas en 2 notas, y 12 líneas al historial. |
 | G1 | clic en el vacío a la derecha de una tarea: el cursor cae en esa línea | ✅ | línea 19, col 30: «- [ ] tarea con fecha absoluta %%t:due=2» |
-| G2 | flecha derecha desde el fin del texto cruza el token de un teclazo | ✅ | de 24:33 a 25:0 |
+| G2 | flecha derecha desde el fin del texto cruza el token de un teclazo | ✅ | de 24:33 a 25:6 |
 | G3 | Backspace desde el comienzo de la línea de abajo: saca el checkbox, y el segundo une limpio | ✅ | 1.º «- tarea de abajo para unir» · 2.º «- [ ] tarea de arriba para unir tarea de abajo para unir» |
 | G4 | Enter al final de una tarea: nace «- [ ] » y el token se queda arriba | ✅ | «- [ ] tarea para partir con token %%t:id=c3d4;wb=foco%%» ⏎ «- [ ] » |
 | G5 | tildar una tarea con fecha: completa, no toca el due y el cursor no se mueve | ✅ | disco: «- [x] tarea para tildar con fecha %%t:due=2026-11-20;done=2026-09-30%%» · cursor 16:10 → 16:10 |

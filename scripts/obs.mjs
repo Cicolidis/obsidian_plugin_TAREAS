@@ -33,6 +33,8 @@ export function obs(...args) {
     // la CLI no tiene tiempo límite propio, y un `eval` que espera algo que no
     // llega la deja esperando para siempre.
     timeout: 150_000,
+    // SIGTERM no alcanza: la CLI lo ignora y `execFileSync` se queda esperando.
+    killSignal: "SIGKILL",
   }).trimEnd();
 }
 
