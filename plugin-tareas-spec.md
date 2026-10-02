@@ -1015,7 +1015,7 @@ Un comando abre N notas en una ventana nueva (`workspace.openPopoutLeaf`), con l
 
 ## 14. Prioridad
 
-Tres niveles: normal (sin color), alta (amarillo), muy alta (rojo).
+Tres niveles: normal (sin color), alta (naranja en tema claro, amarillo en oscuro), muy alta (rojo).
 
 - **Se guarda un número (`p=1`/`p=2`), se dibuja un color.** Ordenar necesita un ordinal, y guardar el nombre del color ata la paleta para siempre. En Anotaciones el color *es* el dato porque viene de Zotero; acá es presentación.
 - **El color pinta la línea de la tarea, no el subárbol.** Los hijos llevan un filete de 2px del mismo color en el borde izquierdo. Con árboles de 76 líneas, teñir todo deja media nota roja.
@@ -1050,6 +1050,19 @@ número: `#c99a00` sobre blanco da **2,59:1**, por debajo del 3:1 que la WCAG
 1.4.11 pide para un componente y muy por debajo del 4,5:1 de texto. La paleta
 que quedó —`#8c6500` y `#c62828` en claro, `#e3c052` y `#e07070` en oscuro—
 tiene **4,63:1 en el peor de los ocho casos**.
+
+**Corregido el 01/10/2026: en tema claro, alta pasó de ocre a naranja.** En la
+verificación de la sesión 9 el usuario vio que el ocre `#8c6500` no se
+destacaba. Los números estaban en regla y el problema era otro: ocre y rojo
+tenían casi la misma luminancia (**1,06:1** entre los dos), así que en claro
+solo los separaba el tono, y el ocre se leía como un marrón apagado. La barra y
+el checkbox son componentes, así que la vara es 3:1 y no 4,5:1; eso deja usar
+`#d16f00`, que da **3,51:1** sobre blanco y se separa del rojo también por luz.
+El signo `!` sí es texto y tiene su propio naranja, `#a85000`: **4,56:1** ya
+mezclado con su `opacity: 0.9`. Con esa opacidad el ocre daba 4,32:1, y el «peor
+caso 4,63:1» de arriba no la contaba. Lo mide `scripts/verificar/colores.mjs`,
+que además saca capturas de los dos temas: los números solos no habían
+alcanzado para ver esto.
 
 **Son dos indicadores de forma, no uno, y se encienden por separado.** Decisión
 del usuario: uno, el otro o los dos.
@@ -1230,6 +1243,7 @@ Criterio heredado del `PLAN.md` de Anotaciones: **primero lo que produce evidenc
 | 7 | Pestañas Buscar y Agenda, con «archivadas» como origen en Buscar (§12) | |
 | 8 | Migración (§19) | Al final: reescribe notas reales, y conviene que el parser esté probado |
 | 9 | Layout de paneles | Alcance chico, entra en cualquier hueco |
+| 10 | **Revisión final de los ajustes**: que cada uno sea necesario, y agruparlos en categorías con separaciones visuales claras | Pedido del usuario el 01/10/2026, al verificar la sesión 9. Al final, porque cada paso de arriba puede agregar o volver innecesario alguno |
 
 **El orden real se desvió, y hay que decirlo.** Después del 4b se hicieron 6a,
 6b y 6c, y el 5 quedó sin empezar: al 29/09/2026 el plugin escribe asignaciones
@@ -1237,6 +1251,23 @@ a workbenches que **ninguna vista muestra**. Cada paso del 6 tenía su razón �
 6a resolvía el hallazgo del 7,5%, el 6b cerraba los campos del token—, pero la
 consecuencia es la que la fila de este cuadro anticipaba: la vista que más se usa
 es la que falta. **Con el 6c verificado, no entra nada antes del 5.**
+
+### Tareas sueltas para Claude Code
+
+Arreglos chicos ya decididos, que no son un paso del cuadro. Entran al principio
+de la sesión que corresponda, antes de lo grande.
+
+- **Unir debajo de una tarea con el token ilegible.** Encontrado en la
+  verificación de la sesión 9. Hoy, si la línea de arriba tiene un token que no
+  se puede leer (`%%t:zz=1%%`, por ejemplo), unir deja el token en el medio de
+  la línea, con el texto absorbido pegado detrás y sin espacio. La causa no está
+  diagnosticada: es lo primero, midiendo. **Decidido el 01/10/2026:** el texto
+  absorbido va **antes** del token, separado por un espacio, y los bytes del
+  token no se tocan: ni se reparan ni se borran, que es la regla de la §5.3 para
+  un token que no parsea («nunca reparar a ciegas»). Con test en
+  `unirLimpio.test.ts` o en el módulo donde resulte estar la causa, y
+  comprobado en vivo con una unión real por el protocolo de Chrome sobre
+  `tarea con el token roto` del vault de prueba, que hoy ya tiene esa línea.
 
 ### Antes de compartirlo como community plugin
 

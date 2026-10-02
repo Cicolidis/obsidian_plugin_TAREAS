@@ -58,3 +58,18 @@ M5:
 
 Otras cosas que vi:
 ```
+
+## Lo que contestó el usuario (01/10/2026)
+
+| Id | Respuesta | Qué se hizo |
+|---|---|---|
+| M1 | Bien | — |
+| M2 | En oscuro, bien. En claro, el ocre de alta no se destaca | Alta pasó a naranja `#d16f00` en tema claro (el signo `!`, a `#a85000`). Medido y con capturas por `scripts/verificar/colores.mjs`; detalle en la §14 |
+| M3 | Alcanzan, aunque solo va a estar seguro usando el plugin entero | — |
+| M4 | Se entiende | — |
+| M5 | Mejor, pero hace falta una revisión final: que cada ajuste sea necesario, en categorías y con separaciones visuales claras | Paso 10 de la §20 |
+| §2 | Ajustes del vault real corregidos a mano | — |
+
+Y una propuesta aprobada: **unir debajo de una tarea con el token ilegible**
+pone el texto absorbido antes del token, con un espacio. Queda como tarea suelta
+en la §20.

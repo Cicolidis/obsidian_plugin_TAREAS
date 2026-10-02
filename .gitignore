@@ -21,3 +21,7 @@ notas-de-tareas.json
 
 # El vault de prueba: se arma con `npm run vault:prueba` desde test/vault-semilla/.
 tareas-vault-prueba/
+
+# Los permisos que Claude Code va aprobando en esta máquina. Los del proyecto
+# están en `.claude/settings.json`, que sí va.
+.claude/settings.local.json

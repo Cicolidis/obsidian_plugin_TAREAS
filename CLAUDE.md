@@ -108,6 +108,7 @@ Desde la sesión 9, **Claude Code verifica el comportamiento del plugin en un Ob
 npm run vault:prueba     # arma el vault de prueba y lo abre en una ventana propia
 npm run deploy:prueba    # compila, prueba de humo, copia y recarga el plugin ahí
 node scripts/verificar/paso-6c.mjs [A B …]   # una verificación, por secciones
+node scripts/verificar/colores.mjs [#hex …]   # contraste de la prioridad en los dos temas, con capturas
 ```
 
 - **El vault de prueba es `tareas-vault-prueba/`**, adentro del repo y fuera de git. Se arma desde `test/vault-semilla/` —inventada, porque el repo es público— con Outliner copiado del vault real, porque la forma de una edición depende de él. `node scripts/vault-prueba.mjs notas` lo restaura.

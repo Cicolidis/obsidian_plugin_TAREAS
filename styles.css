@@ -38,15 +38,31 @@
  *
  * ## Los colores, medidos
  *
- * Contraste WCAG calculado contra los fondos por omisión de los dos temas. El
- * peor caso es **4,63:1**, arriba del 4,5:1 que pide AA para texto — y eso
- * aplica al glifo, que es texto; el filete es componente y le alcanzaba con
- * 3:1. El amarillo de Anotaciones (`#c99a00`) daba **2,59:1 sobre blanco** y se
+ * Contraste WCAG contra el fondo por omisión de cada tema, medido en vivo por
+ * `scripts/verificar/colores.mjs` (que lee el color que de verdad le llega a la
+ * línea, no el de este archivo).
+ *
+ * **La barra y el checkbox son componentes**, no texto: la vara es el 3:1 de
+ * la WCAG 1.4.11, no el 4,5:1. Eso deja usar un naranja que se ve. El ocre de
+ * antes (`#8c6500`, 5,28:1) cumplía de sobra y no se distinguía: tenía casi la
+ * misma luminancia que el rojo (1,06:1 entre los dos) y en tema claro se leía
+ * como un marrón apagado (verificación de la sesión 9, 01/10/2026). El naranja
+ * `#d16f00` da **3,51:1** sobre blanco y **3,25:1** sobre un gris claro como
+ * `#f6f6f6`, y se separa del rojo por tono y por luz.
+ *
+ * El único texto es el signo `!` del final —opcional, apagado por omisión—, y
+ * va con `opacity: 0.9`. Para él hay un naranja más oscuro,
+ * `--tareas-alta-texto`: **4,56:1** ya mezclado con la opacidad. El ocre de
+ * antes, con esa opacidad, daba 4,32:1: el «peor caso 4,63:1» que decía este
+ * comentario no la contaba.
+ *
+ * El amarillo de Anotaciones (`#c99a00`) daba **2,59:1 sobre blanco** y se
  * descartó: es exactamente el peor caso que la §14 anticipaba sin medirlo.
  */
 
 .theme-light {
-	--tareas-alta: #8c6500;
+	--tareas-alta: #d16f00;
+	--tareas-alta-texto: #a85000;
 	--tareas-muy-alta: #c62828;
 }
 
@@ -211,6 +227,9 @@ body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
 
 body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p1::after {
 	content: "!";
+	/* Solo el tema claro la define: ahí el naranja de la barra no alcanza para
+	   texto. En el oscuro cae al color de siempre. */
+	color: var(--tareas-alta-texto, var(--tareas-color));
 }
 
 body.tareas-ind-glifo .markdown-source-view.mod-cm6 .cm-line.tareas-p2::after {
